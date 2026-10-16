@@ -28,9 +28,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 19        | Sprite engine              | COMPLETE |
 | 20        | Tilemap engine             | COMPLETE |
 | 21        | Scrolling (camera)         | COMPLETE |
-| 22+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 22        | Platformer (integration)   | COMPLETE |
+| 23+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 22 — Platformer.** See `docs.md` for the exact scope.
+Next up: **Milestone 23 — Architecture Review** (a written review, then v0.1). See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -76,6 +77,10 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     scroll_demo.c       M21 guest: pans a camera over a 512x352 world (32x22
                         cells of 16px tiles — larger than the screen) both
                         axes, with a world-space sprite and a fixed HUD
+    platformer.c        M22 guest: the integration game — tilemap terrain,
+                        animated player + coin sprites, camera follow,
+                        AABB collision, jump physics, parallax layers, input
+                        and audio, all in one side-scroller
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -90,7 +95,9 @@ deps/libretro/
 tests/
     test_*.c           per-milestone harnesses (see below); test_tilemap.c (M20)
                        re-renders the whole framebuffer from an independent model
-                       (as does test_scroll.c, M21, for every frame of a sweep)
+                       (as does test_scroll.c, M21, for every frame of a sweep);
+                       test_platformer.c (M22) drives a scripted game and reads
+                       the game globals out of RAM (like test_breakout.c)
 ```
 
 Key boundary: `src/arcade1/` (the machine) has **no** libretro/RetroArch
@@ -126,6 +133,9 @@ make test-tilemap # M20 tilemap engine: COLSxROWS grid, exact framebuffer vs an
 make test-scroll  # M21 camera scrolling: 120-frame sweep over a map larger than
                   #     the screen, every pixel of every frame vs an independent
                   #     model, camera readbacks + determinism
+make test-platformer # M22 integration game as firmware: scripted playthrough
+                  #     (fall/land, walk+coin+camera, jump/land, reach goal,
+                  #     restart) + audio beeps + determinism
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
@@ -204,8 +214,11 @@ measurable, one commit per task:
   RGB565 tint, same 1-bpp tile format as a sprite), so the per-pixel and
   per-cell loops no longer run in the guest. Since M21 a camera (CAM_X/CAM_Y)
   pans the world-space commands (SPRITE/TILEMAP) while primitives stay
-  screen-space (HUD), and TILEMAP windows to the visible cells. Still no
-  multi-layer/parallax, flip, priority, visibility flags, alpha blending or
+  screen-space (HUD), and TILEMAP windows to the visible cells. The platformer
+  (M22) composites multiple layers with **parallax** — a background of
+  screen-space rects drawn at half/quarter the camera rate, over the world-space
+  terrain tilemap — but that is guest-side positioning, not a device feature.
+  Still no device-side layer/priority/visibility flags, flip, alpha blending or
   rotation (forbidden by docs.md until a later milestone asks for them).
 - Breakout (M15): full-screen clear + repaint of every rectangle each frame
   (now 2,039 instructions/frame avg, 2,185 max over 595 frames since M19's
@@ -225,6 +238,16 @@ measurable, one commit per task:
   entropy later would break reset-and-compare. A piece's 4x4 box may hang
   off-screen left; cells clamp individually at column 0 (the device clips
   draws).
+- Platformer (M22): present-yield loop; CPU load 841 inst/frame avg (6,324 max
+  over 295 frames) — lighter than Breakout because terrain/sprites/camera are
+  device-side. The 40x16 terrain `cells[]` is 2,560 B of RAM (the dominant
+  memory cost, as with Tetris), built once at boot; the guest is 2,404 B of
+  ROM. Physics is intentionally simple (integer velocities, axis-separated
+  AABB, gravity 1 / jump 6 / terminal 5) and the level is flat-ground with
+  floating platforms so a scripted "hold right" reaches the goal — chosen to
+  keep the harness deterministic rather than to be a good game. Parallax is
+  guest-side (screen-space rects at half/quarter camera rate), not a device
+  layer feature. No enemies, scrolling enemies, save, or title screen.
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is

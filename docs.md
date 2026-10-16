@@ -1367,6 +1367,65 @@ Instead produce an architecture review answering:
 
 Only then define ARCADE-1 v0.1.
 
+## Platformer decisions (pinned at M22)
+
+The integration milestone: one game that exercises every capability built so
+far, and the last code milestone before the architecture review (M23). It is
+`programs/platformer.c`, a side-scrolling platformer run as guest firmware.
+
+**How each required feature is exercised.**
+
+| Feature | How the platformer uses it |
+|---------|----------------------------|
+| tilemaps | the terrain is a single 40×16 `gfx_tilemap` (M20); the cell array is the **single source of truth** for both rendering *and* collision (a cell's low-16 index drives solidity), exactly the Tetris `field` pattern |
+| sprites  | the player (animated) and the coins are `gfx_sprite` (M19) |
+| scrolling | the camera (M21) follows the player, clamped to the 640×256 world |
+| collision | axis-separated AABB vs the solid terrain cells (walk into walls, land on ground/platforms) |
+| animation | a 3-frame player (2 walk + 1 airborne) chosen by a timer + airborne flag |
+| layers | sky (`gfx_clear`) → parallax background (screen-space rects at half/quarter camera rate) → terrain tilemap (world-space, camera) → sprites → HUD |
+| input | left/right walk, A to jump (INPUT_PAD) |
+| audio | jump (660 Hz), coin (880 Hz), goal (440 Hz) beeps (AUDIO_FREQ/CTRL), each held for a few timer ticks |
+
+**Memory budget (the recurring constraint).** World = 40×16 tiles of 16 px =
+640×256 px (camera pans 320 px horizontally, 16 px vertically). The terrain is
+one `cells[16][40]` grid (640 words = **2,560 B of RAM**) built once at boot;
+tile art + level logic live in ROM. The whole guest is **2,404 B of ROM** and
+leaves ~1.4 KB of stack — comfortably inside the 4 KiB + 4 KiB budget, and the
+third data point (after Tetris and scroll_demo) that the 32-bit-per-cell
+tilemap format is the dominant memory cost of any non-trivial game. That
+observation is M23's answer-seed for "what should the final memory map /
+tile format look like?".
+
+**Design choices worth pinning.** The ground is flat across the whole level so
+the main path is walkable end-to-end (a scripted "hold right" reaches the
+goal), while the *vertical* interest lives in floating platforms you jump onto
+— this keeps the physics testable without fragile frame-perfect input. The
+player spawns ~24 px above the ground so the boot frames fall and land under
+gravity. Coins on the ground path are collected by walking; coins above
+platforms need a jump. Multiple layers are composited with **parallax**: the
+background scrolls at half (hills) and quarter (clouds) the camera rate,
+drawn as screen-space primitives (which the camera never moves) positioned
+manually from `cam_x`, while the terrain and sprites use the world-space
+camera — a direct demonstration of the M21 "primitives are screen-space,
+sprites/maps are world-space" split.
+
+**Testing**: `make test-platformer` boots the game as firmware and drives a
+scripted RetroPad through the whole story, reading the game globals (`px`,
+`py`, `onground`, `score`, `state`, `cam_x`, `cam_y`) out of guest RAM: spawn
+falls and lands on the exact surface, layers all render (sky/hills/terrain/
+player/coin each found in the framebuffer), walking advances `px` by 2/frame
+and collects a ground coin, jumping leaves the ground (`vy<0`) and lands back
+on the surface, reaching the goal sets `state` to WIN with the goal beep, the
+camera follows and clamps at both world edges, and A restarts. Plus audio
+square-wave checks, one present/timer tick per frame, `stray_accesses == 0`,
+and reset-and-compare determinism (identical 295-frame hash sequence +
+byte-identical final framebuffer). Guest CPU load: **841 inst/frame average,
+6,324 max** (295 frames) — a *lighter* per-frame load than Breakout (2,039
+avg) despite doing far more, because the tilemap/sprite/camera work is
+offloaded to the device; the guest only runs the physics loop and issues a
+handful of MMIO commands per frame, so a full layered game sits comfortably
+inside a 60 fps frame budget.
+
 ---
 
 # 27. Graphics philosophy

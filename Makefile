@@ -26,7 +26,7 @@ TESTDIR := build
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
-test-sprite test-tilemap test-scroll test-breakout test-tetris: | $(TESTDIR)
+test-sprite test-tilemap test-scroll test-platformer test-breakout test-tetris: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -43,7 +43,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo breakout tetris
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -57,7 +57,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
-        test-breakout test-tetris
+        test-platformer test-breakout test-tetris
 
 all: $(TARGET)
 
@@ -270,6 +270,26 @@ test-scroll: $(GUEST_BUILD)/scroll_demo.arc1
 	@CELLS=$$($(RISCV_NM) $(GUEST_BUILD)/scroll_demo.elf | awk '$$3=="cells"{print $$1}'); \
 	 echo "cells @ 0x$$CELLS"; \
 	 $(TESTDIR)/test_scroll $(GUEST_BUILD)/scroll_demo.arc1 0x$$CELLS
+
+# Build and run the milestone-22 platformer harness: boot platformer.c on the
+# machine's own CPU as firmware and drive a scripted RetroPad through the whole
+# game story — spawn/fall/land under gravity, walk + coin + camera follow,
+# jump/land, walk to the goal (WIN), restart — reading the game globals out of
+# guest RAM, plus audio beeps, camera clamping and reset-and-compare
+# determinism. Exercises tilemaps + sprites + scrolling + collision + animation
+# + layers + input + audio together.
+test-platformer: $(GUEST_BUILD)/platformer.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_platformer \
+	    tests/test_platformer.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/platformer.elf | \
+	    awk '$$3=="px"{px=$$1} $$3=="py"{py=$$1} $$3=="onground"{og=$$1} \
+	         $$3=="score"{sc=$$1} $$3=="state"{st=$$1} \
+	         $$3=="cam_x"{cx=$$1} $$3=="cam_y"{cy=$$1} \
+	         END{print "0x"px, "0x"py, "0x"og, "0x"sc, "0x"st, "0x"cx, "0x"cy}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_platformer $(GUEST_BUILD)/platformer.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
