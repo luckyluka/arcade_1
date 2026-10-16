@@ -26,9 +26,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 17        | Proper ROM format (.arc1)  | COMPLETE |
 | 18        | Tetris                     | COMPLETE |
 | 19        | Sprite engine              | COMPLETE |
-| 20+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 20        | Tilemap engine             | COMPLETE |
+| 21+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 20 — Tilemap engine.** See `docs.md` for the exact scope.
+Next up: **Milestone 21 — Scrolling.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -44,8 +45,9 @@ src/
                        (multiply/divide semantics added at M16)
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
         video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT (M13) plus the M19
-                       FILL/SPRITE device-side blit commands (1-bpp image
-                       source restricted to guest ROM/RAM)
+                       FILL/SPRITE and M20 TILEMAP device-side commands (1-bpp
+                       image/tile source restricted to guest ROM/RAM; TILEMAP
+                       draws a COLSxROWS grid of 32-bit tile+colour cells)
         audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
         rom.h/.c       .arc1 game image: parse/validate/write, CRC-32 (M17)
     libretro/
@@ -56,15 +58,21 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
     gfx.h               guest graphics API: gfx_clear/rect/present (M14),
-                        gfx_sprite added at M19 (rect = one device-side FILL)
+                        gfx_sprite added at M19, gfx_tilemap added at M20
+                        (rect = one device-side FILL; tilemap = one TILEMAP)
     counter.c           docs.md example program (counter = 123)
     mmio_demo.c         M11 guest: read IN register, write OUT register
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     gfx_demo.c          M14 guest: draws only through the gfx.h API
     sprite_demo.c       M19 guest: blits a 1-bpp image (ROM + RAM sources)
+    tilemap_demo.c      M20 guest: draws COLSxROWS tile grids via gfx_tilemap
+                        (multiple tiles, per-cell colour, empty cells, ROM+RAM
+                        cells, negative origin, clipping, guards)
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
-                        timer-driven gravity, fixed-seed piece stream)
+                        timer-driven gravity, fixed-seed piece stream); since
+                        M20 the field[] IS the tilemap (one gfx_tilemap per
+                        frame, no per-cell repaint loop)
     build/              generated .elf/.bin/.arc1 (gitignored)
 tools/
     packarc1.c          host packer: flat .bin -> .arc1 game image (M17);
@@ -72,7 +80,8 @@ tools/
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
 tests/
-    test_*.c           per-milestone harnesses (see below)
+    test_*.c           per-milestone harnesses (see below); test_tilemap.c (M20)
+                       re-renders the whole framebuffer from an independent model
 ```
 
 Key boundary: `src/arcade1/` (the machine) has **no** libretro/RetroArch
@@ -103,6 +112,8 @@ make test-video   # M13 guest drives video device -> framebuffer, reset
 make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
 make test-rom     # M17 .arc1 image format: CRC-32, header, every rejection
 make test-sprite  # M19 sprite engine: 1-bpp blit, exact pixels + clipping
+make test-tilemap # M20 tilemap engine: COLSxROWS grid, exact framebuffer vs an
+                  #     independent model + determinism
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
@@ -171,15 +182,17 @@ measurable, one commit per task:
   executions (buffering deliberately left undecided per docs.md). With
   firmware attached (M15) a PRESENT also ends the frame: the machine runs the
   guest until the guest presents.
-- Graphics API (M14, extended M19): `programs/gfx.h` provides `gfx_clear` /
-  `gfx_rect` / `gfx_present` and (since M19) `gfx_sprite` as a **guest-only**
-  header (it dereferences fixed MMIO addresses — host tests must use the
-  `arcade1_*` API instead). Since M19 a rectangle is one device-side FILL
-  command and a 1-bpp image is one SPRITE command (set bits = COLOR, clear
-  bits = transparent, source restricted to guest ROM/RAM), so the per-pixel
-  loop no longer runs in the guest. Still no tilemaps, flip, priority,
-  visibility flags, alpha blending or rotation (forbidden by docs.md until a
-  later milestone asks for them).
+- Graphics API (M14, extended M19/M20): `programs/gfx.h` provides `gfx_clear` /
+  `gfx_rect` / `gfx_present`, `gfx_sprite` (M19) and `gfx_tilemap` (M20) as a
+  **guest-only** header (it dereferences fixed MMIO addresses — host tests must
+  use the `arcade1_*` API instead). Since M19 a rectangle is one device-side
+  FILL and a 1-bpp image is one SPRITE (set bits = COLOR, clear bits =
+  transparent, source restricted to guest ROM/RAM); since M20 a whole COLSxROWS
+  grid of 32-bit tile+colour cells is one TILEMAP (tile 0 = empty, per-cell
+  RGB565 tint, same 1-bpp tile format as a sprite), so the per-pixel and
+  per-cell loops no longer run in the guest. Still no scroll/layer, flip,
+  priority, visibility flags, alpha blending or rotation (forbidden by docs.md
+  until a later milestone asks for them).
 - Breakout (M15): full-screen clear + repaint of every rectangle each frame
   (now 2,039 instructions/frame avg, 2,185 max over 595 frames since M19's
   device-side FILL — down from 77,836 when rects were per-pixel `sw`s); no
@@ -187,12 +200,13 @@ measurable, one commit per task:
   trajectory, no title screen. The frame protocol is present-yield with a
   1,000,000-instruction safety cap per frame. Game state (score/lives/state)
   is read from guest RAM by the test via `nm` symbol addresses.
-- Tetris (M18): the same present-yield loop; CPU load is now 9,384
-  instructions/frame avg (16,678 max over 300 frames) since M19's device-side
-  FILL/SPRITE — down from 245,797 when every cell/rect/glyph was a per-pixel
-  `sw` — but it still repaints all 200 cells + panel + piece unconditionally
-  each frame (the explicit M20 input: a tilemap/dirty update would cut it
-  further). The machine has no entropy device, so the piece stream is
+- Tetris (M18, updated M20): the same present-yield loop; CPU load is now
+  8,079 instructions/frame avg (14,309 max over 300 frames) since M20's
+  tilemap — down from 9,384 after M19 and from 245,797 when every cell/rect/
+  glyph was a per-pixel `sw`. The field[] IS the playfield tilemap, so draw()
+  is one gfx_tilemap command (no per-frame 200-cell repaint loop); the
+  residual is game logic, the falling/preview piece, and the per-glyph panel
+  text. The machine has no entropy device, so the piece stream is
   xorshift32 with the fixed seed `0x1234ABCD` and START rewinds it — adding
   entropy later would break reset-and-compare. A piece's 4x4 box may hang
   off-screen left; cells clamp individually at column 0 (the device clips
@@ -201,7 +215,7 @@ measurable, one commit per task:
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: tetris at 3066 bytes; its .arc1 file is that payload
+  ROM (largest so far: tetris at 3176 bytes; its .arc1 file is that payload
   plus a 16-byte header). Since M16 the ISA is RV32IM,
   so guest C may use `*` and `/` directly (spec-exact semantics, no traps —
   division by zero and `INT_MIN / -1` return the defined results) with no

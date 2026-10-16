@@ -63,9 +63,20 @@
 #define COL_NUM    0x07E0u     /* panel numbers (green)                      */
 #define COL_OVER   0xF800u     /* GAME OVER                                  */
 
-/* One colour per piece id (I O T S Z J L); field cells store id+1. */
+/* One colour per piece id (I O T S Z J L). The playfield tilemap stores this
+ * RGB565 value in each occupied cell's high half. */
 static const unsigned short pcol[7] = {
     0x07FFu, 0xFFE0u, 0xF81Fu, 0x07E0u, 0xF800u, 0x001Fu, 0xFD20u
+};
+
+/* The playfield's single tile: a 9x9 solid square in the top-left of a
+ * 10x10 cell (the last row/column stay transparent, giving the 1px grid gap
+ * the old per-cell gfx_rect drew). 10px wide = 2 bytes/row, 10 rows. Every
+ * occupied cell references this tile (index 1); the per-cell colour carries
+ * the piece identity, so one tile renders all seven pieces. */
+static const unsigned char block_tile[20] = {
+    0xFF, 0x80, 0xFF, 0x80, 0xFF, 0x80, 0xFF, 0x80, 0xFF, 0x80,
+    0xFF, 0x80, 0xFF, 0x80, 0xFF, 0x80, 0xFF, 0x80, 0x00, 0x00,
 };
 
 /* --- Pieces --------------------------------------------------------------- *
@@ -96,7 +107,12 @@ int lines;
 int level;
 int state;
 int locked;              /* pieces locked so far (test progress probe)     */
-unsigned char field[COLS * ROWS];   /* 0 = empty, else piece id + 1        */
+/* The playfield IS the tilemap (M20): each cell is a 32-bit tilemap word —
+ * 0 = empty, else 1u | (pcol[piece id] << 16): tile index 1 (block_tile) plus
+ * a per-cell colour. This array is the single source of truth for collision
+ * AND for rendering, so draw() is one gfx_tilemap command and lock/clear only
+ * touch the cells that change (no per-frame 200-cell repaint loop). */
+unsigned int field[COLS * ROWS];
 
 int cur;                 /* current piece id                               */
 int next;                /* preview piece id                               */
@@ -198,7 +214,7 @@ static void lock_piece(void)
 
     for (i = 0; i < 4; i++)
         field[(cur_y + curc[i] / 4) * COLS + (cur_x + curc[i] % 4)] =
-            (unsigned char)(cur + 1);
+            1u | ((unsigned int)pcol[cur] << 16);   /* tile 1 + this colour */
     locked++;
 
     /* Clear full rows, shifting everything above down. Recheck the same
@@ -404,18 +420,16 @@ static void draw_cell_block(int x, int y, int pitch, unsigned col)
 
 static void draw(void)
 {
-    int r, c, i;
+    int i;
 
     gfx_clear(COL_BG);
 
-    /* Playfield: border, floor, occupied cells. */
+    /* Playfield: border, floor, then the whole grid in ONE tilemap command
+     * (the field IS the map, so no per-frame repaint loop). Empty cells
+     * (word 0) leave the floor showing through. */
     gfx_rect(PX - 2, PY - 2, COLS * CELL + 4, ROWS * CELL + 4, COL_FRAME);
     gfx_rect(PX, PY, COLS * CELL, ROWS * CELL, COL_FLOOR);
-    for (r = 0; r < ROWS; r++)
-        for (c = 0; c < COLS; c++)
-            if (field[r * COLS + c])
-                draw_cell_block(PX + c * CELL, PY + r * CELL, CELL,
-                                pcol[field[r * COLS + c] - 1]);
+    gfx_tilemap(PX, PY, field, block_tile, COLS, ROWS, CELL, CELL);
 
     /* Panel: labels, numbers, next-piece preview. */
     draw_text(PANEL_X, 14, "SCORE", COL_TEXT);

@@ -80,6 +80,16 @@
 
 #define SEED  0x1234ABCDu      /* tetris.c's fixed xorshift32 seed         */
 
+/* M20: the playfield IS the tilemap. Each cell is a 32-bit word — 0 = empty,
+ * else 1u | (pcol[piece id] << 16): tile index 1 plus a per-cell colour.
+ * The field still stores pieces, so the script keeps thinking in the OLD
+ * piece-id+1 values (1..7); CELL(pid) converts one into the cell word it
+ * now lives as. pcol[] mirrors tetris.c's palette (I O T S Z J L). */
+static const uint16_t pcol[7] = {
+    0x07FFu, 0xFFE0u, 0xF81Fu, 0x07E0u, 0xF800u, 0x001Fu, 0xFD20u
+};
+#define CELL(pid) (1u | ((uint32_t)pcol[(pid) - 1] << 16))
+
 #define MMIO_BASE 0x4000u
 #define PIX(x, y) ((size_t)(y) * ARCADE1_WIDTH + (size_t)(x))
 
@@ -191,15 +201,16 @@ static uint32_t reg(uint32_t off)
     return arcade1_read32(&m.bus, MMIO_BASE + off);
 }
 
-/* The playfield: 200 bytes in guest RAM, read/written directly. */
-static uint8_t fget(int i)
+/* The playfield: 200 32-bit tilemap cells in guest RAM, read/written directly
+ * (address is sym_field + i*4, since field[] is now an unsigned int array). */
+static uint32_t fget(int i)
 {
-    return arcade1_read8(&m.bus, (uint32_t)(sym_field + i));
+    return arcade1_read32(&m.bus, (uint32_t)(sym_field + i * 4));
 }
 
-static void fset(int i, uint8_t v)
+static void fset(int i, uint32_t v)
 {
-    arcade1_write8(&m.bus, (uint32_t)(sym_field + i), v);
+    arcade1_write32(&m.bus, (uint32_t)(sym_field + i * 4), v);
 }
 
 static void field_clear(void)
@@ -209,11 +220,11 @@ static void field_clear(void)
         fset(i, 0);
 }
 
-static void assert_field(const uint8_t *want)
+static void assert_field(const uint32_t *want)
 {
     int i;
     for (i = 0; i < COLS * ROWS; i++)
-        assert(fget(i) == want[i] && "playfield bytes diverged");
+        assert(fget(i) == want[i] && "playfield cells diverged");
 }
 
 static bool pred_locked(void) { return guest(sym_locked) >= want_locked; }
@@ -297,7 +308,7 @@ static void assert_silence(void)
 
 /* --- The scripted game ---------------------------------------------------- */
 
-static uint8_t want[COLS * ROWS];   /* expected playfield bytes             */
+static uint32_t want[COLS * ROWS];  /* expected playfield cells (tilemap)   */
 
 static void run_script(bool verify)
 {
@@ -357,30 +368,30 @@ static void run_script(bool verify)
     assert(reg(0x300) == 440 && reg(0x304) == 1);/* lock beep             */
     assert_square();
     memset(want, 0, sizeof want);
-    want[18 * COLS + 5] = 7;                     /* L: (0,2),(1,0..2)     */
-    want[19 * COLS + 3] = 7;
-    want[19 * COLS + 4] = 7;
-    want[19 * COLS + 5] = 7;
+    want[18 * COLS + 5] = CELL(7);                /* L: (0,2),(1,0..2)     */
+    want[19 * COLS + 3] = CELL(7);
+    want[19 * COLS + 4] = CELL(7);
+    want[19 * COLS + 5] = CELL(7);
     assert_field(want);
 
     want_locked = 2;
     run_until(PAD_DOWN, pred_locked, "second lock", 100);
     assert(guest(sym_cur) == 6);                 /* stream: next is L     */
     assert(reg(0x300) == 440);
-    want[17 * COLS + 3] = 2;                     /* O lands on the L      */
-    want[17 * COLS + 4] = 2;
-    want[18 * COLS + 3] = 2;
-    want[18 * COLS + 4] = 2;
+    want[17 * COLS + 3] = CELL(2);                /* O lands on the L      */
+    want[17 * COLS + 4] = CELL(2);
+    want[18 * COLS + 3] = CELL(2);
+    want[18 * COLS + 4] = CELL(2);
     assert_field(want);
 
     want_locked = 3;
     run_until(PAD_DOWN, pred_locked, "third lock", 100);
     assert(guest(sym_cur) == 4);                 /* stream: next is Z      */
     assert(reg(0x300) == 440);
-    want[15 * COLS + 5] = 7;                     /* L drops into a notch  */
-    want[16 * COLS + 3] = 7;
-    want[16 * COLS + 4] = 7;
-    want[16 * COLS + 5] = 7;
+    want[15 * COLS + 5] = CELL(7);                /* L drops into a notch  */
+    want[16 * COLS + 3] = CELL(7);
+    want[16 * COLS + 4] = CELL(7);
+    want[16 * COLS + 5] = CELL(7);
     assert_field(want);
     assert(guest(sym_lines) == 0);               /* no row full yet       */
 
@@ -388,10 +399,10 @@ static void run_script(bool verify)
     run_until(PAD_DOWN, pred_locked, "fourth lock", 100);
     assert(guest(sym_cur) == 2);                 /* T: P3 plays with it   */
     assert(reg(0x300) == 440);
-    want[13 * COLS + 3] = 5;                     /* Z on top              */
-    want[13 * COLS + 4] = 5;
-    want[14 * COLS + 4] = 5;
-    want[14 * COLS + 5] = 5;
+    want[13 * COLS + 3] = CELL(5);                /* Z on top              */
+    want[13 * COLS + 4] = CELL(5);
+    want[14 * COLS + 4] = CELL(5);
+    want[14 * COLS + 5] = CELL(5);
     assert_field(want);
     assert(guest(sym_lines) == 0 && guest(sym_score) == 0);
 
@@ -414,13 +425,13 @@ static void run_script(bool verify)
     rotcells(guest(sym_cur), 2, c4);             /* the rotation A tries   */
     {
         const int cx = guest(sym_x), cy = guest(sym_y);
-        uint8_t saved[4];
+        uint32_t saved[4];
         for (i = 0; i < 4; i++) {                /* block the new shape    */
             r = cy + c4[i] / 4;
             c = cx + c4[i] % 4;
             if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
                 saved[i] = fget(r * COLS + c);
-                fset(r * COLS + c, 1);
+                fset(r * COLS + c, 1u);           /* tile 1, colour 0       */
             }
         }
         run_frames(1, PAD_A);
@@ -451,7 +462,7 @@ static void run_script(bool verify)
      * exactly where this piece's bottom cells will land. */
     field_clear();
     for (c = 4; c < COLS; c++)
-        fset(10 * COLS + c, 7);
+        fset(10 * COLS + c, CELL(7));
 
     want_x = 0;
     run_until(PAD_LEFT, pred_x, "T back to the wall", 60);
@@ -463,7 +474,7 @@ static void run_script(bool verify)
         if (c4[i] / 4 > maxr)
             maxr = c4[i] / 4;
     for (c = 0; c < COLS; c++)
-        fset((ROWS - 1) * COLS + c, 7);
+        fset((ROWS - 1) * COLS + c, CELL(7));
     for (i = 0; i < 4; i++)                      /* gaps under bottom cells */
         if (c4[i] / 4 == maxr)
             fset((ROWS - 1) * COLS + c4[i] % 4, 0);
@@ -478,12 +489,12 @@ static void run_script(bool verify)
      * 11, the T cells land on 18/19, the gap cell dies with its row. */
     memset(want, 0, sizeof want);
     for (c = 4; c < COLS; c++)
-        want[11 * COLS + c] = 7;                 /* marker row: 10 -> 11   */
+        want[11 * COLS + c] = CELL(7);            /* marker row: 10 -> 11   */
     for (i = 0; i < 4; i++) {
         int fr = want_y + c4[i] / 4;
         int fc = c4[i] % 4;
         if (fr != ROWS - 1)
-            want[(fr + 1) * COLS + fc] = (uint8_t)(guest(sym_cur) + 1);
+            want[(fr + 1) * COLS + fc] = CELL((uint32_t)guest(sym_cur) + 1);
     }
 
     want_locked = 5;
@@ -499,7 +510,7 @@ static void run_script(bool verify)
      * ever complete) and soft-drop until a spawn is blocked. */
     for (r = 8; r < ROWS; r++)
         for (c = 2; c < COLS; c++)
-            fset(r * COLS + c, 7);
+            fset(r * COLS + c, CELL(7));
     assert(guest(sym_cur) == 5);                 /* J next in the stream  */
     assert(guest(sym_locked) == 5);
 

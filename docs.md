@@ -599,20 +599,25 @@ implemented (M12 timer, M13 video, ...).
 **Register table** — the canonical list of machine device registers. It was
 empty at M11 (infrastructure only); each device appends its rows here when it
 lands. The timer's rows were pinned at M12, the video device's at M13, the
-input and audio devices' at M15, and the sprite engine's additions at M19:
+input and audio devices' at M15, the sprite engine's additions at M19, and
+the tilemap engine's additions at M20:
 
 | Offset | Register    | Access | Function | When it takes effect |
 |--------|-------------|--------|----------|----------------------|
 | 0x00   | TIMER_COUNT | R      | Tick count, +1 per completed frame while enabled. Read-only: writes are ignored by the device. | Advances once per `arcade1_run_frame()` while CTRL bit0 is set; a `lw` observes the value at the instruction that performs it |
 | 0x04   | TIMER_CTRL  | R/W    | bit0 = enable (1) / pause (0); all other bits are ignored on write and read as 0 | The register latches at the `sw` instruction; the new state governs every frame that completes after that write |
-| 0x100  | VIDEO_X     | R/W    | Draw X coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (X is treated as **signed** by FILL/SPRITE) | Latches at the `sw`; read by the next draw command |
-| 0x104  | VIDEO_Y     | R/W    | Draw Y coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (Y is treated as **signed** by FILL/SPRITE) | Latches at the `sw`; read by the next draw command |
-| 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL/FILL/SPRITE, masked to 16 bits | Latches at the `sw` |
-| 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame), 4 = FILL (fill the W×H rectangle at X,Y with COLOR), 5 = SPRITE (blit the 1-bpp image at ADDR, W×H, at X,Y); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
+| 0x100  | VIDEO_X     | R/W    | Draw X coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (X is treated as **signed** by FILL/SPRITE). For TILEMAP, X is the map's origin column on screen (also **signed** — a negative origin clips the left columns) | Latches at the `sw`; read by the next draw command |
+| 0x104  | VIDEO_Y     | R/W    | Draw Y coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (Y is treated as **signed** by FILL/SPRITE). For TILEMAP, Y is the map's origin row on screen (also **signed**) | Latches at the `sw`; read by the next draw command |
+| 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL/FILL/SPRITE, masked to 16 bits. Not used by TILEMAP (colour is per-cell) | Latches at the `sw` |
+| 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame), 4 = FILL (fill the W×H rectangle at X,Y with COLOR), 5 = SPRITE (blit the 1-bpp image at ADDR, W×H, at X,Y), 6 = TILEMAP (draw the COLS×ROWS grid of 32-bit cells at MAP_ADDR, using tiles at TILE_ADDR); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
 | 0x110  | VIDEO_STATUS | R     | Number of PRESENT commands executed | Increments at the `sw` of each PRESENT |
 | 0x114  | VIDEO_ADDR  | R/W    | Guest address of a SPRITE's 1-bpp image data (must lie in ROM `0x0000..0x0FFF` or RAM `0x1000..0x1FFF`; anything else reads as all-transparent) | Latches at the `sw`; read by the next SPRITE command |
-| 0x118  | VIDEO_W     | R/W    | Width in pixels for FILL/SPRITE, kept exactly as written | Latches at the `sw`; read by the next FILL/SPRITE |
-| 0x11C  | VIDEO_H     | R/W    | Height in pixels for FILL/SPRITE, kept exactly as written | Latches at the `sw`; read by the next FILL/SPRITE |
+| 0x118  | VIDEO_W     | R/W    | Width in pixels for FILL/SPRITE, kept exactly as written. For TILEMAP, W is one tile's width in pixels (the cell pitch) | Latches at the `sw`; read by the next FILL/SPRITE/TILEMAP |
+| 0x11C  | VIDEO_H     | R/W    | Height in pixels for FILL/SPRITE, kept exactly as written. For TILEMAP, H is one tile's height in pixels (the cell pitch) | Latches at the `sw`; read by the next FILL/SPRITE/TILEMAP |
+| 0x120  | VIDEO_MAP_ADDR | R/W | Guest address of a TILEMAP's cell array: COLS×ROWS little-endian 32-bit words, each `tile_index | (rgb565 << 16)` (index 0 = empty). Must lie in ROM or RAM; anything else reads as all-empty (no side effects) | Latches at the `sw`; read by the next TILEMAP command |
+| 0x124  | VIDEO_TILE_ADDR | R/W | Guest address of a TILEMAP's tile-set image data: the same 1-bpp format as a SPRITE. Tile N (>= 1) lives at TILE_ADDR + (N-1)·(H·ceil(W/8)). Must lie in ROM or RAM | Latches at the `sw`; read by the next TILEMAP command |
+| 0x128  | VIDEO_COLS  | R/W    | TILEMAP grid width in cells (0 = draws nothing) | Latches at the `sw`; read by the next TILEMAP command |
+| 0x12C  | VIDEO_ROWS  | R/W    | TILEMAP grid height in cells (0 = draws nothing) | Latches at the `sw`; read by the next TILEMAP command |
 | 0x200  | INPUT_PAD   | R      | RetroPad for the current frame: bit0 up, bit1 down, bit2 left, bit3 right, bit4 A, bit5 B, bit6 start, bit7 select; other bits read as 0 | Reflects the `arcade1_input_t` the host set for this frame (`arcade1_set_input`, called before the frame starts); read-only, writes ignored |
 | 0x300  | AUDIO_FREQ  | R/W    | Tone frequency in Hz (power-on 440 — the historical demo beep). 0 = constant level while enabled | Latches at the `sw`; shapes **this** frame's samples, because the machine renders audio after the guest has run |
 | 0x304  | AUDIO_CTRL  | R/W    | bit0 = tone enable (power-on: set); other bits ignored on write and read as 0 | Disabled = silence for this frame; takes effect the same way as FREQ |
@@ -1183,6 +1188,69 @@ layer
 ```
 
 Again, derive the design from actual games rather than designing a general-purpose GPU.
+
+## Tilemap decisions (pinned at M20)
+
+Both shipped games draw a grid where each cell is a *tile reference plus a
+per-cell colour*: Tetris a 10×20 field with 7 piece colours, Breakout a 5×10
+brick field with per-row colours. That is "tiles + tile attributes," and the
+one attribute both actually need is **colour** — without it neither game could
+use a tilemap at all. So M20 implements exactly that and nothing more; scroll
+position (M21) and layers are deliberately out of scope.
+
+**Cell** = one 32-bit little-endian word: bits [15:0] = tile index
+(**0 = empty**, skipped so the background shows through), bits [31:16] = an
+RGB565 tint applied to that tile's set bits. One word per cell is
+FPGA-friendly (a single aligned fetch) and lets a map initialised to zeros be
+blank. Per-cell colour is the one "tile attribute" both games need.
+
+**Tiles** are the *same* 1-bpp images the SPRITE command (M19) uses: row-major,
+rows padded to whole bytes, MSB = leftmost. Tile N (>= 1) lives at
+`TILE_ADDR + (N-1) · tile_bytes`, `tile_bytes = H · ceil(W/8)`. Index 0 is
+reserved as "empty" (never fetched). Reusing the sprite format means one pixel
+pipeline, not two — critical for FPGA reproducibility.
+
+**Registers** (CMD 6 = TILEMAP): reuse X/Y (0x100/0x104) as the map's signed
+origin on screen and W/H (0x118/0x11C) as one tile's size; add MAP_ADDR
+(0x120, the cell array), TILE_ADDR (0x124, the tile-set image), COLS (0x128),
+ROWS (0x12C). COLOR is unused (colour is per-cell). Cell (col, row) lands at
+`(X + col·W, Y + row·H)`; each tile clips to the screen exactly like a sprite
+(negative origin shows its right/bottom part, right/bottom overhangs are cut),
+computed in 64-bit so no coordinate wraps. A zero W/H or COLS/ROWS draws
+nothing. Like SPRITE, cell and tile fetches read only from ROM/RAM; anything
+else (including the MMIO window) reads as empty/transparent, so a map can
+never disturb a device and `stray_accesses` stays 0.
+
+**Guest API**: `gfx_tilemap(x, y, cells, tiles, cols, rows, tile_w, tile_h)`
+issues one TILEMAP. `gfx_clear` / `gfx_rect` / `gfx_sprite` / `gfx_present`
+are unchanged.
+
+**Adopted in Tetris** — the field *became* the tilemap: `field[]` is now the
+200-cell array itself (single source of truth for collision AND rendering).
+Occupied cells store `1u | (pcol[piece] << 16)` (tile 1 = a 9×9 block inside a
+10×10 cell, reproducing the old per-cell `gfx_rect` exactly, gap included); the
+per-cell colour carries the piece identity, so one tile renders all seven
+pieces. `draw()` is now one `gfx_tilemap` call — no per-frame repaint loop —
+and lock/clear only touch the cells that change. Breakout was **not** converted:
+its bricks are a per-row bitmask (not a cell grid) and it is already at ~2k
+inst/frame; the payoff there is marginal, so per "smallest change" it stays on
+FILL. The tilemap's real remaining consumer is M22's platformer.
+
+**Measured effect** (Tetris): 9,384 -> **8,079** instructions/frame average,
+16,678 -> **14,309** max (300 frames). The field-repaint loop is gone; the
+residual is game logic, the falling/preview piece, and the per-glyph panel
+text. State hash re-pinned; framebuffer pixel assertions are byte-identical
+(the 9×9 block is unchanged).
+
+**Testing**: `make test-tilemap` boots `tilemap_demo.c` on the machine's own
+CPU and re-renders **every pixel** from an independent model written from the
+documented semantics (not by calling the device): 4 distinct tiles at 8×8,
+per-cell colour, empty cells, right/bottom overhang, negative origin, a RAM
+cell source rendering identically to the ROM original, an illegal (MMIO-window)
+cell source and zero-size guards drawing nothing, register readbacks
+(X/Y/W/H/MAP/TILE/COLS/ROWS), timer and `stray_accesses` undisturbed, and
+reset-and-compare determinism. `make test-tetris` re-verified the full game
+script against the new 32-bit field representation.
 
 ---
 

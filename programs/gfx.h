@@ -21,6 +21,11 @@
 #define GFX_REG_ADDR  (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x114))
 #define GFX_REG_W     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x118))
 #define GFX_REG_H     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x11C))
+/* M20 tilemap registers (docs.md "Tilemap decisions, pinned at M20"). */
+#define GFX_REG_MAP_ADDR  (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x120))
+#define GFX_REG_TILE_ADDR (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x124))
+#define GFX_REG_COLS      (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x128))
+#define GFX_REG_ROWS      (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x12C))
 /* 0x110 (STATUS, PRESENT count) exists but the API never needs to read it. */
 
 /* VIDEO_CMD values (docs.md register table). */
@@ -29,6 +34,7 @@
 #define GFX_CMD_PRESENT   0x3u
 #define GFX_CMD_FILL      0x4u
 #define GFX_CMD_SPRITE    0x5u
+#define GFX_CMD_TILEMAP   0x6u
 
 /* Fill the whole screen with color (RGB565). */
 static inline void gfx_clear(unsigned int color)
@@ -72,6 +78,34 @@ static inline void gfx_sprite(int x, int y, const void *img,
     GFX_REG_W     = (unsigned int)w;
     GFX_REG_H     = (unsigned int)h;
     GFX_REG_CMD   = GFX_CMD_SPRITE;
+}
+
+/* Draw a cols x rows tilemap of cells at top-left (x, y).
+ *
+ * `cells` points at cols*rows 32-bit little-endian words. Each cell's low
+ * 16 bits are a tile index (0 = empty cell, drawn as nothing so the
+ * background shows through); its high 16 bits are an RGB565 colour that
+ * tints that tile's set bits. Tile N (>= 1) has its 1-bpp image — the same
+ * format gfx_sprite() takes — stored at `tiles + (N-1)*tile_bytes`, where
+ * tile_bytes = tile_h * ((tile_w + 7) / 8). Cell (col, row) lands at
+ * (x + col*tile_w, y + row*tile_h); each tile clips to the screen like a
+ * sprite. `cells` and `tiles` must live in ROM or RAM; anything else draws
+ * nothing. tile_w/tile_h <= 0 or cols/rows <= 0 draws nothing. */
+static inline void gfx_tilemap(int x, int y, const void *cells,
+                               const void *tiles, int cols, int rows,
+                               int tile_w, int tile_h)
+{
+    if (cols <= 0 || rows <= 0 || tile_w <= 0 || tile_h <= 0)
+        return;
+    GFX_REG_X         = (unsigned int)x;
+    GFX_REG_Y         = (unsigned int)y;
+    GFX_REG_MAP_ADDR  = (unsigned int)cells;
+    GFX_REG_TILE_ADDR = (unsigned int)tiles;
+    GFX_REG_COLS      = (unsigned int)cols;
+    GFX_REG_ROWS      = (unsigned int)rows;
+    GFX_REG_W         = (unsigned int)tile_w;
+    GFX_REG_H         = (unsigned int)tile_h;
+    GFX_REG_CMD       = GFX_CMD_TILEMAP;
 }
 
 /* Mark a frame as presented (counted by the device's STATUS register). */

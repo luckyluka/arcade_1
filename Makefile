@@ -26,7 +26,7 @@ TESTDIR := build
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
-test-sprite test-breakout test-tetris: | $(TESTDIR)
+test-sprite test-tilemap test-breakout test-tetris: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -43,7 +43,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo breakout tetris
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo breakout tetris
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -56,7 +56,8 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 .PHONY: all clean program android android-arm64 android-arm \
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video test-gfx test-rom test-sprite test-breakout test-tetris
+        test-video test-gfx test-rom test-sprite test-tilemap \
+        test-breakout test-tetris
 
 all: $(TARGET)
 
@@ -240,6 +241,19 @@ test-sprite: $(GUEST_BUILD)/sprite_demo.bin
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_sprite $(GUEST_BUILD)/sprite_demo.bin
+
+# Build and run the milestone-20 tilemap-engine harness: boot tilemap_demo.c
+# on the machine's own CPU, drive it once, and verify the whole framebuffer
+# against an independent re-render of the documented semantics — multiple
+# tiles, per-cell colour, empty cells, negative origin and right/bottom
+# clipping, ROM-vs-RAM cells, an illegal cell source and zero-size guards
+# drawing nothing — plus reset-and-compare determinism.
+test-tilemap: $(GUEST_BUILD)/tilemap_demo.bin
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_tilemap \
+	    tests/test_tilemap.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
+	$(TESTDIR)/test_tilemap $(GUEST_BUILD)/tilemap_demo.bin
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
