@@ -19,9 +19,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 10        | Load compiled C program    | COMPLETE |
 | 11        | MMIO                       | COMPLETE |
 | 12        | Timer                      | COMPLETE |
-| 13+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 13        | ARCADE-1 video device      | COMPLETE |
+| 14+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 13 — ARCADE-1 video device.** See `docs.md` for the
+Next up: **Milestone 14 — Simple rectangle API.** See `docs.md` for the
 exact scope.
 
 ## Architecture
@@ -34,6 +35,7 @@ src/
         cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
         exec.h/.c      RV32I interpreter: registers + PC + single-step
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
+        video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT -> framebuffer (M13)
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
 programs/               guest code compiled by RISC-V GCC (M10+)
@@ -41,6 +43,7 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     link.ld             linker script: code->ROM, data/bss/stack->RAM
     counter.c           docs.md example program (counter = 123)
     mmio_demo.c         M11 guest: read IN register, write OUT register
+    video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     build/              generated .elf/.bin (gitignored)
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
@@ -68,6 +71,7 @@ make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
 make test-program # M10 run compiled C on the VM, assert counter == 123
 make test-mmio    # M11 guest reads/writes an MMIO device register
 make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
+make test-video   # M13 guest drives video device -> framebuffer, reset
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -107,31 +111,39 @@ measurable, one commit per task:
   (per roadmap: do not freeze the display resolution yet).
 - Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
   gap) is a placeholder, not the final ARCADE-1 map. MMIO routes to a
-  host-registered device handler; since M12 the machine attaches the **timer**
-  device to it (video is M13).
+  host-registered handler that the machine muxes between its devices: timer
+  (M12) at 0x000..0x0FF, video (M13) at 0x100..
 - The test pattern, moving square, and beep are host-driven demo logic inside
-  the machine; they will be replaced by the RV32 CPU + real devices in
-  milestones 08–13.
+  the machine. The devices now exist (M12 timer, M13 video), but the demo
+  rendering still paints every frame — it is fully replaced only when the CPU
+  is wired into the frame loop (firmware-boot milestone).
 - The RV32I interpreter (M09) and the guest program flow (M10/M11) work, but a
   compiled program is still executed by a **standalone harness**
-  (`make test-program`, `make test-mmio`) — it is **not yet wired into the
-  machine's frame loop**. `arcade1_run_frame` still drives the host demo logic
-  (square/beep); the machine does not yet *boot* a program as firmware (that
-  wiring comes in a later milestone, now that the MMIO infrastructure exists).
+  (`make test-program`, `make test-mmio`, `make test-video`) — it is **not yet
+  wired into the machine's frame loop**. `arcade1_run_frame` still drives the
+  host demo logic (square/beep); the machine does not yet *boot* a program as
+  firmware (that wiring comes in a later milestone, now that the MMIO
+  infrastructure exists).
 - MMIO is minimal by design (M11): one 4 KiB window (0x4000) routed to a single
   host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops).
-  The machine attaches the timer through it (M12); video attaches the same way
-  in M13.
+  The machine's handler muxes the window: timer at 0x000..0x0FF, video at
+  0x100.., unknown offsets read 0 / ignore writes.
 - Timer (M12): exactly 1 tick per frame, registers `TIMER_COUNT` (read-only)
-  and `TIMER_CTRL` (bit0 = enable), no interrupt/pending logic. It is driven
-  and read by the host test today — a guest cannot read it yet because the CPU
-  is **not wired into the frame loop** (that arrives with the firmware-boot
-  milestone).
+  and `TIMER_CTRL` (bit0 = enable), no interrupt/pending logic. Guest code can
+  already reach it (the M12 harness runs a guest `lw`), but nothing reads it
+  per-frame yet because the CPU is **not wired into the frame loop** (that
+  arrives with the firmware-boot milestone).
+- Video (M13): single framebuffer, no flipping — `PRESENT` only counts
+  executions (buffering deliberately left undecided per docs.md). Guest
+  drawing works over MMIO (`make test-video`), but the host demo pattern
+  still repaints every frame, so guest pixels land *between* frames until the
+  CPU runs inside `arcade1_run_frame()`. No guest graphics API yet (M14 adds
+  the rectangle API).
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (currently ~112 bytes).
+  ROM (largest so far: video_demo at 264 bytes).
 - FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
   OS/syscall/halt handling yet. Unknown words also act as NOP. `crt0` "ends"
   a program by parking in a self-loop (`j .`), which the harness detects.

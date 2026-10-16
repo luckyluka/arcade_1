@@ -2,9 +2,9 @@
  *
  * Self-contained machine logic: RGB565 software framebuffer, test pattern,
  * RetroPad indicator overlay, D-pad moving square, a 440 Hz beep, and the
- * milestone-12 timer (one tick per frame, exposed over MMIO). This file has
- * NO dependency on libretro or any host frontend; it is driven purely through
- * the arcade1_* API in machine.h.
+ * timer (M12) + video (M13) MMIO devices. This file has NO dependency on
+ * libretro or any host frontend; it is driven purely through the arcade1_*
+ * API in machine.h.
  */
 
 #include "machine.h"
@@ -162,6 +162,31 @@ static void audio_render(arcade1_machine_t *m)
     }
 }
 
+/* --- MMIO dispatch (the window's single M11 handler) --------------------- *
+ * The bus routes the whole 0x4000 window to one handler, so the machine muxes
+ * it: 0x000..0x0FF is the timer, 0x100.. is the video device. Offsets that no
+ * device claims read 0 / ignore writes — still not stray accesses, because the
+ * handler itself is attached (docs.md "MMIO decisions"). */
+
+static uint32_t machine_mmio_read(void *ctx, uint32_t offset)
+{
+    arcade1_machine_t *m = ctx;
+
+    if (offset < ARCADE1_VIDEO_REG_BASE)
+        return arcade1_timer_mmio_read(&m->timer, offset);
+    return arcade1_video_mmio_read(&m->video, offset);
+}
+
+static void machine_mmio_write(void *ctx, uint32_t offset, uint32_t value)
+{
+    arcade1_machine_t *m = ctx;
+
+    if (offset < ARCADE1_VIDEO_REG_BASE)
+        arcade1_timer_mmio_write(&m->timer, offset, value);
+    else
+        arcade1_video_mmio_write(&m->video, offset, value);
+}
+
 /* --- Public API ---------------------------------------------------------- */
 
 void arcade1_init(arcade1_machine_t *m)
@@ -169,11 +194,14 @@ void arcade1_init(arcade1_machine_t *m)
     memset(m, 0, sizeof(*m));
     arcade1_bus_init(&m->bus);
     arcade1_timer_reset(&m->timer);
-    /* Attach the timer as the machine's first device on the MMIO window (the
-     * M11 handler mechanism). arcade1_bus_reset() keeps this attachment, so a
-     * reset restarts the timer without re-registering it. */
-    arcade1_set_mmio(&m->bus, arcade1_timer_mmio_read,
-                     arcade1_timer_mmio_write, &m->timer);
+    arcade1_video_reset(&m->video);
+    /* The video device borrows the machine's scanout buffer (set once here,
+     * kept across resets). */
+    m->video.framebuffer = m->framebuffer;
+    /* Attach the machine's muxed handler to the MMIO window (the M11 handler
+     * mechanism). arcade1_bus_reset() keeps this attachment, so a reset
+     * restarts the devices without re-registering anything. */
+    arcade1_set_mmio(&m->bus, machine_mmio_read, machine_mmio_write, m);
 }
 
 void arcade1_reset(arcade1_machine_t *m)
@@ -183,11 +211,17 @@ void arcade1_reset(arcade1_machine_t *m)
     m->square_x      = (ARCADE1_WIDTH  - SQUARE_SIZE) / 2;
     m->square_y      = (ARCADE1_HEIGHT - SQUARE_SIZE) / 2;
 
+    /* Power-on video state: a black screen with no guest commands pending.
+     * (Everything rendered by arcade1_run_frame() is regenerated from scratch
+     * each frame, so this only matters for guest-drawn pixels.) */
+    memset(m->framebuffer, 0, sizeof(m->framebuffer));
+    arcade1_video_reset(&m->video);
+
     /* The timer restarts with the machine (count 0, enabled). */
     arcade1_timer_reset(&m->timer);
 
     /* RAM is volatile; a reset clears it but preserves any loaded ROM and the
-     * timer's MMIO attachment. */
+     * devices' MMIO attachment. */
     arcade1_bus_reset(&m->bus);
 }
 

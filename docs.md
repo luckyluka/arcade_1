@@ -598,18 +598,24 @@ implemented (M12 timer, M13 video, ...).
 
 **Register table** — the canonical list of machine device registers. It was
 empty at M11 (infrastructure only); each device appends its rows here when it
-lands. The timer's rows were pinned at M12:
+lands. The timer's rows were pinned at M12, the video device's at M13:
 
 | Offset | Register    | Access | Function | When it takes effect |
 |--------|-------------|--------|----------|----------------------|
 | 0x00   | TIMER_COUNT | R      | Tick count, +1 per completed frame while enabled. Read-only: writes are ignored by the device. | Advances once per `arcade1_run_frame()` while CTRL bit0 is set; a `lw` observes the value at the instruction that performs it |
 | 0x04   | TIMER_CTRL  | R/W    | bit0 = enable (1) / pause (0); all other bits are ignored on write and read as 0 | The register latches at the `sw` instruction; the new state governs every frame that completes after that write |
-| —      | Video       | TBD    | defined at M13 | pinned at M13 |
+| 0x100  | VIDEO_X     | R/W    | Set-pixel X coordinate (kept exactly as written; the plot itself clips to the screen) | Latches at the `sw`; read by the next SET_PIXEL command |
+| 0x104  | VIDEO_Y     | R/W    | Set-pixel Y coordinate (kept exactly as written; the plot itself clips to the screen) | Latches at the `sw`; read by the next SET_PIXEL command |
+| 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL, masked to 16 bits | Latches at the `sw` |
+| 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
+| 0x110  | VIDEO_STATUS | R     | Number of PRESENT commands executed | Increments at the `sw` of each PRESENT |
 
-(Both timer registers are serviced by the one device handler, so every access
-reaches the device — `stray_accesses` stays 0. M11's harness `tests/test_mmio.c`
-demonstrates read/write dispatch with a scratch register pair that lives in the
-test; as of M12 the machine itself attaches the timer to this window.)
+(The machine registers a **single** handler for the whole window — the M11
+contract — and muxes it internally: `0x000..0x0FF` is the timer, `0x100..` is
+the video device; unknown offsets read 0 / ignore writes. Every access thus
+reaches a device, so `stray_accesses` stays 0. M11's harness
+`tests/test_mmio.c` demonstrates read/write dispatch with a scratch register
+pair that lives in the test.)
 
 ---
 
@@ -684,6 +690,30 @@ software renderer
      ↓
 Libretro
 ```
+
+## Video decisions (pinned at M13)
+
+- **Window split:** the machine keeps the M11 contract of ONE handler for the
+  window and muxes it internally — `0x000..0x0FF` is the timer, `0x100..` is
+  the video device. Unknown offsets read 0 / ignore writes (still serviced by
+  the handler, so never stray).
+- **Registers:** `VIDEO_X`, `VIDEO_Y`, `VIDEO_COLOR` (R/W), `VIDEO_CMD` (W:
+  1 = CLEAR, 2 = SET_PIXEL, 3 = PRESENT) and `VIDEO_STATUS` (R: PRESENTs
+  executed), appended to the register table in §15.
+- **Single buffer, no flip:** the device draws directly into the machine's
+  scanout framebuffer — the RGB565 buffer Libretro reads. `PRESENT` only
+  counts executions; buffering/flip policy stays deliberately undecided
+  (docs.md: do NOT finalize the graphics architecture yet).
+- **Clipping:** SET_PIXEL ignores plots outside 320x240 (coordinates still
+  read back as written), COLOR is masked to 16 bits, CLEAR fills the whole
+  screen.
+- **Reset:** `arcade1_reset()` restores the power-on video state — black
+  screen, zeroed registers and present counter (the framebuffer pointer and
+  the window's MMIO attachment survive, like RAM/ROM semantics).
+- **Scope:** the host demo rendering inside `arcade1_run_frame()` still paints
+  the test pattern each frame for now, so guest pixels land *between* frames;
+  full guest takeover of the screen arrives when the CPU is wired into the
+  frame loop (later milestone).
 
 ---
 

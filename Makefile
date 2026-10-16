@@ -15,7 +15,8 @@ LDFLAGS += -shared
 
 TARGET  := arcade1_libretro.so
 SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
-           src/arcade1/exec.c src/arcade1/timer.c src/libretro/libretro.c
+           src/arcade1/exec.c src/arcade1/timer.c src/arcade1/video.c \
+           src/libretro/libretro.c
 
 # Test executables are built into this directory (gitignored) instead of /tmp.
 TESTDIR := build
@@ -23,7 +24,7 @@ TESTDIR := build
 # Every test target builds into $(TESTDIR), so make sure the directory exists
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
-test-exec test-program test-mmio test-timer: | $(TESTDIR)
+test-exec test-program test-mmio test-timer test-video: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -38,7 +39,7 @@ GUEST_ARCH    := -march=rv32i -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo
+GUEST_PROGS   := counter mmio_demo video_demo
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
@@ -47,7 +48,8 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 .SECONDARY: $(GUEST_ELFS)
 
 .PHONY: all clean program test test-input test-square test-beep test-machine \
-        test-memory test-cpu test-exec test-program test-mmio test-timer
+        test-memory test-cpu test-exec test-program test-mmio test-timer \
+        test-video
 
 all: $(TARGET)
 
@@ -84,7 +86,7 @@ test-beep: $(TARGET)
 test-machine:
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_machine \
 	    tests/test_machine.c src/arcade1/machine.c src/arcade1/memory.c \
-	    src/arcade1/timer.c
+	    src/arcade1/timer.c src/arcade1/video.c
 	$(TESTDIR)/test_machine
 
 # Build and run the milestone-07 memory/bus harness. Links ONLY memory.c —
@@ -142,12 +144,25 @@ test-mmio: $(GUEST_BUILD)/mmio_demo.bin
 # Build and run the milestone-12 timer harness: drive real machine frames and
 # check the timer's MMIO registers (host-level rw + a hand-assembled CPU lw),
 # CTRL pause/resume, read-only COUNT, and reset-and-compare determinism. Links
-# machine+timer+memory+exec+cpu (no libretro, no .so).
+# machine+timer+video+memory+exec+cpu (no libretro, no .so).
 test-timer:
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_timer \
 	    tests/test_timer.c src/arcade1/machine.c src/arcade1/timer.c \
-	    src/arcade1/memory.c src/arcade1/exec.c src/arcade1/cpu.c
+	    src/arcade1/video.c src/arcade1/memory.c src/arcade1/exec.c \
+	    src/arcade1/cpu.c
 	$(TESTDIR)/test_timer
+
+# Build and run the milestone-13 video harness: run video_demo.c on the CPU so
+# it issues CLEAR/SET_PIXEL/PRESENT over MMIO into the machine's scanout
+# framebuffer, then check pixels, register readbacks, timer+video coexisting on
+# the one muxed window, and reset-and-compare determinism. Links
+# machine+video+timer+memory+exec+cpu (no libretro, no .so).
+test-video: $(GUEST_BUILD)/video_demo.bin
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_video \
+	    tests/test_video.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/memory.c src/arcade1/exec.c \
+	    src/arcade1/cpu.c
+	$(TESTDIR)/test_video $(GUEST_BUILD)/video_demo.bin
 
 clean:
 	rm -f $(TARGET)
