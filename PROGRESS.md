@@ -32,9 +32,10 @@ the v0.1 machine specification it produced (M24) is in `SPEC.md`.
 | 21        | Scrolling (camera)         | COMPLETE |
 | 22        | Platformer (integration)   | COMPLETE |
 | 23        | Architecture Review        | COMPLETE |
-| 24+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 24        | ARCADE-1 v0.1 Candidate    | COMPLETE |
+| 25+       | (see `FUTURE_MILESTONES.md`) | NOT STARTED |
 
-Next up: **Milestone 24 — ARCADE-1 v0.1 Candidate** (write the machine spec from the review). See `docs.md` for the exact scope.
+Next up: **Milestone 25 — SDK v0.1** (build the real developer-facing ARCADE-1 SDK). See `FUTURE_MILESTONES.md` for the exact scope.
 
 ## Architecture
 
