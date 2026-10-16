@@ -34,6 +34,7 @@ void arcade1_cpu_reset(arcade1_cpu_t *cpu)
     for (int i = 0; i < 32; i++)
         cpu->regs[i] = 0u;
     cpu->pc = ARCADE1_ROM_BASE;
+    cpu->instret = 0u;
 }
 
 /* --- Execute one instruction --------------------------------------------- */
@@ -144,4 +145,5 @@ void arcade1_cpu_step(arcade1_cpu_t *cpu, arcade1_bus_t *bus)
     }
 
     cpu->pc = next;
+    cpu->instret++;   /* one step = one executed instruction (incl. NOPs) */
 }

@@ -1039,8 +1039,10 @@ strays.
 Golden-frame or behavior tests where practical.
 
 Each game must be headless-runnable (no frontend) and print a hash per frame,
-so runs can be diffed byte-for-byte across hosts and after a reset. Record each
-game's CPU load as a number once it runs, so regressions are visible.
+so runs can be diffed byte-for-byte across hosts and after a reset. A game's
+CPU load is instructions executed per frame; read the counter before and after
+each frame. Record each game's CPU load as a number once it runs, so
+regressions are visible.
 
 The same ARCADE-1 game should eventually be executable by:
 

@@ -94,6 +94,7 @@ int main(void)
     assert(cpu.pc == ARCADE1_ROM_BASE && "reset PC must be ROM base");
     for (int i = 0; i < 32; i++)
         assert(cpu.regs[i] == 0 && "reset must clear all registers");
+    assert(cpu.instret == 0 && "reset must clear the instruction counter");
 
     /* === Arithmetic + x0 rule =========================================== */
     {
@@ -114,6 +115,7 @@ int main(void)
         assert(cpu.regs[4] == 77   && "SUB x4, x1, x2 -> 77");
         assert(cpu.regs[0] == 0    && "write to x0 must be discarded (x0==0)");
         assert(cpu.pc == 20        && "PC must advance 4 per instruction");
+        assert(cpu.instret == 5    && "instret must equal steps taken");
     }
 
     /* === Logical + shifts =============================================== */
@@ -341,6 +343,7 @@ int main(void)
         assert(cpu.regs[1] == 5 && "ADDI before NOPs");
         assert(cpu.regs[2] == 6 && "execution continues after NOPs");
         assert(cpu.pc == 16 && "NOPs must advance PC by 4");
+        assert(cpu.instret == 4 && "NOP/system steps must count as executed");
     }
 
     printf("milestone09: all assertions passed\n");

@@ -21,19 +21,24 @@
 
 /* --- CPU architectural state -------------------------------------------- *
  * 32 x 32-bit general registers + program counter. x0 is hardwired to zero:
- * reads of x0 always yield 0 and writes to x0 are discarded. */
+ * reads of x0 always yield 0 and writes to x0 are discarded.
+ *
+ * instret counts instructions executed (retired steps), including steps that
+ * behave as NOP (unknown or system encodings). Diagnostic only — it has no
+ * effect on execution. Cleared by arcade1_cpu_reset. */
 typedef struct arcade1_cpu {
     uint32_t regs[32];
     uint32_t pc;
+    uint64_t instret;
 } arcade1_cpu_t;
 
 /* Power-on reset: all registers cleared to 0, PC set to the ROM base (the
- * entry point). */
+ * entry point), instret cleared to 0. */
 void arcade1_cpu_reset(arcade1_cpu_t *cpu);
 
 /* Execute the single instruction at PC, then advance PC. Deterministic and
  * never faults: unmapped fetches and unknown encodings behave as a NOP
- * (PC += 4). */
+ * (PC += 4). Every call counts as one executed instruction (instret++). */
 void arcade1_cpu_step(arcade1_cpu_t *cpu, arcade1_bus_t *bus);
 
 #endif /* ARCADE1_EXEC_H */
