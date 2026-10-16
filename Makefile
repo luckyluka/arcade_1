@@ -24,7 +24,7 @@ TESTDIR := build
 # Every test target builds into $(TESTDIR), so make sure the directory exists
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
-test-exec test-program test-mmio test-timer test-video: | $(TESTDIR)
+test-exec test-program test-mmio test-timer test-video test-gfx: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -39,7 +39,7 @@ GUEST_ARCH    := -march=rv32i -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
@@ -49,7 +49,7 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
 .PHONY: all clean program test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video
+        test-video test-gfx
 
 all: $(TARGET)
 
@@ -115,7 +115,8 @@ test-exec:
 # --- Guest programs: C -> RV32 ELF -> flat binary --------------------------
 program: $(GUEST_BINS)
 
-$(GUEST_BUILD)/%.elf: programs/%.c programs/crt0.S programs/link.ld
+# gfx.h is shared guest API: rebuild guests when it changes.
+$(GUEST_BUILD)/%.elf: programs/%.c programs/gfx.h programs/crt0.S programs/link.ld
 	@mkdir -p $(GUEST_BUILD)
 	$(RISCV_GCC) $(GUEST_CFLAGS) -T programs/link.ld -o $@ programs/crt0.S $<
 
@@ -163,6 +164,18 @@ test-video: $(GUEST_BUILD)/video_demo.bin
 	    src/arcade1/timer.c src/arcade1/memory.c src/arcade1/exec.c \
 	    src/arcade1/cpu.c
 	$(TESTDIR)/test_video $(GUEST_BUILD)/video_demo.bin
+
+# Build and run the milestone-14 graphics-API harness: gfx_demo.c draws ONLY
+# via gfx_clear/gfx_rect/gfx_present (programs/gfx.h), and the harness counts
+# every framebuffer pixel to prove drawing, overlap order and clipping (incl.
+# negative coordinates), plus reset-and-compare determinism. Links
+# machine+video+timer+memory+exec+cpu (no libretro, no .so).
+test-gfx: $(GUEST_BUILD)/gfx_demo.bin
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_gfx \
+	    tests/test_gfx.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/memory.c src/arcade1/exec.c \
+	    src/arcade1/cpu.c
+	$(TESTDIR)/test_gfx $(GUEST_BUILD)/gfx_demo.bin
 
 clean:
 	rm -f $(TARGET)

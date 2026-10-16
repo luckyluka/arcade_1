@@ -20,10 +20,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 11        | MMIO                       | COMPLETE |
 | 12        | Timer                      | COMPLETE |
 | 13        | ARCADE-1 video device      | COMPLETE |
-| 14+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 14        | Simple rectangle API       | COMPLETE |
+| 15+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 14 — Simple rectangle API.** See `docs.md` for the
-exact scope.
+Next up: **Milestone 15 — Breakout.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -41,9 +41,11 @@ src/
 programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
+    gfx.h               guest graphics API: gfx_clear/rect/present (M14, guest-only)
     counter.c           docs.md example program (counter = 123)
     mmio_demo.c         M11 guest: read IN register, write OUT register
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
+    gfx_demo.c          M14 guest: draws only through the gfx.h API
     build/              generated .elf/.bin (gitignored)
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
@@ -72,6 +74,7 @@ make test-program # M10 run compiled C on the VM, assert counter == 123
 make test-mmio    # M11 guest reads/writes an MMIO device register
 make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
 make test-video   # M13 guest drives video device -> framebuffer, reset
+make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -137,13 +140,18 @@ measurable, one commit per task:
   executions (buffering deliberately left undecided per docs.md). Guest
   drawing works over MMIO (`make test-video`), but the host demo pattern
   still repaints every frame, so guest pixels land *between* frames until the
-  CPU runs inside `arcade1_run_frame()`. No guest graphics API yet (M14 adds
-  the rectangle API).
+  CPU runs inside `arcade1_run_frame()`.
+- Graphics API (M14): `programs/gfx.h` provides `gfx_clear` / `gfx_rect` /
+  `gfx_present` as a **guest-only** header (it dereferences fixed MMIO
+  addresses — host tests must use the `arcade1_*` API instead). Deliberately
+  primitive: one `sw` per pixel, device-side clipping only, and no sprites,
+  tilemaps, alpha blending or hardware-accelerated rectangles yet (forbidden
+  by docs.md until a later milestone).
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: video_demo at 264 bytes).
+  ROM (largest so far: gfx_demo at 344 bytes).
 - FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
   OS/syscall/halt handling yet. Unknown words also act as NOP. `crt0` "ends"
   a program by parking in a self-loop (`j .`), which the harness detects.

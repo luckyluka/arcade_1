@@ -735,6 +735,26 @@ The important thing is that a program running inside RV32 can draw graphics.
 
 Do not add sprites, tilemaps, textures, shaders, rotation, alpha blending, or other features yet.
 
+## Graphics API decisions (pinned at M14)
+
+- **Guest-side layer, no new hardware:** the API is `programs/gfx.h`
+  (header-only, `static inline`), compiled into guest programs. It maps onto
+  the M13 video device's registers — so **no register-table rows are added at
+  M14**: `clear` -> `VIDEO_CMD = 1`, `rectangle` -> a loop of `VIDEO_CMD = 2`
+  plots with `VIDEO_COLOR` set once per call, `present` -> `VIDEO_CMD = 3`.
+- **Signatures:** `gfx_clear(color)`, `gfx_rect(x, y, w, h, color)`,
+  `gfx_present()` — signed screen coordinates with top-left origin, RGB565
+  colours. `w/h <= 0` draws nothing.
+- **Primitive by design:** a rectangle costs one `sw` per pixel (no hardware
+  rectangle, no acceleration). Anything outside the screen — including
+  negative x/y — is clipped per pixel by the device, so a partly off-screen
+  rectangle is safe to draw.
+- **Explicitly excluded** (per the milestone text): sprites, tilemaps,
+  textures, shaders, rotation, alpha blending — none of it exists at M14.
+- **Scope:** guest drawing still lands *between* frames while the host demo
+  repaints every `arcade1_run_frame()` (same as M13). The M15 game (Breakout)
+  uses this API as its drawing primitive.
+
 ---
 
 # 19. Milestone 15 — Breakout
