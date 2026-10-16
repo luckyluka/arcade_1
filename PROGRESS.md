@@ -17,9 +17,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 08        | RV32I decoder              | COMPLETE |
 | 09        | RV32I execution            | COMPLETE |
 | 10        | Load compiled C program    | COMPLETE |
-| 11+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 11        | MMIO                       | COMPLETE |
+| 12+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 11 — MMIO.** See `docs.md` for the exact scope.
+Next up: **Milestone 12 — Timer.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -27,7 +28,7 @@ Next up: **Milestone 11 — MMIO.** See `docs.md` for the exact scope.
 src/
     arcade1/
         machine.h/.c   machine state + per-frame logic (frontend-independent)
-        memory.h/.c    memory/bus: ROM + RAM, 8/16/32-bit read/write
+        memory.h/.c    memory/bus: ROM + RAM + MMIO (device handler), 8/16/32-bit r/w
         cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
         exec.h/.c      RV32I interpreter: registers + PC + single-step
     libretro/
@@ -36,6 +37,7 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
     counter.c           docs.md example program (counter = 123)
+    mmio_demo.c         M11 guest: read IN register, write OUT register
     build/              generated .elf/.bin (gitignored)
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
@@ -61,6 +63,7 @@ make test-cpu     # M08 RV32I decoder (links ONLY cpu.c)
 make test-exec    # M09 RV32I interpreter (links exec+cpu+memory, no .so)
 make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
 make test-program # M10 run compiled C on the VM, assert counter == 123
+make test-mmio    # M11 guest reads/writes an MMIO device register
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -75,16 +78,23 @@ square is a unique orange `0xFD00` so tests can locate it by scanning).
 
 - 320x240 @ 60 fps, 48 kHz audio — placeholder resolution/rate, NOT final
   (per roadmap: do not freeze the display resolution yet).
-- Memory map (ROM 0x0000+4K, RAM 0x1000+4K) is a placeholder, not the final
-  ARCADE-1 map. No MMIO/peripherals yet.
+- Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
+  gap) is a placeholder, not the final ARCADE-1 map. MMIO now routes to a
+  host-registered device handler, but there are **no concrete peripherals**
+  attached yet (timer is M12, the video device is M13).
 - The test pattern, moving square, and beep are host-driven demo logic inside
   the machine; they will be replaced by the RV32 CPU + real devices in
   milestones 08–13.
-- The RV32I interpreter (M09) and the guest program flow (M10) work, but a
+- The RV32I interpreter (M09) and the guest program flow (M10/M11) work, but a
   compiled program is still executed by a **standalone harness**
-  (`make test-program`) — it is **not yet wired into the machine's frame
-  loop**. `arcade1_run_frame` still drives the host demo logic (square/beep);
-  making the machine *boot* a program as firmware arrives with MMIO (M11+).
+  (`make test-program`, `make test-mmio`) — it is **not yet wired into the
+  machine's frame loop**. `arcade1_run_frame` still drives the host demo logic
+  (square/beep); the machine does not yet *boot* a program as firmware (that
+  wiring comes in a later milestone, now that the MMIO infrastructure exists).
+- MMIO is minimal by design (M11): one 4 KiB window (0x4000) routed to a single
+  host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops), and
+  the machine attaches no device yet. Timer/video attach via the same handler in
+  M12/M13.
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is

@@ -16,6 +16,7 @@ typedef enum {
     REGION_NONE,
     REGION_ROM,
     REGION_RAM,
+    REGION_MMIO,
 } region_t;
 
 /* Decode an address to a region. Callers pass the access width in bytes so we
@@ -36,6 +37,9 @@ static region_t resolve(const arcade1_bus_t *bus, uint32_t addr,
     if (addr - ARCADE1_RAM_BASE <= ARCADE1_RAM_SIZE - width)
         return REGION_RAM;
 
+    if (addr - ARCADE1_MMIO_BASE <= ARCADE1_MMIO_SIZE - width)
+        return REGION_MMIO;
+
     return REGION_NONE;
 }
 
@@ -48,8 +52,18 @@ void arcade1_bus_init(arcade1_bus_t *bus)
 
 void arcade1_bus_reset(arcade1_bus_t *bus)
 {
-    /* RAM is volatile; ROM persists across runs. */
+    /* RAM is volatile; ROM and the attached MMIO handler persist across runs. */
     memset(bus->ram, 0, sizeof(bus->ram));
+}
+
+void arcade1_set_mmio(arcade1_bus_t *bus,
+                      arcade1_mmio_read_fn read_fn,
+                      arcade1_mmio_write_fn write_fn,
+                      void *ctx)
+{
+    bus->mmio_read  = read_fn;
+    bus->mmio_write = write_fn;
+    bus->mmio_ctx   = ctx;
 }
 
 /* --- ROM loading --------------------------------------------------------- */
@@ -82,6 +96,7 @@ uint8_t arcade1_read8(const arcade1_bus_t *bus, uint32_t addr)
     case REGION_RAM:
         base = bus->ram + (addr - ARCADE1_RAM_BASE);
         break;
+    case REGION_MMIO:   /* Sub-word MMIO unsupported: deterministic 0. */
     case REGION_NONE:
     default:
         return 0;   /* Out of range: deterministic zero, no fault. */
@@ -100,6 +115,7 @@ uint16_t arcade1_read16(const arcade1_bus_t *bus, uint32_t addr)
     case REGION_RAM:
         base = bus->ram + (addr - ARCADE1_RAM_BASE);
         break;
+    case REGION_MMIO:   /* Sub-word MMIO unsupported: deterministic 0. */
     case REGION_NONE:
     default:
         return 0;   /* Out of range: deterministic zero, no fault. */
@@ -119,6 +135,10 @@ uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr)
     case REGION_RAM:
         base = bus->ram + (addr - ARCADE1_RAM_BASE);
         break;
+    case REGION_MMIO:
+        /* Dispatch to the registered device; no device -> deterministic 0. */
+        return bus->mmio_read ? bus->mmio_read(bus->mmio_ctx,
+                                               addr - ARCADE1_MMIO_BASE) : 0u;
     case REGION_NONE:
     default:
         return 0;   /* Out of range: deterministic zero, no fault. */
@@ -133,7 +153,8 @@ uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr)
 
 void arcade1_write8(arcade1_bus_t *bus, uint32_t addr, uint8_t value)
 {
-    /* ROM is read-only at runtime; only RAM accepts writes. */
+    /* Only RAM accepts writes: ROM is read-only, and a sub-word MMIO write is
+     * a no-op (MMIO is 32-bit only). Out-of-range writes are ignored too. */
     if (resolve(bus, addr, 1) != REGION_RAM)
         return;
 
@@ -156,10 +177,18 @@ void arcade1_write16(arcade1_bus_t *bus, uint32_t addr, uint16_t value)
 
 void arcade1_write32(arcade1_bus_t *bus, uint32_t addr, uint32_t value)
 {
+    const region_t region = resolve(bus, addr, 4);
     uint8_t *base;
 
+    if (region == REGION_MMIO) {
+        /* Dispatch to the registered device; no device -> ignored. */
+        if (bus->mmio_write)
+            bus->mmio_write(bus->mmio_ctx, addr - ARCADE1_MMIO_BASE, value);
+        return;
+    }
+
     /* ROM is read-only at runtime; only RAM accepts writes. */
-    if (resolve(bus, addr, 4) != REGION_RAM)
+    if (region != REGION_RAM)
         return;
 
     base = bus->ram + (addr - ARCADE1_RAM_BASE);

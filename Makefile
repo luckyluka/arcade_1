@@ -23,7 +23,7 @@ GUEST_ARCH    := -march=rv32i -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter
+GUEST_PROGS   := counter mmio_demo
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
@@ -32,7 +32,7 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 .SECONDARY: $(GUEST_ELFS)
 
 .PHONY: all clean program test test-input test-square test-beep test-machine \
-        test-memory test-cpu test-exec test-program
+        test-memory test-cpu test-exec test-program test-mmio
 
 all: $(TARGET)
 
@@ -113,6 +113,15 @@ test-program: $(GUEST_BUILD)/counter.bin
 	@ADDR=$$($(RISCV_NM) $(GUEST_BUILD)/counter.elf | awk '$$3=="counter"{print $$1}'); \
 	  echo "counter @ 0x$$ADDR"; \
 	  /tmp/arcade1_test_program $(GUEST_BUILD)/counter.bin 0x$$ADDR
+
+# Build + run the milestone-11 MMIO harness: register a device on the bus's
+# MMIO region, compile and load mmio_demo.c, execute it, and assert the guest
+# read a host-provided register and wrote value+1 back. Links exec+cpu+memory
+# (no .so).
+test-mmio: $(GUEST_BUILD)/mmio_demo.bin
+	$(CC) $(CFLAGS) -o /tmp/arcade1_test_mmio tests/test_mmio.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/memory.c
+	/tmp/arcade1_test_mmio $(GUEST_BUILD)/mmio_demo.bin
 
 clean:
 	rm -f $(TARGET)
