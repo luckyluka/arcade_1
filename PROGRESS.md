@@ -27,9 +27,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 18        | Tetris                     | COMPLETE |
 | 19        | Sprite engine              | COMPLETE |
 | 20        | Tilemap engine             | COMPLETE |
-| 21+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 21        | Scrolling (camera)         | COMPLETE |
+| 22+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 21 — Scrolling.** See `docs.md` for the exact scope.
+Next up: **Milestone 22 — Platformer.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -47,7 +48,9 @@ src/
         video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT (M13) plus the M19
                        FILL/SPRITE and M20 TILEMAP device-side commands (1-bpp
                        image/tile source restricted to guest ROM/RAM; TILEMAP
-                       draws a COLSxROWS grid of 32-bit tile+colour cells)
+                       draws a COLSxROWS grid of 32-bit tile+colour cells);
+                       M21 added a camera (CAM_X/CAM_Y) that SPRITE/TILEMAP
+                       subtract, and TILEMAP windowing (only visible cells)
         audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
         rom.h/.c       .arc1 game image: parse/validate/write, CRC-32 (M17)
     libretro/
@@ -58,8 +61,10 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
     gfx.h               guest graphics API: gfx_clear/rect/present (M14),
-                        gfx_sprite added at M19, gfx_tilemap added at M20
-                        (rect = one device-side FILL; tilemap = one TILEMAP)
+                        gfx_sprite added at M19, gfx_tilemap added at M20,
+                        gfx_camera added at M21
+                        (rect = one device-side FILL; tilemap = one TILEMAP;
+                        camera = CAM_X/CAM_Y that SPRITE/TILEMAP subtract)
     counter.c           docs.md example program (counter = 123)
     mmio_demo.c         M11 guest: read IN register, write OUT register
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
@@ -68,6 +73,9 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     tilemap_demo.c      M20 guest: draws COLSxROWS tile grids via gfx_tilemap
                         (multiple tiles, per-cell colour, empty cells, ROM+RAM
                         cells, negative origin, clipping, guards)
+    scroll_demo.c       M21 guest: pans a camera over a 512x352 world (32x22
+                        cells of 16px tiles — larger than the screen) both
+                        axes, with a world-space sprite and a fixed HUD
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -82,6 +90,7 @@ deps/libretro/
 tests/
     test_*.c           per-milestone harnesses (see below); test_tilemap.c (M20)
                        re-renders the whole framebuffer from an independent model
+                       (as does test_scroll.c, M21, for every frame of a sweep)
 ```
 
 Key boundary: `src/arcade1/` (the machine) has **no** libretro/RetroArch
@@ -114,6 +123,9 @@ make test-rom     # M17 .arc1 image format: CRC-32, header, every rejection
 make test-sprite  # M19 sprite engine: 1-bpp blit, exact pixels + clipping
 make test-tilemap # M20 tilemap engine: COLSxROWS grid, exact framebuffer vs an
                   #     independent model + determinism
+make test-scroll  # M21 camera scrolling: 120-frame sweep over a map larger than
+                  #     the screen, every pixel of every frame vs an independent
+                  #     model, camera readbacks + determinism
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
@@ -190,9 +202,11 @@ measurable, one commit per task:
   transparent, source restricted to guest ROM/RAM); since M20 a whole COLSxROWS
   grid of 32-bit tile+colour cells is one TILEMAP (tile 0 = empty, per-cell
   RGB565 tint, same 1-bpp tile format as a sprite), so the per-pixel and
-  per-cell loops no longer run in the guest. Still no scroll/layer, flip,
-  priority, visibility flags, alpha blending or rotation (forbidden by docs.md
-  until a later milestone asks for them).
+  per-cell loops no longer run in the guest. Since M21 a camera (CAM_X/CAM_Y)
+  pans the world-space commands (SPRITE/TILEMAP) while primitives stay
+  screen-space (HUD), and TILEMAP windows to the visible cells. Still no
+  multi-layer/parallax, flip, priority, visibility flags, alpha blending or
+  rotation (forbidden by docs.md until a later milestone asks for them).
 - Breakout (M15): full-screen clear + repaint of every rectangle each frame
   (now 2,039 instructions/frame avg, 2,185 max over 595 frames since M19's
   device-side FILL — down from 77,836 when rects were per-pixel `sw`s); no

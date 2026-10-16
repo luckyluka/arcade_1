@@ -26,7 +26,7 @@ TESTDIR := build
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
-test-sprite test-tilemap test-breakout test-tetris: | $(TESTDIR)
+test-sprite test-tilemap test-scroll test-breakout test-tetris: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -43,7 +43,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo breakout tetris
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo breakout tetris
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -56,7 +56,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 .PHONY: all clean program android android-arm64 android-arm \
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video test-gfx test-rom test-sprite test-tilemap \
+        test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-breakout test-tetris
 
 all: $(TARGET)
@@ -254,6 +254,22 @@ test-tilemap: $(GUEST_BUILD)/tilemap_demo.bin
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_tilemap $(GUEST_BUILD)/tilemap_demo.bin
+
+# Build and run the milestone-21 camera-scrolling harness: boot scroll_demo.c
+# on the machine's own CPU as firmware, sweep the camera across a map larger
+# than the screen for 120 frames, and verify EVERY pixel of every frame against
+# an independent full-visit model (reading the map cells straight out of guest
+# RAM) — proving the camera pans world-space sprites/tilemaps, leaves the HUD
+# fixed, and that the device's tilemap windowing is pixel-identical. Plus
+# register readbacks and reset-and-compare determinism.
+test-scroll: $(GUEST_BUILD)/scroll_demo.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_scroll \
+	    tests/test_scroll.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@CELLS=$$($(RISCV_NM) $(GUEST_BUILD)/scroll_demo.elf | awk '$$3=="cells"{print $$1}'); \
+	 echo "cells @ 0x$$CELLS"; \
+	 $(TESTDIR)/test_scroll $(GUEST_BUILD)/scroll_demo.arc1 0x$$CELLS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

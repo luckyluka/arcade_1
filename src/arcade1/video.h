@@ -44,6 +44,13 @@
 #define ARCADE1_VIDEO_REG_TILE_ADDR 0x124u  /* R/W : tile-set image data      */
 #define ARCADE1_VIDEO_REG_COLS      0x128u  /* R/W : grid width in cells      */
 #define ARCADE1_VIDEO_REG_ROWS      0x12Cu  /* R/W : grid height in cells     */
+/* M21 (docs.md "Scrolling decisions, pinned at M21"): a 2D camera offset.
+ * The two WORLD-space commands — SPRITE and TILEMAP — draw at
+ * (X - CAM_X, Y - CAM_Y); the primitives (CLEAR/SET_PIXEL/FILL) stay in
+ * screen space and are never scrolled (they are the HUD). A camera of (0,0)
+ * is the power-on default and reproduces M19/M20 exactly. */
+#define ARCADE1_VIDEO_REG_CAM_X    0x130u  /* R/W : camera X (signed pixels)  */
+#define ARCADE1_VIDEO_REG_CAM_Y    0x134u  /* R/W : camera Y (signed pixels)  */
 
 /* VIDEO_CMD values. Any other value is ignored. */
 #define ARCADE1_VIDEO_CMD_CLEAR     0x1u  /* fill the screen with COLOR       */
@@ -68,6 +75,7 @@ typedef struct arcade1_video {
     uint32_t map_addr;       /* cell array address (TILEMAP source, M20)  */
     uint32_t tile_addr;      /* tile-set image address (TILEMAP, M20)     */
     uint32_t cols, rows;     /* grid size in cells (TILEMAP, M20)         */
+    uint32_t cam_x, cam_y;   /* camera offset (SPRITE/TILEMAP origin, M21)*/
     uint32_t presents;       /* PRESENT commands executed (STATUS)        */
 } arcade1_video_t;
 

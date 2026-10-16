@@ -618,6 +618,8 @@ the tilemap engine's additions at M20:
 | 0x124  | VIDEO_TILE_ADDR | R/W | Guest address of a TILEMAP's tile-set image data: the same 1-bpp format as a SPRITE. Tile N (>= 1) lives at TILE_ADDR + (N-1)·(H·ceil(W/8)). Must lie in ROM or RAM | Latches at the `sw`; read by the next TILEMAP command |
 | 0x128  | VIDEO_COLS  | R/W    | TILEMAP grid width in cells (0 = draws nothing) | Latches at the `sw`; read by the next TILEMAP command |
 | 0x12C  | VIDEO_ROWS  | R/W    | TILEMAP grid height in cells (0 = draws nothing) | Latches at the `sw`; read by the next TILEMAP command |
+| 0x130  | VIDEO_CAM_X | R/W    | Camera X offset in **signed** pixels. The two world-space commands — SPRITE and TILEMAP — draw at (X − CAM_X, Y − CAM_Y); the screen-space primitives (CLEAR / SET_PIXEL / FILL) are never scrolled. Power-on 0 = no offset | Latches at the `sw`; read by the next SPRITE/TILEMAP command |
+| 0x134  | VIDEO_CAM_Y | R/W    | Camera Y offset in **signed** pixels (see CAM_X) | Latches at the `sw`; read by the next SPRITE/TILEMAP command |
 | 0x200  | INPUT_PAD   | R      | RetroPad for the current frame: bit0 up, bit1 down, bit2 left, bit3 right, bit4 A, bit5 B, bit6 start, bit7 select; other bits read as 0 | Reflects the `arcade1_input_t` the host set for this frame (`arcade1_set_input`, called before the frame starts); read-only, writes ignored |
 | 0x300  | AUDIO_FREQ  | R/W    | Tone frequency in Hz (power-on 440 — the historical demo beep). 0 = constant level while enabled | Latches at the `sw`; shapes **this** frame's samples, because the machine renders audio after the guest has run |
 | 0x304  | AUDIO_CTRL  | R/W    | bit0 = tone enable (power-on: set); other bits ignored on write and read as 0 | Disabled = silence for this frame; takes effect the same way as FREQ |
@@ -1270,6 +1272,65 @@ Test against a large tilemap.
 Do not assume the final output resolution.
 
 The graphics API should use logical coordinates and remain independent of physical display resolution.
+
+## Scrolling decisions (pinned at M21)
+
+**What the camera is.** A 2D view offset. The two *world-space* commands —
+SPRITE (M19) and TILEMAP (M20) — draw at `(X − CAM_X, Y − CAM_Y)`; the
+*screen-space* primitives (CLEAR / SET_PIXEL / FILL) are never scrolled, so a
+guest keeps its HUD at fixed screen coordinates and its world at stable world
+coordinates, moving only the camera each frame. Power-on camera is (0,0),
+which reproduces M19/M20 exactly (every pre-existing state hash is unchanged).
+
+**Registers** (added at 0x130/0x134): CAM_X and CAM_Y, signed pixel offsets,
+latching at the `sw` and read by the next SPRITE/TILEMAP command. Guest API:
+`gfx_camera(cam_x, cam_y)`.
+
+**Honest scope.** Functional scrolling already existed before M21: X/Y are
+signed, and a map or sprite could simply be drawn at `(world − camera)` by the
+guest with per-frame clipping. The camera register is therefore *ergonomic and
+consistency* (one place to pan the whole world, sprites and maps stay in sync)
+rather than new raw capability. Its one substantive addition is below.
+
+**Device windowing (the bandwidth answer).** TILEMAP now visits only the
+columns/rows that are even partially on screen, computed from the camera in
+64-bit; a cell fully outside the viewport is skipped before any cell/tile
+fetch. Skipping such a cell cannot change a pixel — the per-tile clip would
+have drawn nothing for it — so the framebuffer is identical to visiting every
+cell, but a map far larger than the screen costs only its visible cells in
+fetches. This is what makes a big scrolling map affordable and is the direct
+input to M23's "what are the real graphics bandwidth requirements?".
+
+**Logical coordinates / resolution independence.** `programs/gfx.h` never
+hardcodes the screen size: the camera and all coordinates are in logical
+pixels, and the device (not the guest) clips to the physical 320×240. A guest
+written against gfx.h is therefore independent of the physical display
+resolution, satisfying the milestone's requirement.
+
+**A real memory-map limit surfaced.** With the current 4 KiB ROM + 4 KiB RAM,
+a cell grid large enough to exceed the screen in *both* axes does not fit at
+small tile sizes: at 8 px tiles, a map bigger than 320×240 needs > 40×30 =
+1,200 cells = 4,800 bytes — over the budget. The demo therefore uses **16 px**
+tiles and a 32×22 map (512×352 world): the 704 cells = 2,816 bytes fit in RAM
+and scroll both axes (192 px horizontal, 112 px vertical). This is a concrete
+data point for M23's "what should the final memory map look like?" — bigger
+RAM (or a procedural/windowed map) is needed for full-screen-plus maps at fine
+tile sizes.
+
+**Testing**: `make test-scroll` boots `scroll_demo.c` on the machine's own CPU
+as firmware and, for **120 frames**, re-renders **every pixel of every frame**
+from an independent model and memcmps it against the real framebuffer. The
+model reads the demo's 704 map cells straight out of guest RAM, uses its own
+hand-mirrored tiles and sprite, computes the expected camera independently from
+the frame index (and asserts the CAM_X/CAM_Y register readback matches, so a
+wrong camera register is caught), and visits every cell then clips — proving
+the device's windowing is pixel-identical. It also asserts the camera-dependent
+invariants (world sprite pans, HUD stays fixed), register readbacks, one
+present and one timer tick per frame, `stray_accesses == 0`, and
+reset-and-compare determinism (identical 120-frame hash sequence +
+byte-identical final framebuffer). Steady-state guest CPU load is ~49
+instructions/frame (one TILEMAP command does all the pixel work on the device),
+with 17,140 on the boot frame (map construction).
 
 ---
 

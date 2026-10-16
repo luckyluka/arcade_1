@@ -26,6 +26,9 @@
 #define GFX_REG_TILE_ADDR (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x124))
 #define GFX_REG_COLS      (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x128))
 #define GFX_REG_ROWS      (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x12C))
+/* M21 camera registers (docs.md "Scrolling decisions, pinned at M21"). */
+#define GFX_REG_CAM_X     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x130))
+#define GFX_REG_CAM_Y     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x134))
 /* 0x110 (STATUS, PRESENT count) exists but the API never needs to read it. */
 
 /* VIDEO_CMD values (docs.md register table). */
@@ -106,6 +109,20 @@ static inline void gfx_tilemap(int x, int y, const void *cells,
     GFX_REG_W         = (unsigned int)tile_w;
     GFX_REG_H         = (unsigned int)tile_h;
     GFX_REG_CMD       = GFX_CMD_TILEMAP;
+}
+
+/* Set the camera to the world pixel (cam_x, cam_y), which becomes the
+ * top-left of the view. gfx_sprite() and gfx_tilemap() are WORLD-space: the
+ * device draws each at (x - cam_x, y - cam_y), so a guest keeps its objects
+ * at fixed world coordinates and only the camera moves each frame. The
+ * primitives (gfx_clear/gfx_rect/gfx_set_pixel) are screen-space and are
+ * never scrolled — use them for the HUD. A camera of (0,0) (the power-on
+ * default) draws everything exactly where its x/y say, so sprites and maps
+ * drawn before any camera call are unaffected. */
+static inline void gfx_camera(int cam_x, int cam_y)
+{
+    GFX_REG_CAM_X = (unsigned int)cam_x;
+    GFX_REG_CAM_Y = (unsigned int)cam_y;
 }
 
 /* Mark a frame as presented (counted by the device's STATUS register). */

@@ -25,6 +25,8 @@ void arcade1_video_reset(arcade1_video_t *v)
     v->tile_addr = 0u;
     v->cols      = 0u;
     v->rows      = 0u;
+    v->cam_x     = 0u;
+    v->cam_y     = 0u;
     v->presents = 0u;
     /* v->framebuffer / v->rom / v->ram are deliberately kept: they are
      * assigned once at machine init and survive resets (like the bus's MMIO
@@ -157,10 +159,15 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
     }
 }
 
+/* M21: SPRITE is a WORLD-space command, so the camera is subtracted from its
+ * origin — the guest keeps the sprite at a fixed world position and only the
+ * camera moves. Primitives (CLEAR/SET_PIXEL/FILL) stay screen-space. */
 static void video_sprite(arcade1_video_t *v)
 {
-    video_blit_1bpp(v, v->addr, (int32_t)v->x, (int32_t)v->y, v->w, v->h,
-                    (uint16_t)v->color);
+    video_blit_1bpp(v, v->addr,
+                    (int32_t)v->x - (int32_t)v->cam_x,
+                    (int32_t)v->y - (int32_t)v->cam_y,
+                    v->w, v->h, (uint16_t)v->color);
 }
 
 /* --- M20: TILEMAP --------------------------------------------------------- *
@@ -171,11 +178,20 @@ static void video_sprite(arcade1_video_t *v)
  * format is exactly the SPRITE one. Cell (col, row) lands at
  * (X + col*W, Y + row*H); each tile clips to the screen like a sprite.
  * Per-cell colour is the one "tile attribute" both shipped games need
- * (Tetris' 7 piece colours, Breakout's per-row brick colours). */
+ * (Tetris' 7 piece colours, Breakout's per-row brick colours).
+ *
+ * M21: TILEMAP is WORLD-space, so the camera is subtracted from the origin.
+ * It also WINDOWs: only the columns/rows even partially on screen are
+ * visited, so a map far larger than the screen costs only its visible cells
+ * in fetches/bandwidth (the M23 question). Skipping a fully off-screen cell
+ * cannot change a pixel — the per-tile clip would have drawn nothing for it
+ * anyway — so the framebuffer is identical to visiting every cell. */
 static void video_tilemap(arcade1_video_t *v)
 {
     uint32_t col, row;
     uint64_t tile_bytes;
+    int64_t ox, oy, w, h;
+    int64_t col_start, col_end, row_start, row_end;
 
     if (v->framebuffer == 0)
         return;
@@ -185,8 +201,36 @@ static void video_tilemap(arcade1_video_t *v)
 
     tile_bytes = (uint64_t)v->h * (((uint64_t)v->w + 7u) / 8u);
 
-    for (row = 0; row < v->rows; row++) {
-        for (col = 0; col < v->cols; col++) {
+    /* Map origin on screen after the camera (world minus camera). */
+    ox = (int32_t)v->x - (int32_t)v->cam_x;
+    oy = (int32_t)v->y - (int32_t)v->cam_y;
+    w  = (int64_t)v->w;
+    h  = (int64_t)v->h;
+
+    /* Visible column window: first col whose right edge > 0, last col (excl)
+     * whose left edge < WIDTH. floor/ceil in 64-bit, clamped to the grid. */
+    col_start = (ox < 0) ? ((-ox) / w) : 0;           /* floor(-ox / w)     */
+    if (col_start < 0) col_start = 0;
+    if (col_start > (int64_t)v->cols) col_start = (int64_t)v->cols;
+    {
+        const int64_t num = (int64_t)ARCADE1_WIDTH - ox;
+        col_end = (num <= 0) ? 0 : ((num + w - 1) / w);   /* ceil(num / w)  */
+    }
+    if (col_end < 0) col_end = 0;
+    if (col_end > (int64_t)v->cols) col_end = (int64_t)v->cols;
+
+    row_start = (oy < 0) ? ((-oy) / h) : 0;           /* floor(-oy / h)     */
+    if (row_start < 0) row_start = 0;
+    if (row_start > (int64_t)v->rows) row_start = (int64_t)v->rows;
+    {
+        const int64_t num = (int64_t)ARCADE1_HEIGHT - oy;
+        row_end = (num <= 0) ? 0 : ((num + h - 1) / h);   /* ceil(num / h)  */
+    }
+    if (row_end < 0) row_end = 0;
+    if (row_end > (int64_t)v->rows) row_end = (int64_t)v->rows;
+
+    for (row = (uint32_t)row_start; row < (uint32_t)row_end; row++) {
+        for (col = (uint32_t)col_start; col < (uint32_t)col_end; col++) {
             const uint64_t cell_addr = (uint64_t)v->map_addr +
                 ((uint64_t)row * v->cols + col) * 4u;
             /* One little-endian 32-bit cell, assembled from byte fetches. */
@@ -203,8 +247,8 @@ static void video_tilemap(arcade1_video_t *v)
             video_blit_1bpp(v,
                             (uint64_t)v->tile_addr +
                                 (uint64_t)(index - 1u) * tile_bytes,
-                            (int32_t)v->x + (int64_t)col * (int32_t)v->w,
-                            (int32_t)v->y + (int64_t)row * (int32_t)v->h,
+                            ox + (int64_t)col * w,
+                            oy + (int64_t)row * h,
                             v->w, v->h, (uint16_t)(cell >> 16));
         }
     }
@@ -228,6 +272,8 @@ uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
     case ARCADE1_VIDEO_REG_TILE_ADDR: return v->tile_addr;
     case ARCADE1_VIDEO_REG_COLS:      return v->cols;
     case ARCADE1_VIDEO_REG_ROWS:      return v->rows;
+    case ARCADE1_VIDEO_REG_CAM_X:     return v->cam_x;
+    case ARCADE1_VIDEO_REG_CAM_Y:     return v->cam_y;
     default:                       return 0u;   /* CMD is write-only, rest 0 */
     }
 }
@@ -266,6 +312,12 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         return;
     case ARCADE1_VIDEO_REG_ROWS:
         v->rows = value;              /* TILEMAP grid height in cells      */
+        return;
+    case ARCADE1_VIDEO_REG_CAM_X:
+        v->cam_x = value;             /* camera X; SPRITE/TILEMAP subtract */
+        return;
+    case ARCADE1_VIDEO_REG_CAM_Y:
+        v->cam_y = value;             /* camera Y; SPRITE/TILEMAP subtract */
         return;
     case ARCADE1_VIDEO_REG_CMD:
         switch (value) {
