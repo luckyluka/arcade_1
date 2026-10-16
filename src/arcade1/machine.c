@@ -1,10 +1,12 @@
 /* ARCADE-1 machine — implementation.
  *
  * Self-contained machine logic: RGB565 software framebuffer, test pattern,
- * RetroPad indicator overlay, D-pad moving square, a 440 Hz beep, and the
- * timer (M12) + video (M13) MMIO devices. This file has NO dependency on
- * libretro or any host frontend; it is driven purely through the arcade1_*
- * API in machine.h.
+ * RetroPad indicator overlay, D-pad moving square, and the timer (M12),
+ * video (M13) and audio (M15) MMIO devices. From milestone 15 the machine
+ * also owns the guest CPU: when firmware is attached, arcade1_run_frame runs
+ * guest code once per frame (until the guest presents its frame) instead of
+ * rendering the host demo. This file has NO dependency on libretro or any
+ * host frontend; it is driven purely through the arcade1_* API in machine.h.
  */
 
 #include "machine.h"
@@ -18,14 +20,15 @@
 
 /* --- Beep ---------------------------------------------------------------- */
 
-#define BEEP_FREQ_HZ 440
-#define BEEP_AMP     8000
+/* Amplitude of the square wave generated from the audio device's frequency
+ * and enable state (milestone 15). The frequency itself is guest-writable
+ * (AUDIO_FREQ); the power-on default 440 Hz reproduces the M05 demo beep. */
+#define BEEP_AMP 8000
 
-/* Per-sample phase step for BEEP_FREQ_HZ at ARCADE1_SAMPLE_RATE. The full
- * cycle maps to 2^32; the top bit selects the square-wave polarity. */
-#define BEEP_STEP \
-    ((uint32_t)(((uint64_t)BEEP_FREQ_HZ << 32) / \
-                (uint64_t)ARCADE1_SAMPLE_RATE_INT))
+/* Safety cap: guest instructions executed per frame while firmware is
+ * attached (docs.md M15). A well-behaved guest presents its frame long
+ * before this; the cap only prevents a runaway guest from hanging the host. */
+#define FRAME_STEP_CAP 1000000u
 
 /* --- Pixel helpers ------------------------------------------------------- */
 
@@ -151,22 +154,36 @@ static void draw_square(arcade1_machine_t *m)
 
 /* --- Beep ---------------------------------------------------------------- */
 
+/* Render this frame's audio from the audio device state (M15): a square wave
+ * at AUDIO_FREQ Hz while AUDIO_CTRL enable is set, silence otherwise. The
+ * full cycle maps to 2^32; the top bit selects the polarity. Frequency 0
+ * produces a constant level (use the enable bit for silence). Called once
+ * per frame AFTER the guest has run, so a register write at frame N shapes
+ * frame N's samples. */
 static void audio_render(arcade1_machine_t *m)
 {
+    const uint32_t freq = m->audio_dev.freq;
+    const uint32_t step =
+        (uint32_t)(((uint64_t)freq << 32) / (uint64_t)ARCADE1_SAMPLE_RATE_INT);
+    const bool on = (m->audio_dev.ctrl & ARCADE1_AUDIO_CTRL_ENABLE) != 0;
+
     for (unsigned i = 0; i < ARCADE1_AUDIO_FRAMES; i++) {
-        int16_t s = (m->beep_phase & 0x80000000u) ? (int16_t)-BEEP_AMP
-                                                  : (int16_t) BEEP_AMP;
+        int16_t s = 0;
+        if (on)
+            s = (m->beep_phase & 0x80000000u) ? (int16_t)-BEEP_AMP
+                                              : (int16_t) BEEP_AMP;
         m->audio[i * 2]     = s;    /* Left  */
         m->audio[i * 2 + 1] = s;    /* Right */
-        m->beep_phase += BEEP_STEP;
+        m->beep_phase += step;
     }
 }
 
 /* --- MMIO dispatch (the window's single M11 handler) --------------------- *
  * The bus routes the whole 0x4000 window to one handler, so the machine muxes
- * it: 0x000..0x0FF is the timer, 0x100.. is the video device. Offsets that no
- * device claims read 0 / ignore writes — still not stray accesses, because the
- * handler itself is attached (docs.md "MMIO decisions"). */
+ * it: 0x000..0x0FF is the timer, 0x100..0x1FF the video device, 0x200..0x2FF
+ * the input device (read-only pad), 0x300..0x3FF the audio device. Offsets
+ * that no device claims read 0 / ignore writes — still not stray accesses,
+ * because the handler itself is attached (docs.md "MMIO decisions"). */
 
 static uint32_t machine_mmio_read(void *ctx, uint32_t offset)
 {
@@ -174,7 +191,21 @@ static uint32_t machine_mmio_read(void *ctx, uint32_t offset)
 
     if (offset < ARCADE1_VIDEO_REG_BASE)
         return arcade1_timer_mmio_read(&m->timer, offset);
-    return arcade1_video_mmio_read(&m->video, offset);
+    if (offset < ARCADE1_INPUT_REG_BASE)
+        return arcade1_video_mmio_read(&m->video, offset);
+    if (offset < ARCADE1_AUDIO_REG_BASE) {
+        /* INPUT_PAD: read-only view of the host's pad for this frame. */
+        const arcade1_input_t *in = &m->input;
+        return ((uint32_t)in->up     << 0) |
+               ((uint32_t)in->down   << 1) |
+               ((uint32_t)in->left   << 2) |
+               ((uint32_t)in->right  << 3) |
+               ((uint32_t)in->a      << 4) |
+               ((uint32_t)in->b      << 5) |
+               ((uint32_t)in->start  << 6) |
+               ((uint32_t)in->select << 7);
+    }
+    return arcade1_audio_mmio_read(&m->audio_dev, offset);
 }
 
 static void machine_mmio_write(void *ctx, uint32_t offset, uint32_t value)
@@ -183,8 +214,12 @@ static void machine_mmio_write(void *ctx, uint32_t offset, uint32_t value)
 
     if (offset < ARCADE1_VIDEO_REG_BASE)
         arcade1_timer_mmio_write(&m->timer, offset, value);
-    else
+    else if (offset < ARCADE1_INPUT_REG_BASE)
         arcade1_video_mmio_write(&m->video, offset, value);
+    else if (offset < ARCADE1_AUDIO_REG_BASE)
+        ;   /* input registers are read-only */
+    else
+        arcade1_audio_mmio_write(&m->audio_dev, offset, value);
 }
 
 /* --- Public API ---------------------------------------------------------- */
@@ -195,6 +230,7 @@ void arcade1_init(arcade1_machine_t *m)
     arcade1_bus_init(&m->bus);
     arcade1_timer_reset(&m->timer);
     arcade1_video_reset(&m->video);
+    arcade1_audio_reset(&m->audio_dev);
     /* The video device borrows the machine's scanout buffer (set once here,
      * kept across resets). */
     m->video.framebuffer = m->framebuffer;
@@ -220,9 +256,46 @@ void arcade1_reset(arcade1_machine_t *m)
     /* The timer restarts with the machine (count 0, enabled). */
     arcade1_timer_reset(&m->timer);
 
+    /* Audio returns to the power-on tone (440 Hz, enabled): a machine with
+     * no guest firmware plays the demo beep again after a reset (M05). */
+    arcade1_audio_reset(&m->audio_dev);
+
+    /* The guest CPU reboots from the reset vector. With firmware attached the
+     * next frame re-runs crt0/main from the top (a deterministic cold boot). */
+    arcade1_cpu_reset(&m->cpu);
+
     /* RAM is volatile; a reset clears it but preserves any loaded ROM and the
-     * devices' MMIO attachment. */
+     * devices' MMIO attachment. The firmware flag persists: a machine with
+     * attached firmware stays a firmware machine across reset. */
     arcade1_bus_reset(&m->bus);
+}
+
+void arcade1_set_firmware(arcade1_machine_t *m, bool enabled)
+{
+    m->firmware = enabled;
+    /* Boot from the reset vector: the next arcade1_run_frame starts executing
+     * at 0x00000000 (crt0), so enabling is equivalent to a cold boot. */
+    arcade1_cpu_reset(&m->cpu);
+}
+
+/* Run the guest for one frame (M15): execute instructions until the guest
+ * presents its frame (a PRESENT write through gfx_present), until the CPU
+ * parks (PC stops changing, as crt0's `j .` does after main returns), or
+ * until the safety cap. This makes one guest loop iteration equal exactly one
+ * host frame, deterministically: game speed is locked to 60 fps. */
+static void run_firmware(arcade1_machine_t *m)
+{
+    const uint32_t presents_before = m->video.presents;
+    uint32_t prev_pc = 0xFFFFFFFFu;   /* != any PC: first step always runs */
+    uint32_t steps   = 0;
+
+    while (m->cpu.pc != prev_pc && steps < FRAME_STEP_CAP) {
+        prev_pc = m->cpu.pc;
+        arcade1_cpu_step(&m->cpu, &m->bus);
+        steps++;
+        if (m->video.presents != presents_before)
+            return;                   /* frame boundary: guest presented */
+    }
 }
 
 void arcade1_set_input(arcade1_machine_t *m, const arcade1_input_t *in)
@@ -232,25 +305,31 @@ void arcade1_set_input(arcade1_machine_t *m, const arcade1_input_t *in)
 
 void arcade1_run_frame(arcade1_machine_t *m)
 {
-    /* Update state from input (input -> state). */
-    if (m->input.left)  m->square_x -= SQUARE_SPEED;
-    if (m->input.right) m->square_x += SQUARE_SPEED;
-    if (m->input.up)    m->square_y -= SQUARE_SPEED;
-    if (m->input.down)  m->square_y += SQUARE_SPEED;
+    if (m->firmware) {
+        /* Guest owns the frame (M15): it reads INPUT_PAD, updates its state,
+         * draws through the video device and presents with gfx_present. The
+         * host demo does not render while firmware is attached. */
+        run_firmware(m);
+    } else {
+        /* Host demo (M02-M05): update state from input, then render. */
+        if (m->input.left)  m->square_x -= SQUARE_SPEED;
+        if (m->input.right) m->square_x += SQUARE_SPEED;
+        if (m->input.up)    m->square_y -= SQUARE_SPEED;
+        if (m->input.down)  m->square_y += SQUARE_SPEED;
 
-    if (m->square_x < 0)                              m->square_x = 0;
-    if (m->square_y < 0)                              m->square_y = 0;
-    if (m->square_x > ARCADE1_WIDTH  - SQUARE_SIZE)
-        m->square_x = ARCADE1_WIDTH  - SQUARE_SIZE;
-    if (m->square_y > ARCADE1_HEIGHT - SQUARE_SIZE)
-        m->square_y = ARCADE1_HEIGHT - SQUARE_SIZE;
+        if (m->square_x < 0)                              m->square_x = 0;
+        if (m->square_y < 0)                              m->square_y = 0;
+        if (m->square_x > ARCADE1_WIDTH  - SQUARE_SIZE)
+            m->square_x = ARCADE1_WIDTH  - SQUARE_SIZE;
+        if (m->square_y > ARCADE1_HEIGHT - SQUARE_SIZE)
+            m->square_y = ARCADE1_HEIGHT - SQUARE_SIZE;
 
-    /* Render video (state -> rendering). */
-    render_test_pattern(m);
-    draw_pad_overlay(m);
-    draw_square(m);
+        render_test_pattern(m);
+        draw_pad_overlay(m);
+        draw_square(m);
+    }
 
-    /* Generate audio. */
+    /* Generate audio (M15: from the audio device state, both modes). */
     audio_render(m);
 
     m->frame_counter++;

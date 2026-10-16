@@ -21,23 +21,27 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 12        | Timer                      | COMPLETE |
 | 13        | ARCADE-1 video device      | COMPLETE |
 | 14        | Simple rectangle API       | COMPLETE |
-| 15+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 15        | Breakout (first game)      | COMPLETE |
+| 16+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 15 — Breakout.** See `docs.md` for the exact scope.
+Next up: **Milestone 16 — M extension.** See `docs.md` for the exact scope.
 
 ## Architecture
 
 ```
 src/
     arcade1/
-        machine.h/.c   machine state + per-frame logic (frontend-independent)
+        machine.h/.c   machine state + per-frame logic (frontend-independent);
+                       from M15 owns the guest CPU and boots firmware per frame
         memory.h/.c    memory/bus: ROM + RAM + MMIO (device handler), 8/16/32-bit r/w
         cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
         exec.h/.c      RV32I interpreter: registers + PC + single-step
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
         video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT -> framebuffer (M13)
+        audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
     libretro/
-        libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
+        libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend;
+                       loads content (a guest ROM) as firmware when provided
 programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
@@ -46,6 +50,7 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     mmio_demo.c         M11 guest: read IN register, write OUT register
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     gfx_demo.c          M14 guest: draws only through the gfx.h API
+    breakout.c          M15 guest: the first real game (Breakout)
     build/              generated .elf/.bin (gitignored)
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
@@ -75,6 +80,7 @@ make test-mmio    # M11 guest reads/writes an MMIO device register
 make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
 make test-video   # M13 guest drives video device -> framebuffer, reset
 make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
+make test-breakout # M15 boot Breakout as firmware, scripted game + hashes
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -115,43 +121,49 @@ measurable, one commit per task:
 - Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
   gap) is a placeholder, not the final ARCADE-1 map. MMIO routes to a
   host-registered handler that the machine muxes between its devices: timer
-  (M12) at 0x000..0x0FF, video (M13) at 0x100..
+  (M12) at 0x000..0x0FF, video (M13) at 0x100..0x1FF, input (M15) at
+  0x200..0x2FF, audio (M15) at 0x300..0x3FF.
 - The test pattern, moving square, and beep are host-driven demo logic inside
-  the machine. The devices now exist (M12 timer, M13 video), but the demo
-  rendering still paints every frame — it is fully replaced only when the CPU
-  is wired into the frame loop (firmware-boot milestone).
-- The RV32I interpreter (M09) and the guest program flow (M10/M11) work, but a
-  compiled program is still executed by a **standalone harness**
-  (`make test-program`, `make test-mmio`, `make test-video`) — it is **not yet
-  wired into the machine's frame loop**. `arcade1_run_frame` still drives the
-  host demo logic (square/beep); the machine does not yet *boot* a program as
-  firmware (that wiring comes in a later milestone, now that the MMIO
-  infrastructure exists).
+  the machine, kept for the **content-less** core (M02–M06 behaviour, still
+  covered by `make test`, `test-input`, `test-square`, `test-beep`). Since M15
+  they do **not** run when firmware is attached — the guest owns the frame
+  then. The audio beep itself became device-driven at M15 (AUDIO_FREQ/CTRL,
+  power-on 440 Hz enabled), so it is shared by both modes.
+- Guest programs execute two ways since M15: (a) as **firmware** booting in the
+  machine's frame loop (`arcade1_set_firmware`, used by `make test-breakout`
+  and by loading content in RetroArch), and (b) stepped by standalone harnesses
+  (`make test-program`, `test-mmio`) that keep their own CPU. The machine's
+  own CPU runs only while firmware is attached.
 - MMIO is minimal by design (M11): one 4 KiB window (0x4000) routed to a single
   host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops).
   The machine's handler muxes the window: timer at 0x000..0x0FF, video at
-  0x100.., unknown offsets read 0 / ignore writes.
+  0x100..0x1FF, input at 0x200..0x2FF, audio at 0x300..0x3FF; unknown offsets
+  read 0 / ignore writes.
 - Timer (M12): exactly 1 tick per frame, registers `TIMER_COUNT` (read-only)
-  and `TIMER_CTRL` (bit0 = enable), no interrupt/pending logic. Guest code can
-  already reach it (the M12 harness runs a guest `lw`), but nothing reads it
-  per-frame yet because the CPU is **not wired into the frame loop** (that
-  arrives with the firmware-boot milestone).
+  and `TIMER_CTRL` (bit0 = enable), no interrupt/pending logic. Breakout (M15)
+  is the first per-frame reader (beep duration, death pause).
 - Video (M13): single framebuffer, no flipping — `PRESENT` only counts
-  executions (buffering deliberately left undecided per docs.md). Guest
-  drawing works over MMIO (`make test-video`), but the host demo pattern
-  still repaints every frame, so guest pixels land *between* frames until the
-  CPU runs inside `arcade1_run_frame()`.
+  executions (buffering deliberately left undecided per docs.md). With
+  firmware attached (M15) a PRESENT also ends the frame: the machine runs the
+  guest until the guest presents.
 - Graphics API (M14): `programs/gfx.h` provides `gfx_clear` / `gfx_rect` /
   `gfx_present` as a **guest-only** header (it dereferences fixed MMIO
   addresses — host tests must use the `arcade1_*` API instead). Deliberately
   primitive: one `sw` per pixel, device-side clipping only, and no sprites,
   tilemaps, alpha blending or hardware-accelerated rectangles yet (forbidden
   by docs.md until a later milestone).
+- Breakout (M15): full-screen clear + repaint of every rectangle each frame
+  (~78k instructions/frame — the measured CPU load of this game); no dirty
+  rectangles, no text beyond a 3x5 digit font, one level/fixed launch
+  trajectory, no title screen. The frame protocol is present-yield with a
+  1,000,000-instruction safety cap per frame. Game state (score/lives/state)
+  is read from guest RAM by the test via `nm` symbol addresses.
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: gfx_demo at 344 bytes).
+  ROM (largest so far: breakout at 1714 bytes). No libgcc either, so guest C
+  must avoid variable multiplication/division (M16's M extension lifts this).
 - FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
   OS/syscall/halt handling yet. Unknown words also act as NOP. `crt0` "ends"
   a program by parking in a self-loop (`j .`), which the harness detects.
@@ -165,5 +177,6 @@ measurable, one commit per task:
 - `FUTURE_IDEAS.md` / `FUTURE_MILESTONES.md` are scratch files (not part of a
   milestone); treat as optional input, not a commitment.
 - Each milestone has been verified by a deterministic test harness plus a live
-  RetroArch 1.18.0 load (RGB565, clean startup/shutdown). Re-run `make
-  test-*` after any change.
+  RetroArch 1.18.0 load (RGB565, clean startup/shutdown; since M15 also with
+  content: `retroarch -L ./arcade1_libretro.so programs/build/breakout.bin`
+  boots and runs the game). Re-run `make test-*` after any change.

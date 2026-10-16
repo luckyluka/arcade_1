@@ -16,7 +16,7 @@ LDFLAGS += -shared
 TARGET  := arcade1_libretro.so
 SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
            src/arcade1/exec.c src/arcade1/timer.c src/arcade1/video.c \
-           src/libretro/libretro.c
+           src/arcade1/audio.c src/libretro/libretro.c
 
 # Test executables are built into this directory (gitignored) instead of /tmp.
 TESTDIR := build
@@ -24,7 +24,8 @@ TESTDIR := build
 # Every test target builds into $(TESTDIR), so make sure the directory exists
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
-test-exec test-program test-mmio test-timer test-video test-gfx: | $(TESTDIR)
+test-exec test-program test-mmio test-timer test-video test-gfx \
+test-breakout: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -39,7 +40,7 @@ GUEST_ARCH    := -march=rv32i -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo breakout
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
@@ -49,7 +50,7 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 
 .PHONY: all clean program test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video test-gfx
+        test-video test-gfx test-breakout
 
 all: $(TARGET)
 
@@ -81,12 +82,14 @@ test-beep: $(TARGET)
 	LD_LIBRARY_PATH=. $(TESTDIR)/test_beep
 
 # Build and run the milestone-06 machine harness. Links ONLY the machine
-# sources (no libretro, no .so) — proving the machine is usable without
-# RetroArch.
+# sources — no libretro, no .so — proving the machine is usable without
+# RetroArch. (M15 made the machine own the guest CPU, so exec+cpu are part
+# of "the machine sources" now.)
 test-machine:
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_machine \
 	    tests/test_machine.c src/arcade1/machine.c src/arcade1/memory.c \
-	    src/arcade1/timer.c src/arcade1/video.c
+	    src/arcade1/timer.c src/arcade1/video.c src/arcade1/audio.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_machine
 
 # Build and run the milestone-07 memory/bus harness. Links ONLY memory.c —
@@ -149,8 +152,8 @@ test-mmio: $(GUEST_BUILD)/mmio_demo.bin
 test-timer:
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_timer \
 	    tests/test_timer.c src/arcade1/machine.c src/arcade1/timer.c \
-	    src/arcade1/video.c src/arcade1/memory.c src/arcade1/exec.c \
-	    src/arcade1/cpu.c
+	    src/arcade1/video.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_timer
 
 # Build and run the milestone-13 video harness: run video_demo.c on the CPU so
@@ -161,8 +164,8 @@ test-timer:
 test-video: $(GUEST_BUILD)/video_demo.bin
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_video \
 	    tests/test_video.c src/arcade1/machine.c src/arcade1/video.c \
-	    src/arcade1/timer.c src/arcade1/memory.c src/arcade1/exec.c \
-	    src/arcade1/cpu.c
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_video $(GUEST_BUILD)/video_demo.bin
 
 # Build and run the milestone-14 graphics-API harness: gfx_demo.c draws ONLY
@@ -173,9 +176,29 @@ test-video: $(GUEST_BUILD)/video_demo.bin
 test-gfx: $(GUEST_BUILD)/gfx_demo.bin
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_gfx \
 	    tests/test_gfx.c src/arcade1/machine.c src/arcade1/video.c \
-	    src/arcade1/timer.c src/arcade1/memory.c src/arcade1/exec.c \
-	    src/arcade1/cpu.c
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_gfx $(GUEST_BUILD)/gfx_demo.bin
+
+# Build and run the milestone-15 Breakout harness: boot breakout.c on the
+# machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
+# and check gameplay (serve -> launch -> brick hit -> lives -> game over ->
+# restart), the input/audio/timer devices it uses, per-frame state hashes and
+# reset-and-compare determinism. Links machine+video+timer+audio+memory+
+# exec+cpu (no libretro, no .so). The four game globals are read straight out
+# of guest RAM via addresses from the ELF's symbol table.
+test-breakout: $(GUEST_BUILD)/breakout.bin
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_breakout \
+	    tests/test_breakout.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
+	@SCORE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="score"{print $$1}'); \
+	 LIVES=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="lives"{print $$1}'); \
+	 STATE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="state"{print $$1}'); \
+	 PADDLE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="paddle_x"{print $$1}'); \
+	 echo "score @ 0x$$SCORE  lives @ 0x$$LIVES  state @ 0x$$STATE  paddle_x @ 0x$$PADDLE"; \
+	 $(TESTDIR)/test_breakout $(GUEST_BUILD)/breakout.bin \
+	   0x$$SCORE 0x$$LIVES 0x$$STATE 0x$$PADDLE
 
 clean:
 	rm -f $(TARGET)

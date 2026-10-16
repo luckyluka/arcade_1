@@ -598,7 +598,8 @@ implemented (M12 timer, M13 video, ...).
 
 **Register table** — the canonical list of machine device registers. It was
 empty at M11 (infrastructure only); each device appends its rows here when it
-lands. The timer's rows were pinned at M12, the video device's at M13:
+lands. The timer's rows were pinned at M12, the video device's at M13, the
+input and audio devices' at M15:
 
 | Offset | Register    | Access | Function | When it takes effect |
 |--------|-------------|--------|----------|----------------------|
@@ -609,10 +610,14 @@ lands. The timer's rows were pinned at M12, the video device's at M13:
 | 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL, masked to 16 bits | Latches at the `sw` |
 | 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
 | 0x110  | VIDEO_STATUS | R     | Number of PRESENT commands executed | Increments at the `sw` of each PRESENT |
+| 0x200  | INPUT_PAD   | R      | RetroPad for the current frame: bit0 up, bit1 down, bit2 left, bit3 right, bit4 A, bit5 B, bit6 start, bit7 select; other bits read as 0 | Reflects the `arcade1_input_t` the host set for this frame (`arcade1_set_input`, called before the frame starts); read-only, writes ignored |
+| 0x300  | AUDIO_FREQ  | R/W    | Tone frequency in Hz (power-on 440 — the historical demo beep). 0 = constant level while enabled | Latches at the `sw`; shapes **this** frame's samples, because the machine renders audio after the guest has run |
+| 0x304  | AUDIO_CTRL  | R/W    | bit0 = tone enable (power-on: set); other bits ignored on write and read as 0 | Disabled = silence for this frame; takes effect the same way as FREQ |
 
 (The machine registers a **single** handler for the whole window — the M11
-contract — and muxes it internally: `0x000..0x0FF` is the timer, `0x100..` is
-the video device; unknown offsets read 0 / ignore writes. Every access thus
+contract — and muxes it internally: `0x000..0x0FF` is the timer, `0x100..0x1FF`
+the video device, `0x200..0x2FF` the input device (read-only), `0x300..0x3FF`
+the audio device; unknown offsets read 0 / ignore writes. Every access thus
 reaches a device, so `stray_accesses` stays 0. M11's harness
 `tests/test_mmio.c` demonstrates read/write dispatch with a scratch register
 pair that lives in the test.)
@@ -751,9 +756,11 @@ Do not add sprites, tilemaps, textures, shaders, rotation, alpha blending, or ot
   rectangle is safe to draw.
 - **Explicitly excluded** (per the milestone text): sprites, tilemaps,
   textures, shaders, rotation, alpha blending — none of it exists at M14.
-- **Scope:** guest drawing still lands *between* frames while the host demo
-  repaints every `arcade1_run_frame()` (same as M13). The M15 game (Breakout)
-  uses this API as its drawing primitive.
+- **Scope:** at M14, guest drawing still landed *between* frames while the
+  host demo repainted every `arcade1_run_frame()` (same as M13). M15 changed
+  that for firmware runs: with firmware attached the demo does not repaint, so
+  the guest's presented frame *is* the frame (see M15 below). The M15 game
+  (Breakout) uses this API as its drawing primitive.
 
 ---
 
@@ -794,6 +801,46 @@ RetroArch
 ```
 
 This is a major milestone.
+
+## Firmware and frame protocol (pinned at M15)
+
+- **The machine owns the CPU.** `arcade1_machine_t` now contains an
+  `arcade1_cpu_t`; `arcade1_set_firmware(m, true)` boots guest code from the
+  reset vector (0x00000000) on the next `arcade1_run_frame`. `arcade1_reset`
+  reboots the guest too: ROM contents and the firmware flag persist, everything
+  else (RAM, CPU, devices, timer, framebuffer) returns to power-on state, so a
+  reset is a deterministic cold boot.
+- **One host frame = one guest loop iteration.** `arcade1_run_frame` runs the
+  guest until it executes a PRESENT write (via `gfx_present`), until the PC
+  stops changing (crt0's `j .` park), or until a 1,000,000-instruction safety
+  cap. Game speed is therefore locked to the host's 60 fps, deterministically;
+  a guest that never presents is bounded by the cap, never by wall-clock.
+- **Demo mode is unchanged.** While no firmware is attached, `run_frame`
+  behaves exactly as M02–M06 defined it (test pattern, moving square, pad
+  overlay, input-driven state); with firmware attached, the host demo does not
+  render — the guest owns the frame.
+- **Input:** `INPUT_PAD` (0x200, read-only) reflects the host's
+  `arcade1_set_input` for the current frame, so the guest always sees a stable
+  pad for the whole frame. Rows in the register table above.
+- **Audio:** the device powers on at 440 Hz enabled — the historical M05 demo
+  beep — so the audio pipeline is exercised even with no guest code. Breakout
+  silences it at boot and beeps on events (brick 880 Hz, paddle 660 Hz, death
+  220 Hz, game over 110 Hz, restart 440 Hz), each beep lasting 6 timer ticks.
+  The waveform is rendered by the machine *after* the guest runs, so a register
+  write at frame N already shapes frame N's samples.
+- **Libretro:** `retro_load_game` boots content when `game->data` is non-NULL
+  (the file is the guest ROM, must fit the 4 KiB ROM); with no content the core
+  keeps its no-content demo mode. This also surfaced that the core had never
+  exported `retro_api_version` — RetroArch tolerates that in menu mode but
+  fatals loading content, so the M15 fix adds the required symbol.
+- **Guest constraints:** Breakout is built `-march=rv32i` without libgcc, so
+  it contains no variable multiplication or division (score digits are produced
+  by subtraction) and runs entirely on the M09 interpreter. The full chain
+  works: `breakout.c` -> RISC-V GCC -> ROM -> RV32I VM -> video/audio/input
+  devices -> Libretro -> RetroArch, and the game is also headless-runnable with
+  a printed hash per frame (`make test-breakout`, per the Games testing rule).
+- **Measured CPU load:** ~77.8k instructions per frame on average (80.5k max,
+  full-redraw strategy: clear + repaint all rectangles every frame).
 
 ---
 

@@ -8,6 +8,8 @@
 #ifndef ARCADE1_MACHINE_H
 #define ARCADE1_MACHINE_H
 
+#include "audio.h"     /* arcade1_audio_dev_t (milestone 15) */
+#include "exec.h"      /* arcade1_cpu_t (milestone 15: guest firmware) */
 #include "memory.h"
 #include "timer.h"
 #include "video.h"
@@ -32,6 +34,22 @@
 
 /* Framebuffer size in pixels (RGB565, 16-bit, row-major). */
 #define ARCADE1_FB_PIXELS (ARCADE1_WIDTH * ARCADE1_HEIGHT)
+
+/* --- Input device (milestone 15) ----------------------------------------- */
+
+/* INPUT_PAD register bits (docs.md "Firmware and frame protocol, pinned at
+ * M15"). The input register at 0x200 is read-only and reflects the
+ * arcade1_input_t the host set for the current frame. */
+#define ARCADE1_INPUT_REG_BASE   0x200u
+#define ARCADE1_INPUT_REG_PAD    0x200u
+#define ARCADE1_INPUT_BIT_UP     0x1u
+#define ARCADE1_INPUT_BIT_DOWN   0x2u
+#define ARCADE1_INPUT_BIT_LEFT   0x4u
+#define ARCADE1_INPUT_BIT_RIGHT  0x8u
+#define ARCADE1_INPUT_BIT_A      0x10u
+#define ARCADE1_INPUT_BIT_B      0x20u
+#define ARCADE1_INPUT_BIT_START  0x40u
+#define ARCADE1_INPUT_BIT_SELECT 0x80u
 
 /* --- Abstract input device ---------------------------------------------- */
 
@@ -65,7 +83,17 @@ typedef struct arcade1_machine {
      * the framebuffer above (see docs.md register table). */
     arcade1_video_t video;
 
-    /* Input for the current frame (set via arcade1_set_input). */
+    /* Audio device (M15): guest-driven tone registers; the machine renders
+     * the waveform from this state every frame (see docs.md register table). */
+    arcade1_audio_dev_t audio_dev;
+
+    /* Guest CPU (M15): idle until firmware is attached via
+     * arcade1_set_firmware; then it runs once per arcade1_run_frame. */
+    arcade1_cpu_t cpu;
+    bool firmware;
+
+    /* Input for the current frame (set via arcade1_set_input). Readable by
+     * the guest through the read-only INPUT_PAD register (M15). */
     arcade1_input_t input;
 
     /* Internal machine state. */
@@ -77,13 +105,23 @@ typedef struct arcade1_machine {
 /* Zero the machine (call once before arcade1_reset). */
 void arcade1_init(arcade1_machine_t *m);
 
-/* Reset to power-on state: square centred, counters cleared. */
+/* Reset to power-on state: square centred, counters cleared, CPU reset.
+ * ROM contents and the firmware flag persist: with firmware attached the
+ * guest reboots from the reset vector on the next frame. */
 void arcade1_reset(arcade1_machine_t *m);
+
+/* Attach or detach guest firmware (M15). Load the ROM first
+ * (arcade1_load_rom(&m->bus, ...)); enabling firmware resets the CPU so the
+ * guest boots from the reset vector on the next arcade1_run_frame. While
+ * firmware is attached the host demo (test pattern / square / overlay) does
+ * not render — the guest owns the frame. */
+void arcade1_set_firmware(arcade1_machine_t *m, bool enabled);
 
 /* Set the controller state for the next frame. */
 void arcade1_set_input(arcade1_machine_t *m, const arcade1_input_t *in);
 
-/* Advance one frame: update state, render video, generate audio. */
+/* Advance one frame: run the guest (if firmware attached) until it presents
+ * a frame, then generate audio from the audio device state. */
 void arcade1_run_frame(arcade1_machine_t *m);
 
 /* --- Output accessors ---------------------------------------------------- */

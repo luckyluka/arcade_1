@@ -58,6 +58,12 @@ static void poll_input(void)
 
 /* --- Lifecycle ----------------------------------------------------------- */
 
+/* Required by the libretro ABI: which API revision this core implements.
+ * RetroArch refuses to load a core that does not export it (found the hard
+ * way at M15: content loading fatals without it, while the no-content menu
+ * path happens to tolerate its absence). */
+unsigned retro_api_version(void) { return RETRO_API_VERSION; }
+
 void retro_set_environment(retro_environment_t cb)
 {
     env_cb = cb;
@@ -183,8 +189,6 @@ static void setup_input_descriptors(void)
 
 bool retro_load_game(const struct retro_game_info *game)
 {
-    (void)game; /* Accept any content file. */
-
     /* The machine renders RGB565; negotiate that format with the frontend. */
     enum retro_pixel_format fmt = RETRO_PIXEL_FORMAT_RGB565;
     if (env_cb && !env_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &fmt))
@@ -194,6 +198,19 @@ bool retro_load_game(const struct retro_game_info *game)
 
     arcade1_init(&machine);
     arcade1_reset(&machine);
+
+    /* With no content (SET_SUPPORT_NO_GAME) the machine boots into its
+     * built-in demo. With content (milestone 15) the file is the guest ROM:
+     * load it into the 4 KiB ROM and boot the CPU from the reset vector
+     * (docs.md M15 "Firmware and frame protocol"). */
+    if (game && game->data && game->size > 0) {
+        if (game->size > ARCADE1_ROM_SIZE)
+            return false;   /* content larger than the ROM */
+        if (arcade1_load_rom(&machine.bus, game->data,
+                             (uint32_t)game->size) != game->size)
+            return false;
+        arcade1_set_firmware(&machine, true);
+    }
 
     return true;
 }
