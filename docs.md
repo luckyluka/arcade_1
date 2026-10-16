@@ -929,6 +929,50 @@ game.arc1
 
 and RetroArch should pass that content to the core.
 
+## ARCADE-1 image format decisions (pinned at M17)
+
+- **The format, v1** — a 16-byte header followed by the payload (the
+  same flat RV32IM image the VM has always loaded into its 4 KiB ROM):
+
+  ```text
+  offset  size  field
+  0       4     magic   "ARC1"
+  4       1     version (currently 1)
+  5       3     reserved, must be 0
+  8       4     payload_size   (little-endian u32, 1..4096)
+  12      4     payload_crc32  (little-endian u32, IEEE CRC-32)
+  16      N     payload        (N == payload_size)
+  ```
+
+  Every field earns its place: magic = unambiguous detection, version =
+  a home for future incompatible layouts, size = exact framing (a
+  truncated or padded file is rejected, never half-loaded), CRC = the
+  transfer-corruption check (the trip to a Google TV made that concrete).
+- **Deliberately excluded, per the milestone text**: metadata text,
+  asset sections, compression, signatures, multi-file anything. The
+  reserved bytes and the version byte are the only extension room.
+- **One implementation, two consumers**: the parser, CRC-32 and header
+  writer live in `src/arcade1/rom.{h,c}` (pure, no machine/libretro
+  dependency); the host packer `tools/packarc1.c` links that same code
+  to *write* images, so writer and reader can never disagree.
+- **Loading**: the libretro adapter accepts an `.arc1` image (detected
+  by magic; any parse failure refuses to boot) or — kept for backward
+  compatibility with M15 content — a raw flat image, which is treated
+  exactly as before. Raw support is legacy compatibility, not a format
+  feature; new games ship as `.arc1`.
+- **Rejection, not traps**: a bad image makes `retro_load_game` return
+  false with a distinct reason (`arcade1_image_strerror`); the machine
+  never sees invalid bytes. Valid images are transparent: the payload
+  is the identical byte stream, so all state hashes are unchanged.
+- **Testing**: `make test-rom` (CRC test vector, header round-trip,
+  payload -> ROM load, and every rejection: short, magic, version,
+  size, checksum, plus a full 4 KiB payload); `make test-breakout`
+  now boots `breakout.arc1` and must reproduce the M16 state hash
+  `0x052E8B24448A4ADD` exactly — format transparency asserted as a
+  determinism test; `make test-program` still loads a raw `.bin`, so
+  the compatibility path stays covered too. `make program` now emits
+  both `game.bin` and `game.arc1` per guest.
+
 ---
 
 # 22. Milestone 18 — Tetris

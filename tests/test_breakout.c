@@ -32,6 +32,7 @@
  */
 
 #include "machine.h"    /* brings in memory/timer/video/audio/exec */
+#include "rom.h"        /* M17: .arc1 image parsing */
 
 #include "state_hash.h"
 
@@ -69,7 +70,7 @@
 static arcade1_machine_t m;
 static uint16_t fb1[ARCADE1_FB_PIXELS];       /* pass-1 framebuffer          */
 
-static uint8_t img[ARCADE1_ROM_SIZE];
+static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
 static size_t  img_size;
 
 /* Guest symbol addresses (RAM) handed in by the Makefile via nm. */
@@ -168,9 +169,23 @@ static bool pred_game_over(void)      { return guest(sym_state) == ST_OVER; }
 
 static void boot_machine(void)
 {
+    /* M17: the ROM file is a proper `.arc1` image (what `make program`
+     * now produces); accept a raw flat binary too. Either way exactly the
+     * payload reaches the ROM. */
+    const void *rom = img;
+    size_t rom_size = img_size;
+
+    if (arcade1_image_recognized(img, img_size)) {
+        arcade1_image_t parsed;
+        assert(arcade1_image_parse(img, img_size, &parsed) ==
+               ARCADE1_IMAGE_OK);
+        rom = parsed.payload;
+        rom_size = parsed.payload_size;
+    }
+
     arcade1_init(&m);
     arcade1_reset(&m);
-    assert(arcade1_load_rom(&m.bus, img, (uint32_t)img_size) == img_size);
+    assert(arcade1_load_rom(&m.bus, rom, (uint32_t)rom_size) == rom_size);
     arcade1_set_firmware(&m, true);
 
     frame_count = 0;

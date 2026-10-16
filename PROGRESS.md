@@ -23,9 +23,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 14        | Simple rectangle API       | COMPLETE |
 | 15        | Breakout (first game)      | COMPLETE |
 | 16        | M extension (RV32IM)       | COMPLETE |
-| 17+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 17        | Proper ROM format (.arc1)  | COMPLETE |
+| 18+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 17 — Proper ROM format.** See `docs.md` for the exact scope.
+Next up: **Milestone 18 — Tetris.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -42,9 +43,11 @@ src/
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
         video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT -> framebuffer (M13)
         audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
+        rom.h/.c       .arc1 game image: parse/validate/write, CRC-32 (M17)
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend;
-                       loads content (a guest ROM) as firmware when provided
+                       loads content (an .arc1 image or legacy raw ROM) as
+                       firmware when provided
 programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
@@ -54,7 +57,10 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     gfx_demo.c          M14 guest: draws only through the gfx.h API
     breakout.c          M15 guest: the first real game (Breakout)
-    build/              generated .elf/.bin (gitignored)
+    build/              generated .elf/.bin/.arc1 (gitignored)
+tools/
+    packarc1.c          host packer: flat .bin -> .arc1 game image (M17);
+                        shares the header writer/CRC with the VM's rom.c
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
 tests/
@@ -81,13 +87,14 @@ make test-memory  # M07 memory bus (links ONLY memory.c)
 make test-cpu     # M08 RV32IM decoder (links ONLY cpu.c)
 make test-exec    # M09 RV32IM interpreter (links exec+cpu+memory, no .so;
                   #     extended at M16 with MUL..REMU semantics)
-make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
+make program      # M10+ guests: C -> RV32 ELF -> flat .bin -> .arc1 image (M17)
 make test-program # M10 run compiled C on the VM, assert counter == 123
 make test-mmio    # M11 guest reads/writes an MMIO device register
 make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
 make test-video   # M13 guest drives video device -> framebuffer, reset
 make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
-make test-breakout # M15 boot Breakout as firmware, scripted game + hashes
+make test-rom     # M17 .arc1 image format: CRC-32, header, every rejection
+make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -170,10 +177,17 @@ measurable, one commit per task:
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: breakout at 1718 bytes). Since M16 the ISA is RV32IM,
+  ROM (largest so far: breakout at 1718 bytes; its .arc1 file is that payload
+  plus a 16-byte header). Since M16 the ISA is RV32IM,
   so guest C may use `*` and `/` directly (spec-exact semantics, no traps —
   division by zero and `INT_MIN / -1` return the defined results) with no
   libgcc.
+- The `.arc1` image (M17) is deliberately minimal v1: 16-byte header +
+  CRC-32-checked payload, nothing else — no metadata, asset sections or
+  compression yet (extension room = reserved bytes + the version field).
+  The CRC covers the payload only; header corruption is caught by the
+  magic/version/size checks instead. The core still accepts raw flat
+  `.bin` content for backward compatibility; new games ship as `.arc1`.
 - The M extension (M16) is interpreter-only: all eight instructions are
   single-step interpreted with no special fast path or early-out, so a divide
   costs the same as an add per instruction.

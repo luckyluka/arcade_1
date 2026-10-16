@@ -17,7 +17,7 @@ LDFLAGS += -shared
 TARGET  := arcade1_libretro.so
 SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
            src/arcade1/exec.c src/arcade1/timer.c src/arcade1/video.c \
-           src/arcade1/audio.c src/libretro/libretro.c
+           src/arcade1/audio.c src/arcade1/rom.c src/libretro/libretro.c
 
 # Test executables are built into this directory (gitignored) instead of /tmp.
 TESTDIR := build
@@ -25,7 +25,7 @@ TESTDIR := build
 # Every test target builds into $(TESTDIR), so make sure the directory exists
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
-test-exec test-program test-mmio test-timer test-video test-gfx \
+test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-breakout: | $(TESTDIR)
 
 $(TESTDIR):
@@ -46,6 +46,8 @@ GUEST_BUILD   := programs/build
 GUEST_PROGS   := counter mmio_demo video_demo gfx_demo breakout
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
+# Since M17 every guest is also packaged into a proper .arc1 game image.
+GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 
 # Keep the ELFs (make would otherwise delete them as intermediates); the test
 # reads symbols (e.g. counter's address) from them.
@@ -54,7 +56,7 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 .PHONY: all clean program android android-arm64 android-arm \
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video test-gfx test-breakout
+        test-video test-gfx test-rom test-breakout
 
 all: $(TARGET)
 
@@ -153,8 +155,8 @@ test-exec:
 	    src/arcade1/memory.c
 	$(TESTDIR)/test_exec
 
-# --- Guest programs: C -> RV32 ELF -> flat binary --------------------------
-program: $(GUEST_BINS)
+# --- Guest programs: C -> RV32 ELF -> flat binary -> .arc1 image -----------
+program: $(GUEST_BINS) $(GUEST_ARCS)
 
 # gfx.h is shared guest API: rebuild guests when it changes.
 $(GUEST_BUILD)/%.elf: programs/%.c programs/gfx.h programs/crt0.S programs/link.ld
@@ -163,6 +165,15 @@ $(GUEST_BUILD)/%.elf: programs/%.c programs/gfx.h programs/crt0.S programs/link.
 
 $(GUEST_BUILD)/%.bin: $(GUEST_BUILD)/%.elf
 	$(RISCV_OBJCOPY) -O binary $< $@
+
+# Milestone 17: wrap each flat binary into a proper ARCADE-1 game image.
+# The packer shares the header writer and CRC with the VM itself
+# (src/arcade1/rom.c), so writer and reader cannot disagree.
+$(GUEST_BUILD)/%.arc1: $(GUEST_BUILD)/%.bin $(TESTDIR)/packarc1
+	$(TESTDIR)/packarc1 $< $@
+
+$(TESTDIR)/packarc1: tools/packarc1.c src/arcade1/rom.c src/arcade1/rom.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -o $@ tools/packarc1.c src/arcade1/rom.c
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and
@@ -225,17 +236,26 @@ test-gfx: $(GUEST_BUILD)/gfx_demo.bin
 # reset-and-compare determinism. Links machine+video+timer+audio+memory+
 # exec+cpu (no libretro, no .so). The four game globals are read straight out
 # of guest RAM via addresses from the ELF's symbol table.
-test-breakout: $(GUEST_BUILD)/breakout.bin
+# Build and run the milestone-17 .arc1 game-image harness. Links rom.c +
+# memory.c only (no libretro, no machine, no .so), proving the format code is
+# frontend-independent. Covers CRC vectors, header round-trip, payload load,
+# and every rejection (short/magic/version/size/crc).
+test-rom:
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_rom \
+	    tests/test_rom.c src/arcade1/rom.c src/arcade1/memory.c
+	$(TESTDIR)/test_rom
+
+test-breakout: $(GUEST_BUILD)/breakout.arc1
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_breakout \
 	    tests/test_breakout.c src/arcade1/machine.c src/arcade1/video.c \
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
-	    src/arcade1/exec.c src/arcade1/cpu.c
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
 	@SCORE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="score"{print $$1}'); \
 	 LIVES=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="lives"{print $$1}'); \
 	 STATE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="state"{print $$1}'); \
 	 PADDLE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="paddle_x"{print $$1}'); \
 	 echo "score @ 0x$$SCORE  lives @ 0x$$LIVES  state @ 0x$$STATE  paddle_x @ 0x$$PADDLE"; \
-	 $(TESTDIR)/test_breakout $(GUEST_BUILD)/breakout.bin \
+	 $(TESTDIR)/test_breakout $(GUEST_BUILD)/breakout.arc1 \
 	   0x$$SCORE 0x$$LIVES 0x$$STATE 0x$$PADDLE
 
 clean:

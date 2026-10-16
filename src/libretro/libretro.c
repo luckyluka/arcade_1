@@ -12,6 +12,7 @@
 #include "libretro.h"
 
 #include "machine.h"
+#include "rom.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -202,12 +203,29 @@ bool retro_load_game(const struct retro_game_info *game)
     /* With no content (SET_SUPPORT_NO_GAME) the machine boots into its
      * built-in demo. With content (milestone 15) the file is the guest ROM:
      * load it into the 4 KiB ROM and boot the CPU from the reset vector
-     * (docs.md M15 "Firmware and frame protocol"). */
+     * (docs.md M15 "Firmware and frame protocol").
+     *
+     * Since M17 content may be either a proper `.arc1` image (detected by
+     * its magic; validated and unwrapped by arcade1_image_parse) or, for
+     * backward compatibility, a raw flat ROM image as before. */
     if (game && game->data && game->size > 0) {
-        if (game->size > ARCADE1_ROM_SIZE)
+        const uint8_t *rom = (const uint8_t *)game->data;
+        size_t rom_size = game->size;
+
+        if (arcade1_image_recognized(game->data, game->size)) {
+            arcade1_image_t img;
+            arcade1_image_err_t err =
+                arcade1_image_parse(game->data, game->size, &img);
+            if (err != ARCADE1_IMAGE_OK)
+                return false;   /* corrupt/wrong image, reason in rom.h */
+            rom = img.payload;
+            rom_size = img.payload_size;
+        }
+
+        if (rom_size > ARCADE1_ROM_SIZE)
             return false;   /* content larger than the ROM */
-        if (arcade1_load_rom(&machine.bus, game->data,
-                             (uint32_t)game->size) != game->size)
+        if (arcade1_load_rom(&machine.bus, rom, (uint32_t)rom_size) !=
+            rom_size)
             return false;
         arcade1_set_firmware(&machine, true);
     }
