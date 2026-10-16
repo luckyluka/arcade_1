@@ -599,17 +599,20 @@ implemented (M12 timer, M13 video, ...).
 **Register table** — the canonical list of machine device registers. It was
 empty at M11 (infrastructure only); each device appends its rows here when it
 lands. The timer's rows were pinned at M12, the video device's at M13, the
-input and audio devices' at M15:
+input and audio devices' at M15, and the sprite engine's additions at M19:
 
 | Offset | Register    | Access | Function | When it takes effect |
 |--------|-------------|--------|----------|----------------------|
 | 0x00   | TIMER_COUNT | R      | Tick count, +1 per completed frame while enabled. Read-only: writes are ignored by the device. | Advances once per `arcade1_run_frame()` while CTRL bit0 is set; a `lw` observes the value at the instruction that performs it |
 | 0x04   | TIMER_CTRL  | R/W    | bit0 = enable (1) / pause (0); all other bits are ignored on write and read as 0 | The register latches at the `sw` instruction; the new state governs every frame that completes after that write |
-| 0x100  | VIDEO_X     | R/W    | Set-pixel X coordinate (kept exactly as written; the plot itself clips to the screen) | Latches at the `sw`; read by the next SET_PIXEL command |
-| 0x104  | VIDEO_Y     | R/W    | Set-pixel Y coordinate (kept exactly as written; the plot itself clips to the screen) | Latches at the `sw`; read by the next SET_PIXEL command |
-| 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL, masked to 16 bits | Latches at the `sw` |
-| 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
+| 0x100  | VIDEO_X     | R/W    | Draw X coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (X is treated as **signed** by FILL/SPRITE) | Latches at the `sw`; read by the next draw command |
+| 0x104  | VIDEO_Y     | R/W    | Draw Y coordinate for SET_PIXEL / FILL / SPRITE, kept exactly as written; the draw itself clips to the screen (Y is treated as **signed** by FILL/SPRITE) | Latches at the `sw`; read by the next draw command |
+| 0x108  | VIDEO_COLOR | R/W    | RGB565 colour for CLEAR/SET_PIXEL/FILL/SPRITE, masked to 16 bits | Latches at the `sw` |
+| 0x10C  | VIDEO_CMD   | W      | 1 = CLEAR (fill screen with COLOR), 2 = SET_PIXEL (plot COLOR at X,Y), 3 = PRESENT (count a presented frame), 4 = FILL (fill the W×H rectangle at X,Y with COLOR), 5 = SPRITE (blit the 1-bpp image at ADDR, W×H, at X,Y); other values ignored | Executes synchronously at the `sw`: the framebuffer / present counter changes at that instruction |
 | 0x110  | VIDEO_STATUS | R     | Number of PRESENT commands executed | Increments at the `sw` of each PRESENT |
+| 0x114  | VIDEO_ADDR  | R/W    | Guest address of a SPRITE's 1-bpp image data (must lie in ROM `0x0000..0x0FFF` or RAM `0x1000..0x1FFF`; anything else reads as all-transparent) | Latches at the `sw`; read by the next SPRITE command |
+| 0x118  | VIDEO_W     | R/W    | Width in pixels for FILL/SPRITE, kept exactly as written | Latches at the `sw`; read by the next FILL/SPRITE |
+| 0x11C  | VIDEO_H     | R/W    | Height in pixels for FILL/SPRITE, kept exactly as written | Latches at the `sw`; read by the next FILL/SPRITE |
 | 0x200  | INPUT_PAD   | R      | RetroPad for the current frame: bit0 up, bit1 down, bit2 left, bit3 right, bit4 A, bit5 B, bit6 start, bit7 select; other bits read as 0 | Reflects the `arcade1_input_t` the host set for this frame (`arcade1_set_input`, called before the frame starts); read-only, writes ignored |
 | 0x300  | AUDIO_FREQ  | R/W    | Tone frequency in Hz (power-on 440 — the historical demo beep). 0 = constant level while enabled | Latches at the `sw`; shapes **this** frame's samples, because the machine renders audio after the guest has run |
 | 0x304  | AUDIO_CTRL  | R/W    | bit0 = tone enable (power-on: set); other bits ignored on write and read as 0 | Disabled = silence for this frame; takes effect the same way as FREQ |
@@ -753,7 +756,12 @@ Do not add sprites, tilemaps, textures, shaders, rotation, alpha blending, or ot
 - **Primitive by design:** a rectangle costs one `sw` per pixel (no hardware
   rectangle, no acceleration). Anything outside the screen — including
   negative x/y — is clipped per pixel by the device, so a partly off-screen
-  rectangle is safe to draw.
+  rectangle is safe to draw. *This per-pixel loop was retired at M19, when
+  `gfx_rect` became a single device-side FILL command (see "Sprite
+  decisions, pinned at M19"): same signature, same clipped pixels, one
+  command instead of w*h of them. The M14 state hash changed accordingly
+  (`0x3D91642CBF636CF1` -> `0x96E1742EE36B68B2`) because the guest executes
+  a different instruction stream for the identical picture.*
 - **Explicitly excluded** (per the milestone text): sprites, tilemaps,
   textures, shaders, rotation, alpha blending — none of it exists at M14.
 - **Scope:** at M14, guest drawing still landed *between* frames while the
@@ -971,7 +979,10 @@ and RetroArch should pass that content to the core.
   `0x052E8B24448A4ADD` exactly — format transparency asserted as a
   determinism test; `make test-program` still loads a raw `.bin`, so
   the compatibility path stays covered too. `make program` now emits
-  both `game.bin` and `game.arc1` per guest.
+  both `game.bin` and `game.arc1` per guest. *(The M19 sprite engine
+  later re-pinned this hash to `0x7816DD30A2B9D131` — see "Sprite
+  decisions, pinned at M19"; the `.arc1`-vs-`.bin` transparency
+  property itself is unchanged.)*
 
 ---
 
@@ -1039,7 +1050,10 @@ Instead use the existing API and observe what is missing.
   wall clamps (box origin may hang off-screen; CELLS clamp at column 0),
   a line clear with marker-row compaction verified over all 200 bytes,
   game over, restart-to-boot-state, timer == frames, presents == frames,
-  stray accesses == 0. Final state hash `0x982F9F026B07E9C2`.
+  stray accesses == 0. Final state hash `0x982F9F026B07E9C2` — re-pinned
+  to `0x0D742BEFFEBA2C3E` at M19, when the same picture began costing
+  9,384 instructions/frame instead of 245,797 (the pixel assertions are
+  unchanged; only the executed instruction stream differs).
 - **Fit**: 3,066-byte payload of the 4 KiB ROM budget (1,030 bytes
   spare); the shipped `tetris.arc1` is 3,082 bytes with the header.
 
@@ -1069,6 +1083,88 @@ Do not assume these are final.
 The software VM is the reference implementation.
 
 The eventual FPGA implementation must be able to reproduce the same semantics.
+
+## Sprite decisions (pinned at M19)
+
+The property list above is the starting point; what the two shipped games
+actually need is narrower. Breakout's ball/paddle/bricks and Tetris' blocks
+and panel are all *solid rectangles*, and the one thing neither `CLEAR` nor
+`SET_PIXEL` could do cheaply was a **block of pixels in one command** — the
+per-pixel loop lived in the guest, which is why M18 measured 245,797
+instructions/frame for Tetris.
+
+So the smallest abstraction that pays for itself is two device-side commands
+in the video device (the same parameter registers, two new command values,
+three new registers — the register table above is updated in place):
+
+- **`FILL`** — the W×H rectangle at (X,Y) filled with COLOR. This is the
+  degenerate sprite: a flat-colour object with no image.
+- **`SPRITE`** — the 1-bpp image at (ADDR, W×H) blitted at (X,Y): set bits
+  are drawn in COLOR, **clear bits are left untouched (transparent)**.
+
+Implemented properties: **x, y, image (optional), colour**. Deliberately
+*not* implemented, because no shipped game needs them yet (docs.md: build
+only what the games need — revisit when a real game asks):
+
+- **flip X / flip Y** — useful for a future platformer; a blit engine gains
+  them cheaply later.
+- **priority** — draw order is the compositor; painter's order wins, which
+  is what both games already rely on.
+- **visibility flag** — an unneeded sprite is simply not drawn (no command).
+
+**Image format** (also what the FPGA must reproduce): rows of pixels,
+row-major, each row padded to a whole byte; in each byte the **MSB is the
+leftmost** pixel. Bit `(7 - (col & 7))` of byte
+`addr + row * ((w + 7) / 8) + col / 8`. `gfx_sprite()` in the guest API
+takes a plain `const void *` to such an array.
+
+**Sources and safety**: the device fetches image bytes only from guest ROM
+(`0x0000..0x0FFF`) and RAM (`0x1000..0x1FFF`); anything else — in particular
+the MMIO window itself — reads as zero bits, so a sprite can never have side
+effects on another device. These are device-side fetches, not CPU accesses,
+so `stray_accesses` stays untouched.
+
+**Clipping**: X/Y are *signed* coordinates and W/H are sizes; both commands
+draw the intersection of `[x, x+w) × [y, y+h)` with the screen, computed in
+64-bit so no coordinate can wrap around an edge. This reproduces exactly
+what the old per-pixel loop drew for every value the guest API can produce
+(negative origins show their right/bottom part; right/bottom overhangs are
+cut), so the framebuffer bytes are unchanged by this milestone — only the
+per-pixel loop moved from the guest into the device. A fully off-screen or
+zero-size block draws nothing. `SET_PIXEL` (M13) keeps its original
+per-pixel semantics untouched.
+
+**Guest API**: `gfx_rect()` keeps its signature and its pixels but is now
+**one FILL command** instead of a loop of `SET_PIXEL`s. The new
+`gfx_sprite(x, y, img, w, h, color)` issues a SPRITE. `gfx_clear` /
+`gfx_present` are unchanged.
+
+**Measured effect** (the payoff the M18 observation asked for): both games
+now repaint with one command per object instead of one `sw` per pixel.
+Breakout: 77,836 -> **2,039** instructions/frame average (595 frames).
+Tetris: 245,797 -> **9,384** instructions/frame average, 16,678 max (300
+frames) — 26x faster, and now only ~2x Breakout instead of 3.2x. The
+remaining per-frame cost is game logic and the per-cell/per-glyph command
+issue, which is what M20's tilemap engine is for. State hashes of the two
+games changed accordingly (the CPU executes a different instruction stream
+for the same picture); their framebuffer pixel assertions are unchanged and
+still byte-exact.
+
+**Testing**: `make test-sprite` boots `sprite_demo.c` on the machine's own
+CPU and verifies every affected pixel: exact counts (red 32, green 16,
+white 8, yellow 32, blue 76,712), MSB-first bit order, transparent clear
+bits, a RAM copy rendering identically to the ROM original, right/bottom
+clipping, negative origins, fully off-screen / zero-size / illegal-source
+draws leaving nothing behind, register readbacks (X/Y/W/H/COLOR/ADDR), the
+timer and `stray_accesses` undisturbed, and reset-and-compare determinism
+(identical framebuffer + state hash `0xC970CDBE677933C9`). `make test-gfx`
+(M14) still passes with the new FILL-based `gfx_rect`, with its register
+readback updated to the rectangle's parameters.
+
+**Fit**: `sprite_demo` is a 548-byte payload; `gfx.h` grew by one function
+and three register defines; `video.{c,h}` gained two commands, three
+registers and the ROM/RAM borrows the machine already had. No new device,
+no new MMIO window, no buffering change.
 
 ---
 

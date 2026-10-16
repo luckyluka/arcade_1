@@ -1,8 +1,10 @@
 /* ARCADE-1 video device (milestone 13) implementation.
  *
- * See video.h. Register state plus three synchronous commands that draw into
- * the machine's scanout framebuffer; no clock, no host input, no buffering
- * policy.
+ * See video.h. Register state plus synchronous commands that draw into the
+ * machine's scanout framebuffer; no clock, no host input, no buffering
+ * policy. M19 (docs.md "Sprite decisions, pinned at M19") added FILL and
+ * SPRITE: device-side rectangle fills and 1-bpp image blits with transparent
+ * bits, so the per-pixel loop no longer runs in the guest.
  */
 
 #include "video.h"
@@ -16,9 +18,13 @@ void arcade1_video_reset(arcade1_video_t *v)
     v->x        = 0u;
     v->y        = 0u;
     v->color    = 0u;
+    v->addr     = 0u;
+    v->w        = 0u;
+    v->h        = 0u;
     v->presents = 0u;
-    /* v->framebuffer is deliberately kept: it is assigned once at machine
-     * init and survives resets (like the bus's MMIO attachment). */
+    /* v->framebuffer / v->rom / v->ram are deliberately kept: they are
+     * assigned once at machine init and survive resets (like the bus's MMIO
+     * attachment). */
 }
 
 /* --- Commands (run synchronously at the VIDEO_CMD write) ------------------ */
@@ -52,6 +58,98 @@ static void video_present(arcade1_video_t *v)
     v->presents++;
 }
 
+/* --- M19: FILL and SPRITE -------------------------------------------------- *
+ *
+ * Both draw a WxH block of pixels at (X, Y) into the scanout framebuffer,
+ * row-major, clipped to the screen. Pixel-for-pixel identical to the old
+ * per-pixel SET_PIXEL loop (docs.md "Sprite decisions, pinned at M19"), so
+ * the framebuffer bytes do not change; only the per-pixel loop now lives in
+ * the device.
+ *
+ * Semantics of the clip: X/Y are SIGNED coordinates and W/H are sizes; the
+ * device draws the intersection of [x, x+w) x [y, y+h) with the screen,
+ * computed in 64-bit. For every value the guest API can produce (int x/y,
+ * positive w/h) this is exactly what the old wrapped per-pixel loop drew —
+ * a negative origin shows its right/bottom part, an overhang off the
+ * right/bottom edge is cut — but no coordinate can wrap around an edge. */
+
+static void video_clip_rect(const arcade1_video_t *v,
+                            int64_t *x0, int64_t *x1,
+                            int64_t *y0, int64_t *y1)
+{
+    /* X/Y as signed coordinates, W/H as (unsigned) sizes. */
+    const int64_t x  = (int32_t)v->x;
+    const int64_t y  = (int32_t)v->y;
+    const int64_t xw = x + (int64_t)v->w;   /* 64-bit: cannot overflow */
+    const int64_t yh = y + (int64_t)v->h;
+
+    *x0 = (x > 0) ? x : 0;
+    *x1 = (xw < (int64_t)ARCADE1_WIDTH) ? xw : (int64_t)ARCADE1_WIDTH;
+    *y0 = (y > 0) ? y : 0;
+    *y1 = (yh < (int64_t)ARCADE1_HEIGHT) ? yh : (int64_t)ARCADE1_HEIGHT;
+    if (*x0 > *x1) *x0 = *x1;   /* fully off-screen -> empty range */
+    if (*y0 > *y1) *y0 = *y1;
+}
+
+static void video_fill(arcade1_video_t *v)
+{
+    int64_t x0, x1, y0, y1, px, py;
+
+    if (v->framebuffer == 0)
+        return;
+
+    video_clip_rect(v, &x0, &x1, &y0, &y1);
+
+    for (py = y0; py < y1; py++)
+        for (px = x0; px < x1; px++)
+            v->framebuffer[py * (int64_t)ARCADE1_WIDTH + px] =
+                (uint16_t)v->color;
+}
+
+/* Fetch one byte of a SPRITE image. The device only ever reads guest ROM
+ * (0x0000..0x0FFF) and RAM (0x1000..0x1FFF); anything else — in particular
+ * the MMIO window — reads as 0 bits, so a sprite can never have side effects
+ * on other devices and these fetches are not CPU accesses (the stray-access
+ * counter stays untouched). */
+static uint8_t video_sprite_fetch(const arcade1_video_t *v, uint64_t addr)
+{
+    if (addr < (uint32_t)ARCADE1_ROM_SIZE)
+        return v->rom[addr];
+    if (addr >= (uint32_t)ARCADE1_RAM_BASE &&
+        addr < (uint32_t)(ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE))
+        return v->ram[addr - ARCADE1_RAM_BASE];
+    return 0u;
+}
+
+static void video_sprite(arcade1_video_t *v)
+{
+    int64_t x0, x1, y0, y1, sx, sy;
+
+    if (v->framebuffer == 0)
+        return;
+
+    video_clip_rect(v, &x0, &x1, &y0, &y1);
+
+    /* Rows are padded to whole bytes; MSB is the leftmost pixel. When the
+     * image hangs off the left/top of the screen the image column/row is
+     * recovered from the clipped screen coordinate (64-bit subtraction, so
+     * it cannot wrap). */
+    for (sy = y0; sy < y1; sy++) {
+        const uint64_t row = (uint64_t)(sy - (int64_t)(int32_t)v->y);
+        for (sx = x0; sx < x1; sx++) {
+            const uint64_t col = (uint64_t)(sx - (int64_t)(int32_t)v->x);
+            const uint64_t byte_addr = (uint64_t)v->addr +
+                row * (((uint64_t)v->w + 7u) / 8u) + col / 8u;
+            const uint8_t bits = video_sprite_fetch(v, byte_addr);
+
+            /* Set bits are drawn in COLOR; clear bits are transparent. */
+            if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u)
+                v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] =
+                    (uint16_t)v->color;
+        }
+    }
+}
+
 /* --- MMIO handlers (ctx is the arcade1_video_t*) -------------------------- */
 
 uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
@@ -63,6 +161,9 @@ uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
     case ARCADE1_VIDEO_REG_Y:      return v->y;
     case ARCADE1_VIDEO_REG_COLOR:  return v->color;
     case ARCADE1_VIDEO_REG_STATUS: return v->presents;
+    case ARCADE1_VIDEO_REG_ADDR:   return v->addr;
+    case ARCADE1_VIDEO_REG_W:      return v->w;
+    case ARCADE1_VIDEO_REG_H:      return v->h;
     default:                       return 0u;   /* CMD is write-only, rest 0 */
     }
 }
@@ -81,11 +182,22 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
     case ARCADE1_VIDEO_REG_COLOR:
         v->color = value & 0xFFFFu;   /* RGB565 is 16 bits */
         return;
+    case ARCADE1_VIDEO_REG_ADDR:
+        v->addr = value;              /* SPRITE image source (ROM or RAM) */
+        return;
+    case ARCADE1_VIDEO_REG_W:
+        v->w = value;                 /* FILL/SPRITE width in pixels      */
+        return;
+    case ARCADE1_VIDEO_REG_H:
+        v->h = value;                 /* FILL/SPRITE height in pixels     */
+        return;
     case ARCADE1_VIDEO_REG_CMD:
         switch (value) {
         case ARCADE1_VIDEO_CMD_CLEAR:     video_clear(v);     return;
         case ARCADE1_VIDEO_CMD_SET_PIXEL: video_set_pixel(v); return;
         case ARCADE1_VIDEO_CMD_PRESENT:   video_present(v);   return;
+        case ARCADE1_VIDEO_CMD_FILL:      video_fill(v);      return;
+        case ARCADE1_VIDEO_CMD_SPRITE:    video_sprite(v);    return;
         default:                          return;             /* ignored */
         }
     default:

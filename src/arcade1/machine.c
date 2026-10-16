@@ -231,9 +231,12 @@ void arcade1_init(arcade1_machine_t *m)
     arcade1_timer_reset(&m->timer);
     arcade1_video_reset(&m->video);
     arcade1_audio_reset(&m->audio_dev);
-    /* The video device borrows the machine's scanout buffer (set once here,
-     * kept across resets). */
+    /* The video device borrows the machine's scanout buffer and the guest
+     * ROM/RAM (set once here, kept across resets). ROM/RAM are the only
+     * legal sources for SPRITE image fetches. */
     m->video.framebuffer = m->framebuffer;
+    m->video.rom         = m->bus.rom;
+    m->video.ram         = m->bus.ram;
     /* Attach the machine's muxed handler to the MMIO window (the M11 handler
      * mechanism). arcade1_bus_reset() keeps this attachment, so a reset
      * restarts the devices without re-registering anything. */

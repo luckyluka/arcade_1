@@ -38,6 +38,8 @@
 #define ADDR_Y           (ARCADE1_MMIO_BASE + ARCADE1_VIDEO_REG_Y)
 #define ADDR_COLOR       (ARCADE1_MMIO_BASE + ARCADE1_VIDEO_REG_COLOR)
 #define ADDR_STATUS      (ARCADE1_MMIO_BASE + ARCADE1_VIDEO_REG_STATUS)
+#define ADDR_W           (ARCADE1_MMIO_BASE + ARCADE1_VIDEO_REG_W)
+#define ADDR_H           (ARCADE1_MMIO_BASE + ARCADE1_VIDEO_REG_H)
 
 /* The five colours gfx_demo.c draws (RGB565), chosen to be distinct. */
 #define COLOR_BLUE  ((uint16_t)0x001Fu)
@@ -89,12 +91,18 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
            "gfx_present must be counted exactly once");
 
     /* --- Register state left behind by the API's last plot ---------------- *
-     * The final call was gfx_rect(-10, -5, 12, 8, black): its last pixel is
-     * (1, 2), colour black. */
-    assert(arcade1_read32(&m->bus, ADDR_X) == 1u && "last plot X readback");
-    assert(arcade1_read32(&m->bus, ADDR_Y) == 2u && "last plot Y readback");
+     * The final call was gfx_rect(-10, -5, 12, 8, black). Since M19 this is
+     * one FILL command, so the registers hold the rectangle's parameters
+     * (X/Y as signed coordinates, read back as raw u32) rather than the last
+     * plotted pixel. */
+    assert(arcade1_read32(&m->bus, ADDR_X) == (uint32_t)-10 &&
+           "last fill X readback");
+    assert(arcade1_read32(&m->bus, ADDR_Y) == (uint32_t)-5 &&
+           "last fill Y readback");
+    assert(arcade1_read32(&m->bus, ADDR_W) == 12u && "last fill W readback");
+    assert(arcade1_read32(&m->bus, ADDR_H) == 8u && "last fill H readback");
     assert(arcade1_read32(&m->bus, ADDR_COLOR) == 0x0000u &&
-           "last plot colour readback (black)");
+           "last fill colour readback (black)");
 
     /* --- Exact pixel accounting (drawing + overlap + clipping) ------------- *
      * gfx_demo draws: clear(blue); rect red 40x10 at (20,30);

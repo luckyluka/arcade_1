@@ -25,9 +25,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 16        | M extension (RV32IM)       | COMPLETE |
 | 17        | Proper ROM format (.arc1)  | COMPLETE |
 | 18        | Tetris                     | COMPLETE |
-| 19+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 19        | Sprite engine              | COMPLETE |
+| 20+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 19 — Sprite engine.** See `docs.md` for the exact scope.
+Next up: **Milestone 20 — Tilemap engine.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -42,7 +43,9 @@ src/
         exec.h/.c      RV32IM interpreter: registers + PC + single-step
                        (multiply/divide semantics added at M16)
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
-        video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT -> framebuffer (M13)
+        video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT (M13) plus the M19
+                       FILL/SPRITE device-side blit commands (1-bpp image
+                       source restricted to guest ROM/RAM)
         audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
         rom.h/.c       .arc1 game image: parse/validate/write, CRC-32 (M17)
     libretro/
@@ -52,11 +55,13 @@ src/
 programs/               guest code compiled by RISC-V GCC (M10+)
     crt0.S              startup: set sp, copy .data, zero .bss, call main, park
     link.ld             linker script: code->ROM, data/bss/stack->RAM
-    gfx.h               guest graphics API: gfx_clear/rect/present (M14, guest-only)
+    gfx.h               guest graphics API: gfx_clear/rect/present (M14),
+                        gfx_sprite added at M19 (rect = one device-side FILL)
     counter.c           docs.md example program (counter = 123)
     mmio_demo.c         M11 guest: read IN register, write OUT register
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     gfx_demo.c          M14 guest: draws only through the gfx.h API
+    sprite_demo.c       M19 guest: blits a 1-bpp image (ROM + RAM sources)
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream)
@@ -97,6 +102,7 @@ make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
 make test-video   # M13 guest drives video device -> framebuffer, reset
 make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
 make test-rom     # M17 .arc1 image format: CRC-32, header, every rejection
+make test-sprite  # M19 sprite engine: 1-bpp blit, exact pixels + clipping
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
@@ -165,28 +171,32 @@ measurable, one commit per task:
   executions (buffering deliberately left undecided per docs.md). With
   firmware attached (M15) a PRESENT also ends the frame: the machine runs the
   guest until the guest presents.
-- Graphics API (M14): `programs/gfx.h` provides `gfx_clear` / `gfx_rect` /
-  `gfx_present` as a **guest-only** header (it dereferences fixed MMIO
-  addresses — host tests must use the `arcade1_*` API instead). Deliberately
-  primitive: one `sw` per pixel, device-side clipping only, and no sprites,
-  tilemaps, alpha blending or hardware-accelerated rectangles yet (forbidden
-  by docs.md until a later milestone).
+- Graphics API (M14, extended M19): `programs/gfx.h` provides `gfx_clear` /
+  `gfx_rect` / `gfx_present` and (since M19) `gfx_sprite` as a **guest-only**
+  header (it dereferences fixed MMIO addresses — host tests must use the
+  `arcade1_*` API instead). Since M19 a rectangle is one device-side FILL
+  command and a 1-bpp image is one SPRITE command (set bits = COLOR, clear
+  bits = transparent, source restricted to guest ROM/RAM), so the per-pixel
+  loop no longer runs in the guest. Still no tilemaps, flip, priority,
+  visibility flags, alpha blending or rotation (forbidden by docs.md until a
+  later milestone asks for them).
 - Breakout (M15): full-screen clear + repaint of every rectangle each frame
-  (77,836 instructions/frame avg, 80,497 max over 595 frames — the measured
-  CPU load of this game, M16 build); no dirty
-  rectangles, no text beyond a 3x5 digit font, one level/fixed launch
+  (now 2,039 instructions/frame avg, 2,185 max over 595 frames since M19's
+  device-side FILL — down from 77,836 when rects were per-pixel `sw`s); no
+  dirty rectangles, no text beyond a 3x5 digit font, one level/fixed launch
   trajectory, no title screen. The frame protocol is present-yield with a
   1,000,000-instruction safety cap per frame. Game state (score/lives/state)
   is read from guest RAM by the test via `nm` symbol addresses.
-- Tetris (M18): the same present-yield loop, heavier — 245,797
-  instructions/frame avg (299,269 max over 300 frames), the measured CPU
-  load of this game, because all 200 cells + panel + piece repaint every
-  frame with no "what changed" in the API (the explicit M19 input; a
-  sprite/cell blit or dirty update would cut it). The machine has no
-  entropy device, so the piece stream is xorshift32 with the fixed seed
-  `0x1234ABCD` and START rewinds it — adding entropy later would break
-  reset-and-compare. A piece's 4x4 box may hang off-screen left; cells
-  clamp individually at column 0 (the device clips draws).
+- Tetris (M18): the same present-yield loop; CPU load is now 9,384
+  instructions/frame avg (16,678 max over 300 frames) since M19's device-side
+  FILL/SPRITE — down from 245,797 when every cell/rect/glyph was a per-pixel
+  `sw` — but it still repaints all 200 cells + panel + piece unconditionally
+  each frame (the explicit M20 input: a tilemap/dirty update would cut it
+  further). The machine has no entropy device, so the piece stream is
+  xorshift32 with the fixed seed `0x1234ABCD` and START rewinds it — adding
+  entropy later would break reset-and-compare. A piece's 4x4 box may hang
+  off-screen left; cells clamp individually at column 0 (the device clips
+  draws).
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
