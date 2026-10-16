@@ -24,9 +24,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 15        | Breakout (first game)      | COMPLETE |
 | 16        | M extension (RV32IM)       | COMPLETE |
 | 17        | Proper ROM format (.arc1)  | COMPLETE |
-| 18+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 18        | Tetris                     | COMPLETE |
+| 19+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 18 — Tetris.** See `docs.md` for the exact scope.
+Next up: **Milestone 19 — Sprite engine.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -57,6 +58,8 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     video_demo.c        M13 guest: CLEAR + SET_PIXEL + PRESENT over MMIO
     gfx_demo.c          M14 guest: draws only through the gfx.h API
     breakout.c          M15 guest: the first real game (Breakout)
+    tetris.c            M18 guest: the second game (Tetris — grid, font,
+                        timer-driven gravity, fixed-seed piece stream)
     build/              generated .elf/.bin/.arc1 (gitignored)
 tools/
     packarc1.c          host packer: flat .bin -> .arc1 game image (M17);
@@ -95,6 +98,8 @@ make test-video   # M13 guest drives video device -> framebuffer, reset
 make test-gfx     # M14 guest draws via gfx_clear/rect/present, exact pixels
 make test-rom     # M17 .arc1 image format: CRC-32, header, every rejection
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
+make test-tetris   # M18 game as firmware: pinned piece stream, exact
+                   # playfields, line clear + compaction, 2-pass replay
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -173,11 +178,20 @@ measurable, one commit per task:
   trajectory, no title screen. The frame protocol is present-yield with a
   1,000,000-instruction safety cap per frame. Game state (score/lives/state)
   is read from guest RAM by the test via `nm` symbol addresses.
+- Tetris (M18): the same present-yield loop, heavier — 245,797
+  instructions/frame avg (299,269 max over 300 frames), the measured CPU
+  load of this game, because all 200 cells + panel + piece repaint every
+  frame with no "what changed" in the API (the explicit M19 input; a
+  sprite/cell blit or dirty update would cut it). The machine has no
+  entropy device, so the piece stream is xorshift32 with the fixed seed
+  `0x1234ABCD` and START rewinds it — adding entropy later would break
+  reset-and-compare. A piece's 4x4 box may hang off-screen left; cells
+  clamp individually at column 0 (the device clips draws).
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: breakout at 1718 bytes; its .arc1 file is that payload
+  ROM (largest so far: tetris at 3066 bytes; its .arc1 file is that payload
   plus a 16-byte header). Since M16 the ISA is RV32IM,
   so guest C may use `*` and `/` directly (spec-exact semantics, no traps —
   division by zero and `INT_MIN / -1` return the defined results) with no

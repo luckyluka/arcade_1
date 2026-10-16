@@ -993,6 +993,56 @@ Do not add sprite hardware merely because Tetris would be easier with sprites.
 
 Instead use the existing API and observe what is missing.
 
+## Tetris decisions (pinned at M18)
+
+- **Playfield**: 10x20 grid, cell pitch 10 px (a 9 px block + 1 px gap
+  instead of grid lines), origin (10,10); a 2 px frame around it; the
+  right-hand panel (x=130) carries SCORE/LINES/LEVEL labels + digits and
+  a NEXT preview box. Everything is `gfx_rect`/`gfx_present` — no new
+  device, no sprite hardware, per the milestone text.
+- **Repeated objects**: one shape table, 7 tetrominoes, each stored as
+  4 cells of a 4x4 box (28 bytes). Rotation is math — `(r,c) -> (c,3-r)`
+  applied `rot` times — never a stored per-rotation table; O is
+  rotation-stable and skips it. The same table drives drawing, collision
+  and the NEXT preview.
+- **Text**: the 3x5 scale-2 font from Breakout (one byte per row, bit2 =
+  left) extended to 14 letters (A C E G I L M N O P R S T V) for the
+  labels and the GAME OVER / PRESS START screen; digits unchanged.
+- **Deterministic timing**: gravity is `TIMER_COUNT`-driven (30 ticks at
+  level 0, -2 per level, floor 4); horizontal input = press edge then
+  every 3rd tick; soft drop = every 2nd tick. No host time anywhere.
+- **No entropy, on purpose**: the machine has no random device, so the
+  piece stream is xorshift32 with the fixed seed `0x1234ABCD` — first
+  pieces L O L Z T J ...; two identical runs are the same game, and
+  START rewinds the seed so a restart replays from the opening piece.
+  Adding an entropy device later would break reset-and-compare, so this
+  stays a property, not a workaround.
+- **Game state**: score = {0,100,300,500,800}[simultaneous clears] x
+  (level+1), level = lines/10 capped at 15; two states (PLAY, OVER);
+  game over = spawn collision; full rows clear with the classic
+  shift-down (consecutive rows re-checked in place).
+- **Audio events** (6 ticks each): lock 440, line clear 880, game over
+  110, restart 220; the guest silences the power-on tone in its boot
+  frame, so boot is silent until the first event.
+- **What is missing (the observation this milestone exists for)**:
+  every frame repaints all 200 cells + panel + piece unconditionally —
+  245,797 instructions/frame average (299,269 max), 3.2x Breakout's
+  77,836 — because nothing in the API says *what changed*. A dirty
+  region/cell update, a text primitive (each glyph is 15 rect calls)
+  and a sprite/cell blit are the concrete candidates for M19; the audio
+  envelope (guest must time beep expiry against the timer) and double
+  buffering are noted but stay out of scope.
+- **Testing**: `make test-tetris` runs a 300-frame scripted game twice
+  (reset-and-compare: identical per-frame hashes + byte-identical
+  framebuffer). The script checks the pinned PRNG stream, byte-exact
+  playfields after each of 4 locks, rotation incl. rejected rotation,
+  wall clamps (box origin may hang off-screen; CELLS clamp at column 0),
+  a line clear with marker-row compaction verified over all 200 bytes,
+  game over, restart-to-boot-state, timer == frames, presents == frames,
+  stray accesses == 0. Final state hash `0x982F9F026B07E9C2`.
+- **Fit**: 3,066-byte payload of the 4 KiB ROM budget (1,030 bytes
+  spare); the shipped `tetris.arc1` is 3,082 bytes with the header.
+
 ---
 
 # 23. Milestone 19 — Sprite engine

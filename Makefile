@@ -26,7 +26,7 @@ TESTDIR := build
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
-test-breakout: | $(TESTDIR)
+test-breakout test-tetris: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -43,7 +43,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo breakout
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo breakout tetris
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -56,7 +56,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 .PHONY: all clean program android android-arm64 android-arm \
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
-        test-video test-gfx test-rom test-breakout
+        test-video test-gfx test-rom test-breakout test-tetris
 
 all: $(TARGET)
 
@@ -257,6 +257,29 @@ test-breakout: $(GUEST_BUILD)/breakout.arc1
 	 echo "score @ 0x$$SCORE  lives @ 0x$$LIVES  state @ 0x$$STATE  paddle_x @ 0x$$PADDLE"; \
 	 $(TESTDIR)/test_breakout $(GUEST_BUILD)/breakout.arc1 \
 	   0x$$SCORE 0x$$LIVES 0x$$STATE 0x$$PADDLE
+
+# Build and run the milestone-18 Tetris harness against the guest firmware.
+test-tetris: $(GUEST_BUILD)/tetris.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_tetris \
+	    tests/test_tetris.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SCORE=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="score"{print $$1}'); \
+	 LINES=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="lines"{print $$1}'); \
+	 LEVEL=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="level"{print $$1}'); \
+	 STATE=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="state"{print $$1}'); \
+	 LOCKED=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="locked"{print $$1}'); \
+	 FIELD=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="field"{print $$1}'); \
+	 CUR=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur"{print $$1}'); \
+	 NEXT=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="next"{print $$1}'); \
+	 ROT=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="rot"{print $$1}'); \
+	 CURX=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur_x"{print $$1}'); \
+	 CURY=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur_y"{print $$1}'); \
+	 PRNG=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="prng"{print $$1}'); \
+	 echo "score @ 0x$$SCORE  lines @ 0x$$LINES  state @ 0x$$STATE  locked @ 0x$$LOCKED"; \
+	 $(TESTDIR)/test_tetris $(GUEST_BUILD)/tetris.arc1 \
+	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
+	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
 
 clean:
 	rm -f $(TARGET) $(A64_TARGET) $(A32_TARGET)
