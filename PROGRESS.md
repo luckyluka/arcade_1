@@ -16,10 +16,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 07        | Memory subsystem           | COMPLETE |
 | 08        | RV32I decoder              | COMPLETE |
 | 09        | RV32I execution            | COMPLETE |
-| 10+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 10        | Load compiled C program    | COMPLETE |
+| 11+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 10 — Load compiled C program.** See `docs.md` for the
-exact scope (RISC-V GCC → RV32 executable → ARCADE-1 VM).
+Next up: **Milestone 11 — MMIO.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -32,6 +32,11 @@ src/
         exec.h/.c      RV32I interpreter: registers + PC + single-step
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
+programs/               guest code compiled by RISC-V GCC (M10+)
+    crt0.S              startup: set sp, copy .data, zero .bss, call main, park
+    link.ld             linker script: code->ROM, data/bss/stack->RAM
+    counter.c           docs.md example program (counter = 123)
+    build/              generated .elf/.bin (gitignored)
 deps/libretro/
     libretro.h         vendored MIT-licensed libretro API header
 tests/
@@ -54,6 +59,8 @@ make test-machine # M06 machine standalone (no libretro/.so)
 make test-memory  # M07 memory bus (links ONLY memory.c)
 make test-cpu     # M08 RV32I decoder (links ONLY cpu.c)
 make test-exec    # M09 RV32I interpreter (links exec+cpu+memory, no .so)
+make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
+make test-program # M10 run compiled C on the VM, assert counter == 123
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -73,19 +80,28 @@ square is a unique orange `0xFD00` so tests can locate it by scanning).
 - The test pattern, moving square, and beep are host-driven demo logic inside
   the machine; they will be replaced by the RV32 CPU + real devices in
   milestones 08–13.
-- The RV32I **interpreter** (M09) exists and is instruction-tested, but is
-  **not yet wired into the machine's frame loop** — there is no program to run
-  until M10 loads one. `exec.c` builds into the `.so` but `arcade1_run_frame`
-  still drives the host-side demo logic (square/beep) directly.
+- The RV32I interpreter (M09) and the guest program flow (M10) work, but a
+  compiled program is still executed by a **standalone harness**
+  (`make test-program`) — it is **not yet wired into the machine's frame
+  loop**. `arcade1_run_frame` still drives the host demo logic (square/beep);
+  making the machine *boot* a program as firmware arrives with MMIO (M11+).
+- Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
+  -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
+  `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
+  zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
+  ROM (currently ~112 bytes).
 - FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
-  OS/syscall/halt handling yet. Unknown words also act as NOP.
+  OS/syscall/halt handling yet. Unknown words also act as NOP. `crt0` "ends"
+  a program by parking in a self-loop (`j .`), which the harness detects.
 - Save states / cheats unsupported (stubs).
 
 ## Notes for whoever picks this up
 
 - Follow `docs.md` Rule 1: implement only the current milestone, then stop.
-- `FUTURE_IDEAS.md` is a scratch file (not part of a milestone); treat as
-  optional input, not a commitment.
+- M10+ needs a RISC-V bare-metal toolchain: `riscv64-unknown-elf-gcc` (present
+  here as GCC 13.2.0). If it's missing, guest builds fail at `make program`.
+- `FUTURE_IDEAS.md` / `FUTURE_MILESTONES.md` are scratch files (not part of a
+  milestone); treat as optional input, not a commitment.
 - Each milestone has been verified by a deterministic test harness plus a live
   RetroArch 1.18.0 load (RGB565, clean startup/shutdown). Re-run `make
   test-*` after any change.

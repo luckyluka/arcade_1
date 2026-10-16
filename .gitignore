@@ -3,6 +3,9 @@ arcade1_libretro.so
 *.o
 *.a
 
+# Guest program build artifacts (built from programs/*.c by the RISC-V GCC)
+programs/build/
+
 # Editor / OS noise
 *.swp
 *~
