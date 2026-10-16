@@ -1027,6 +1027,13 @@ same inputs, and assert the identical result (frame, waveform, or
 register-write stream). The beep, machine, and pattern harnesses already do
 this reset-and-compare check — keep doing it for every new test.
 
+### Stray accesses
+
+The bus counts every access it ignores or answers with a default (sub-word
+MMIO, out-of-range, ROM write, MMIO with no device) in `stray_accesses`.
+Tests should assert `stray_accesses == 0` unless the test intentionally causes
+strays.
+
 ### Games
 
 Golden-frame or behavior tests where practical.

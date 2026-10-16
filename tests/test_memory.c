@@ -12,7 +12,10 @@
  *   - arcade1_bus_reset clears RAM but preserves ROM;
  *   - arcade1_load_rom truncates oversized images and zeroes the tail;
  *   - MMIO reads/writes dispatch to a registered device handler, sub-word
- *     MMIO accesses are no-ops, and no device attached reads 0 (M11).
+ *     MMIO accesses are no-ops, and no device attached reads 0 (M11);
+ *   - the stray-access counter advances by exactly 1 for each stray case
+ *     (sub-word MMIO, out-of-range, ROM write, MMIO with no device) and by
+ *     exactly 0 for every serviced access, with results unchanged.
  */
 
 #include "memory.h"
@@ -189,6 +192,119 @@ int main(void)
     arcade1_write32(&bus, ARCADE1_MMIO_BASE + 4, 0xFFFFFFFFu);
     assert(g_mmio.writes == 1 && "MMIO write with no device must be ignored");
 
+    /* --- Stray-access counter ------------------------------------------- *
+     * For each stray case the counter must advance by exactly 1 while the
+     * read result / ignored write stays unchanged; a serviced access must
+     * leave the counter untouched. A reset gives a clean baseline. */
+    arcade1_bus_reset(&bus);   /* also clears the stray counter */
+    assert(bus.stray_accesses == 0 &&
+           "bus_reset must clear the stray counter");
+
+    /* Serviced ROM/RAM accesses are NOT strays. */
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_read32(&bus, ARCADE1_ROM_BASE);
+        arcade1_write32(&bus, ARCADE1_RAM_BASE, 0x11111111u);
+        arcade1_read32(&bus, ARCADE1_RAM_BASE);
+        assert(bus.stray_accesses == s &&
+               "serviced ROM/RAM accesses must not count as strays");
+    }
+
+    /* Serviced 32-bit MMIO (device attached) is NOT a stray. */
+    arcade1_set_mmio(&bus, mmio_read, mmio_write, &g_mmio);
+    {
+        uint32_t s = bus.stray_accesses;
+        assert(arcade1_read32(&bus, ARCADE1_MMIO_BASE) == 0xA5A5A5A5u &&
+               "MMIO word read must still dispatch to the device");
+        arcade1_write32(&bus, ARCADE1_MMIO_BASE + 4, 0x0BADF00Du);
+        assert(g_mmio.writes == 2 && g_mmio.got == 0x0BADF00Du &&
+               "MMIO word write must still reach the device");
+        assert(bus.stray_accesses == s &&
+               "serviced MMIO word accesses must not count as strays");
+    }
+
+    /* Case 1: sub-word (8/16-bit) access to the MMIO window -> +1 each. */
+    {
+        uint32_t s = bus.stray_accesses;
+        assert(arcade1_read8(&bus, ARCADE1_MMIO_BASE) == 0 &&
+               "sub-word MMIO read must still return 0");
+        assert(bus.stray_accesses == s + 1 &&
+               "read8 to MMIO must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        assert(arcade1_read16(&bus, ARCADE1_MMIO_BASE) == 0 &&
+               "sub-word MMIO read must still return 0");
+        assert(bus.stray_accesses == s + 1 &&
+               "read16 to MMIO must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        int w = g_mmio.writes;
+        arcade1_write8(&bus, ARCADE1_MMIO_BASE + 4, 0xFFu);
+        assert(g_mmio.writes == w &&
+               "sub-word MMIO write must still be ignored");
+        assert(bus.stray_accesses == s + 1 &&
+               "write8 to MMIO must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        int w = g_mmio.writes;
+        arcade1_write16(&bus, ARCADE1_MMIO_BASE + 4, 0xFFFFu);
+        assert(g_mmio.writes == w &&
+               "sub-word MMIO write must still be ignored");
+        assert(bus.stray_accesses == s + 1 &&
+               "write16 to MMIO must count exactly 1 stray");
+    }
+
+    /* Case 4: 32-bit MMIO with no device attached -> +1 each. */
+    arcade1_set_mmio(&bus, NULL, NULL, NULL);
+    {
+        uint32_t s = bus.stray_accesses;
+        assert(arcade1_read32(&bus, ARCADE1_MMIO_BASE) == 0 &&
+               "MMIO with no device must still read 0");
+        assert(bus.stray_accesses == s + 1 &&
+               "read32 to MMIO with no device must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write32(&bus, ARCADE1_MMIO_BASE + 4, 0xFFFFFFFFu);
+        assert(bus.stray_accesses == s + 1 &&
+               "write32 to MMIO with no device must count exactly 1 stray");
+    }
+
+    /* Case 2: read/write outside ROM, RAM and MMIO -> +1 each. */
+    {
+        uint32_t s = bus.stray_accesses;
+        assert(arcade1_read32(&bus, 0xFFFFF000u) == 0 &&
+               "far out-of-range read must still return 0");
+        assert(bus.stray_accesses == s + 1 &&
+               "out-of-range read32 must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write32(&bus, ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE,
+                        0xFFFFFFFFu);
+        assert(bus.stray_accesses == s + 1 &&
+               "out-of-range write32 must count exactly 1 stray");
+    }
+
+    /* Case 3: write to ROM -> +1 each, ROM content unchanged. */
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write32(&bus, ARCADE1_ROM_BASE, 0xDEADBEEFu);
+        assert(bus.stray_accesses == s + 1 &&
+               "write32 to ROM must count exactly 1 stray");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write8(&bus, ARCADE1_ROM_BASE, 0xFFu);
+        assert(bus.stray_accesses == s + 1 &&
+               "write8 to ROM must count exactly 1 stray");
+    }
+    assert(arcade1_read32(&bus, ARCADE1_ROM_BASE) == 0x5A5A5A5Au &&
+           "ROM must be unchanged after the stray writes");
+
     printf("milestone07: all assertions passed\n");
     printf("  map: ROM 0x%04X+%u, RAM 0x%04X+%u, MMIO 0x%04X+%u\n",
            ARCADE1_ROM_BASE, ARCADE1_ROM_SIZE,
@@ -196,7 +312,8 @@ int main(void)
            ARCADE1_MMIO_BASE, ARCADE1_MMIO_SIZE);
     printf("  verified: ROM r/o, RAM r/w, little-endian, boundaries,\n");
     printf("            straddle/out-of-range -> 0, reset, load truncation,\n");
-    printf("            byte/halfword widths, MMIO dispatch (M11)\n");
+    printf("            byte/halfword widths, MMIO dispatch (M11),\n");
+    printf("            stray-access counter (+1 per stray, +0 serviced)\n");
 
     return 0;
 }

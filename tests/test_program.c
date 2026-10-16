@@ -64,6 +64,8 @@ int main(int argc, char **argv)
     assert(steps > 0 && "CPU must have executed instructions");
     assert(steps < MAX_STEPS && "program must park (not run to the cap)");
     assert(counter == 123 && "compiled C must set counter = 123");
+    assert(bus.stray_accesses == 0 &&
+           "guest must not perform any stray bus access");
 
     printf("milestone10: all assertions passed\n");
     printf("  verified: C -> riscv gcc -> RV32 ELF -> flat binary -> VM runs\n");

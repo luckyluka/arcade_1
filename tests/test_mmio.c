@@ -109,6 +109,8 @@ int main(int argc, char **argv)
     assert(dev.writes == 1 && "guest must write REG_OUT exactly once");
     assert(dev.seen == DEV_IN_VALUE + 1 &&
            "guest must read REG_IN and write back value+1");
+    assert(bus.stray_accesses == 0 &&
+           "guest must not perform any stray bus access");
 
     /* --- Determinism: reset reproduces the identical MMIO write ----------- */
     /* Snapshot the observed write, then reset (RAM + CPU; ROM and the attached

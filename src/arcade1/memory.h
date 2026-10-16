@@ -64,15 +64,23 @@ typedef struct arcade1_bus {
     arcade1_mmio_read_fn  mmio_read;
     arcade1_mmio_write_fn mmio_write;
     void                 *mmio_ctx;
+
+    /* Number of accesses the bus ignored or answered with a default (the full
+     * case list lives with the accesses in memory.c). Diagnostic only — it
+     * never affects what a read returns or which writes are accepted. Cleared
+     * by arcade1_bus_init() and arcade1_bus_reset(). */
+    uint32_t stray_accesses;
 } arcade1_bus_t;
 
 /* --- Lifecycle ----------------------------------------------------------- */
 
-/* Zero the whole bus (ROM, RAM, and the MMIO handler). Call once before
- * loading a program; re-registers no device — set one with arcade1_set_mmio. */
+/* Zero the whole bus (ROM, RAM, MMIO handler, and the stray counter). Call
+ * once before loading a program; re-registers no device — set one with
+ * arcade1_set_mmio. */
 void arcade1_bus_init(arcade1_bus_t *bus);
 
-/* Reset for a new run: clears RAM, leaves ROM and any MMIO handler intact. */
+/* Reset for a new run: clears RAM and the stray counter, leaves ROM and any
+ * MMIO handler intact. */
 void arcade1_bus_reset(arcade1_bus_t *bus);
 
 /* --- MMIO device registration -------------------------------------------- *
@@ -99,11 +107,16 @@ size_t arcade1_load_rom(arcade1_bus_t *bus, const void *data, size_t size);
  *
  * MMIO: 32-bit accesses (lw/sw) dispatch to the registered device handler.
  * Sub-word (8/16-bit) accesses to the MMIO window are no-ops — reads return 0,
- * writes are ignored — so device registers are always accessed as 32-bit. */
+ * writes are ignored — so device registers are always accessed as 32-bit.
+ *
+ * Every access the bus ignores or answers with a default also bumps the
+ * diagnostic bus->stray_accesses counter (see memory.c for the case list);
+ * this is why the read entry points are non-const — they record that counter.
+ * No returned value or accepted write changes because of it. */
 
-uint8_t  arcade1_read8 (const arcade1_bus_t *bus, uint32_t addr);
-uint16_t arcade1_read16(const arcade1_bus_t *bus, uint32_t addr);
-uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr);
+uint8_t  arcade1_read8 (arcade1_bus_t *bus, uint32_t addr);
+uint16_t arcade1_read16(arcade1_bus_t *bus, uint32_t addr);
+uint32_t arcade1_read32(arcade1_bus_t *bus, uint32_t addr);
 
 void arcade1_write8 (arcade1_bus_t *bus, uint32_t addr, uint8_t value);
 void arcade1_write16(arcade1_bus_t *bus, uint32_t addr, uint16_t value);
