@@ -4,6 +4,10 @@
 # The machine (src/arcade1/) is frontend-independent; src/libretro/ is a thin
 # adapter.
 
+# Keep plain `make` building the .so: the test-* prerequisite rules are
+# declared before `all` and would otherwise become the default goal.
+.DEFAULT_GOAL := all
+
 CC      ?= gcc
 CFLAGS  ?= -std=c11 -Wall -Wextra -O2
 CFLAGS  += -fPIC -Ideps/libretro -Isrc/arcade1
