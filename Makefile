@@ -30,13 +30,15 @@ test-breakout: | $(TESTDIR)
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
 
-# --- RISC-V guest toolchain (milestone 10) ---------------------------------
-# Bare-metal RV32I: no M extension (added in M16), no libc, no SDK. Guest
-# code is built to a flat binary and loaded into the VM's ROM.
+# --- RISC-V guest toolchain (milestones 10 + 16) ----------------------------
+# Bare-metal RV32IM: the M extension (multiply/divide) is part of the CPU
+# since M16, so guests compile for rv32im and may use * and / directly — still
+# no libc, no libgcc, no SDK. Guest code is built to a flat binary and loaded
+# into the VM's ROM.
 RISCV_GCC     := riscv64-unknown-elf-gcc
 RISCV_OBJCOPY := riscv64-unknown-elf-objcopy
 RISCV_NM      := riscv64-unknown-elf-nm
-GUEST_ARCH    := -march=rv32i -mabi=ilp32
+GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build

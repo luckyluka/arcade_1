@@ -19,9 +19,11 @@
  *
  * Controls: left/right steer the paddle, A launches, START restarts.
  *
- * Guest constraint: built -march=rv32i without libgcc, so no variable
- * multiplication or division anywhere (constant folding to shifts/adds is
- * fine); score digits are produced by subtraction.
+ * Guest ISA: built -march=rv32im (M16) without libgcc — guest C may use
+ * variable multiplication/division directly on the interpreter. gcc emits a
+ * few `mul` instructions for the brick-grid stride products (they were
+ * shift/add chains when this game first shipped at M15 on rv32i); score
+ * digits are produced by subtraction.
  */
 
 #include "gfx.h"

@@ -833,11 +833,14 @@ This is a major milestone.
   keeps its no-content demo mode. This also surfaced that the core had never
   exported `retro_api_version` — RetroArch tolerates that in menu mode but
   fatals loading content, so the M15 fix adds the required symbol.
-- **Guest constraints:** Breakout is built `-march=rv32i` without libgcc, so
-  it contains no variable multiplication or division (score digits are produced
-  by subtraction) and runs entirely on the M09 interpreter. The full chain
-  works: `breakout.c` -> RISC-V GCC -> ROM -> RV32I VM -> video/audio/input
-  devices -> Libretro -> RetroArch, and the game is also headless-runnable with
+- **Guest constraints:** at M15, Breakout was built `-march=rv32i` without
+  libgcc, so it contained no variable multiplication or division (score digits
+  are produced by subtraction) and ran entirely on the M09
+  interpreter. (Lifted at M16: the guest toolchain moved to `-march=rv32im`,
+  so the current build does use `mul` — see the M16 decisions below.) The full
+  chain works: `breakout.c` -> RISC-V GCC -> ROM -> RV32IM VM ->
+  video/audio/input devices -> Libretro -> RetroArch, and the game is also
+  headless-runnable with
   a printed hash per frame (`make test-breakout`, per the Games testing rule).
 - **Measured CPU load:** ~77.8k instructions per frame on average (80.5k max,
   full-redraw strategy: clear + repaint all rectangles every frame).
@@ -862,6 +865,38 @@ REMU
 Add tests.
 
 Only after RV32I is already proven.
+
+## M extension decisions (pinned at M16)
+
+- **Decode:** the 8 operations live on the existing OP major opcode
+  (`0x33`) with `funct7 = 0000001`; one `funct3` value each (MUL..REMU).
+  The decoder classifies them (`ARCADE1_OP_MUL` .. `ARCADE1_OP_REMU`) —
+  no new formats, no new fields, no decoder state. `funct7 = 0x01` on
+  OP-IMM stays UNKNOWN: M exists only on OP.
+- **Execute, spec-exact, no traps:** results come from 64-bit
+  intermediates (no host overflow). Division truncates toward zero (C99
+  `/`, `%`, which is what the spec requires). The two spec-defined edge
+  cases return defined values instead of faulting: division by zero
+  yields all-ones for `DIV`/`DIVU` and the dividend for `REM`/`REMU`;
+  the signed overflow case (`INT_MIN / -1`) yields `INT_MIN` for `DIV`
+  and `0` for `REM`. Nothing traps, so a guest cannot fault the VM —
+  determinism is preserved.
+- **x0 and counters unchanged:** writes to `x0` are discarded exactly
+  like every other instruction, and each M instruction counts once in
+  `instret` — covered by tests.
+- **Guest toolchain now `-march=rv32im`:** the point of the extension
+  is that games may use `*` and `/` directly. Guests still build
+  freestanding with no libc and no libgcc (rv32im needs neither).
+  Breakout now contains real `mul` instructions (3, down from a
+  shift/add chain — the binary went 1714 -> 1718 bytes); the other four
+  demo guests recompiled byte-identical, so the M10–M14 printed hashes
+  are unchanged. Breakout's per-frame and final hashes changed once with
+  the recompile and are stable from M16 on.
+- **Testing:** decoder classification of all 8 ops (plus the negative
+  cases) in `tests/test_cpu.c`; execution semantics including the
+  div-by-zero and signed-overflow edges in `tests/test_exec.c`; full
+  regression of every earlier harness to prove RV32I behaviour is
+  untouched.
 
 ---
 

@@ -1,4 +1,5 @@
-/* ARCADE-1 CPU — RV32I instruction decoder (milestone 08) implementation.
+/* ARCADE-1 CPU — RV32IM instruction decoder (milestones 08 + 16)
+ * implementation.
  *
  * See cpu.h. Stateless field/immediate extraction + opcode classification per
  * the RISC-V spec. No execution. No host dependency.
@@ -145,6 +146,20 @@ static arcade1_op_t classify_op(uint32_t inst, uint32_t opcode,
         }
 
     case 0x33:                          /* OP */
+        /* M extension (M16): funct7 = 0000001 selects multiply/divide; all
+         * eight funct3 values are taken (MUL..REMU). */
+        if (funct7 == 0x01) {
+            switch (funct3) {
+            case 0: return ARCADE1_OP_MUL;
+            case 1: return ARCADE1_OP_MULH;
+            case 2: return ARCADE1_OP_MULHSU;
+            case 3: return ARCADE1_OP_MULHU;
+            case 4: return ARCADE1_OP_DIV;
+            case 5: return ARCADE1_OP_DIVU;
+            case 6: return ARCADE1_OP_REM;
+            case 7: return ARCADE1_OP_REMU;
+            }
+        }
         switch (funct3) {
         case 0:                          /* ADD (funct7=0) / SUB (funct7=0x20) */
             if (funct7 == 0x00) return ARCADE1_OP_ADD;

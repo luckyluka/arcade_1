@@ -1,7 +1,11 @@
-/* ARCADE-1 CPU execution — RV32I interpreter (milestone 09) implementation.
+/* ARCADE-1 CPU execution — RV32IM interpreter (milestones 09 + 16)
+ * implementation.
  *
  * See exec.h. One instruction per call: fetch (via the bus), decode (cpu.h),
  * execute, advance PC. x0 is hardwired to zero through reg_get/reg_set.
+ * The M extension (multiply/divide, milestone 16) executes here with exact
+ * spec semantics — no traps, defined results for division by zero and signed
+ * overflow.
  *
  * The switch covers every arcade1_op_t and has no `default`, so -Wswitch
  * flags any operation that is classified but not yet executed — keeping the
@@ -135,6 +139,54 @@ void arcade1_cpu_step(arcade1_cpu_t *cpu, arcade1_bus_t *bus)
     case ARCADE1_OP_SRA:  reg_set(cpu, d.rd, (uint32_t)((int32_t)rs1 >> (rs2 & 0x1Fu))); break;
     case ARCADE1_OP_OR:   reg_set(cpu, d.rd, rs1 | rs2); break;
     case ARCADE1_OP_AND:  reg_set(cpu, d.rd, rs1 & rs2); break;
+
+    /* --- M extension: multiply / divide (milestone 16) --- *
+     * All results are exactly per the RISC-V spec: no traps, well-defined
+     * results for division by zero and for the signed overflow case, computed
+     * from 64-bit intermediates so nothing overflows on the host. */
+    case ARCADE1_OP_MUL:      /* low 32 bits of rs1 * rs2 (sign irrelevant)  */
+        reg_set(cpu, d.rd, (uint32_t)(rs1 * rs2));
+        break;
+    case ARCADE1_OP_MULH:     /* high 32 of signed x signed                  */
+        reg_set(cpu, d.rd,
+                (uint32_t)(((int64_t)(int32_t)rs1 * (int64_t)(int32_t)rs2)
+                           >> 32));
+        break;
+    case ARCADE1_OP_MULHSU:   /* high 32 of signed x unsigned                */
+        reg_set(cpu, d.rd,
+                (uint32_t)(((int64_t)(int32_t)rs1 * (int64_t)(uint64_t)rs2)
+                           >> 32));
+        break;
+    case ARCADE1_OP_MULHU:    /* high 32 of unsigned x unsigned              */
+        reg_set(cpu, d.rd,
+                (uint32_t)(((uint64_t)rs1 * (uint64_t)rs2) >> 32));
+        break;
+    case ARCADE1_OP_DIV: {    /* signed, truncated toward zero               */
+        int32_t n = (int32_t)rs1, v = (int32_t)rs2;
+        if (v == 0)
+            reg_set(cpu, d.rd, 0xFFFFFFFFu);          /* x / 0  = -1        */
+        else if (n == INT32_MIN && v == -1)
+            reg_set(cpu, d.rd, (uint32_t)INT32_MIN);  /* overflow case      */
+        else
+            reg_set(cpu, d.rd, (uint32_t)(n / v));
+        break;
+    }
+    case ARCADE1_OP_DIVU:     /* unsigned                                   */
+        reg_set(cpu, d.rd, rs2 ? rs1 / rs2 : 0xFFFFFFFFu);  /* x / 0 = -1   */
+        break;
+    case ARCADE1_OP_REM: {    /* signed remainder (sign of the dividend)    */
+        int32_t n = (int32_t)rs1, v = (int32_t)rs2;
+        if (v == 0)
+            reg_set(cpu, d.rd, rs1);                  /* x % 0  = x         */
+        else if (n == INT32_MIN && v == -1)
+            reg_set(cpu, d.rd, 0u);                   /* overflow case      */
+        else
+            reg_set(cpu, d.rd, (uint32_t)(n % v));
+        break;
+    }
+    case ARCADE1_OP_REMU:     /* unsigned                                   */
+        reg_set(cpu, d.rd, rs2 ? rs1 % rs2 : rs1);    /* x % 0  = x         */
+        break;
 
     /* --- No effect beyond advancing PC --- */
     case ARCADE1_OP_UNKNOWN:

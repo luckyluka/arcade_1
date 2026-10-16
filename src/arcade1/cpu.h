@@ -1,9 +1,10 @@
-/* ARCADE-1 CPU — RV32I instruction decoder (milestone 08).
+/* ARCADE-1 CPU — RV32IM instruction decoder (milestones 08 + 16).
  *
  * Pure, stateless decoding of a 32-bit RV32I instruction word into its fields,
- * immediate, format, and a classified operation. There is NO execution state
- * (no registers, no PC) yet — that arrives with milestone 09. This decoder is
- * independently testable (see tests/test_cpu.c).
+ * immediate, format, and a classified operation — plus the 8 M-extension
+ * (multiply/divide) operations, added at milestone 16. There is NO execution
+ * state (no registers, no PC) yet — that arrives with milestone 09. This
+ * decoder is independently testable (see tests/test_cpu.c).
  *
  * No dependency on libretro, the machine, or any host frontend.
  */
@@ -50,6 +51,9 @@ typedef enum arcade1_op {
     ARCADE1_OP_ADD, ARCADE1_OP_SUB, ARCADE1_OP_SLL, ARCADE1_OP_SLT,
     ARCADE1_OP_SLTU, ARCADE1_OP_XOR, ARCADE1_OP_SRL, ARCADE1_OP_SRA,
     ARCADE1_OP_OR, ARCADE1_OP_AND,
+    /* OP with funct7 = 0000001: M extension, multiply/divide (M16) */
+    ARCADE1_OP_MUL, ARCADE1_OP_MULH, ARCADE1_OP_MULHSU, ARCADE1_OP_MULHU,
+    ARCADE1_OP_DIV, ARCADE1_OP_DIVU, ARCADE1_OP_REM, ARCADE1_OP_REMU,
     /* System / misc */
     ARCADE1_OP_FENCE, ARCADE1_OP_ECALL, ARCADE1_OP_EBREAK,
 } arcade1_op_t;

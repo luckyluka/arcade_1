@@ -1,12 +1,12 @@
-/* ARCADE-1 — Milestone 08 test harness.
+/* ARCADE-1 — Milestone 08 test harness (extended at milestone 16).
  *
- * Unit tests for the RV32I decoder. Links ONLY src/arcade1/cpu.c (no
+ * Unit tests for the RV32IM decoder. Links ONLY src/arcade1/cpu.c (no
  * libretro, no machine, no .so), proving it is independently testable.
  *
  * Covers what the roadmap requires: opcode extraction, register fields,
  * immediate decoding, instruction formats, branch offsets, and load/store
- * offsets. Instructions are hand-assembled from their fields so the expected
- * decode is known exactly.
+ * offsets — plus the M extension (MUL..REMU) added at M16. Instructions are
+ * hand-assembled from their fields so the expected decode is known exactly.
  */
 
 #include "cpu.h"
@@ -205,6 +205,32 @@ int main(void)
     assert(arcade1_decode(enc_r(0x13, 5, 0x20, 1, 2, 3)).op == ARCADE1_OP_SRAI &&
            "SRAI must classify (funct3=5, funct7=0x20)");
 
+    /* === M extension (funct7 = 0000001 on OP) ============================ */
+    {
+        static const arcade1_op_t mops[8] = {
+            ARCADE1_OP_MUL, ARCADE1_OP_MULH, ARCADE1_OP_MULHSU,
+            ARCADE1_OP_MULHU, ARCADE1_OP_DIV, ARCADE1_OP_DIVU,
+            ARCADE1_OP_REM, ARCADE1_OP_REMU,
+        };
+        for (uint32_t f3 = 0; f3 < 8; f3++) {
+            d = arcade1_decode(enc_r(0x33, f3, 0x01, 5, 6, 7));
+            assert(d.op == mops[f3] && "funct7=0x01 must classify MUL..REMU");
+            assert(d.fmt == ARCADE1_FMT_R && "M ops are R-format");
+            assert(d.rd == 5 && d.rs1 == 6 && d.rs2 == 7 &&
+                   "M op must extract rd/rs1/rs2");
+            assert(d.funct3 == f3 && d.funct7 == 0x01 &&
+                   "M op must keep its funct3/funct7");
+        }
+        /* The base OP decode is unaffected: funct7=0 still yields ADD. */
+        assert(arcade1_decode(enc_r(0x33, 0, 0x00, 1, 2, 3)).op ==
+                   ARCADE1_OP_ADD && "ADD must still classify");
+        /* funct7=0x01 is M-extension ONLY for OP: OP-IMM shift space with
+         * bit 25 set is still a reserved encoding. */
+        assert(arcade1_decode(enc_r(0x13, 1, 0x01, 1, 2, 3)).op ==
+                   ARCADE1_OP_UNKNOWN &&
+               "OP-IMM funct7=0x01 must stay UNKNOWN (no M on OP-IMM)");
+    }
+
     /* === System ========================================================= */
     assert(arcade1_decode(0x00000073u).op == ARCADE1_OP_ECALL &&
            "ECALL must classify");
@@ -214,14 +240,18 @@ int main(void)
     /* === Unknown encodings ============================================== */
     assert(arcade1_decode(0x00000000u).op == ARCADE1_OP_UNKNOWN &&
            "zero word must be UNKNOWN");
-    /* Reserved OP funct7 pattern must not classify as ADD. */
-    assert(arcade1_decode(enc_r(0x33, 0, 0x01, 1, 2, 3)).op == ARCADE1_OP_UNKNOWN &&
+    /* Reserved OP funct7 patterns must not classify: 0x01 is the M extension
+     * (MUL..REMU, tested above); anything else besides 0x00/0x20 is bad. */
+    assert(arcade1_decode(enc_r(0x33, 0, 0x02, 1, 2, 3)).op == ARCADE1_OP_UNKNOWN &&
+           "bad OP funct7 must be UNKNOWN");
+    assert(arcade1_decode(enc_r(0x33, 4, 0x21, 1, 2, 3)).op == ARCADE1_OP_UNKNOWN &&
            "bad OP funct7 must be UNKNOWN");
 
     printf("milestone08: all assertions passed\n");
     printf("  verified: opcode, register fields, I/S/B/U/J immediates,\n");
     printf("            formats, branch offsets, load/store offsets,\n");
-    printf("            OP/OP-IMM sub-classes, system, unknown encodings\n");
+    printf("            OP/OP-IMM sub-classes, M extension (MUL..REMU),\n");
+    printf("            system, unknown encodings\n");
 
     return 0;
 }

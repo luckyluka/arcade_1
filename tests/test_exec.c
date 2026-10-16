@@ -1,6 +1,6 @@
-/* ARCADE-1 — Milestone 09 test harness.
+/* ARCADE-1 — Milestone 09 test harness (extended at milestone 16).
  *
- * Instruction-level tests for the RV32I interpreter. Links exec.c + cpu.c +
+ * Instruction-level tests for the RV32IM interpreter. Links exec.c + cpu.c +
  * memory.c (no libretro, no machine, no .so), proving the CPU executes without
  * any frontend. Programs are hand-assembled with the same field encoders the
  * decoder tests use, serialised little-endian into ROM, then stepped one
@@ -8,7 +8,9 @@
  * bus.
  *
  * Covers what the roadmap requires: arithmetic, logical, shifts, branches,
- * jumps, loads, stores, immediate instructions, and the x0 == 0 rule.
+ * jumps, loads, stores, immediate instructions, and the x0 == 0 rule — plus
+ * the M extension (multiply/divide, including div-by-zero and signed overflow
+ * semantics) added at M16.
  */
 
 #include "exec.h"
@@ -346,11 +348,78 @@ int main(void)
         assert(cpu.instret == 4 && "NOP/system steps must count as executed");
     }
 
+    /* === M extension: multiply / divide (milestone 16) =================== *
+     * Exact spec semantics, including the defined (non-trapping) results for
+     * division by zero and for the signed INT_MIN / -1 overflow case. */
+    {
+        const uint32_t prog[] = {
+            enc_i(0x13, 0, 1, 0, 6),          /* x1 = 6                      */
+            enc_i(0x13, 0, 2, 0, 7),          /* x2 = 7                      */
+            enc_r(0x33, 0, 0x01, 3, 1, 2),    /* MUL   x3, x1, x2  -> 42      */
+            enc_u(0x37, 4, 0x80000),          /* x4 = 0x80000000             */
+            enc_r(0x33, 0, 0x01, 5, 4, 1),    /* MUL   x5, x4, x1  -> low 0   */
+            enc_r(0x33, 1, 0x01, 6, 4, 4),    /* MULH  x6, x4, x4  -> 0x40000000 */
+            enc_i(0x13, 0, 7, 0, -1),         /* x7 = -1 (0xFFFFFFFF)        */
+            enc_r(0x33, 1, 0x01, 8, 7, 7),    /* MULH  x8, x7, x7  -> 0       */
+            enc_r(0x33, 3, 0x01, 9, 7, 7),    /* MULHU x9, x7, x7  -> 0xFFFFFFFE */
+            enc_r(0x33, 2, 0x01, 10, 7, 7),   /* MULHSU x10,x7, x7 -> 0xFFFFFFFF */
+            enc_r(0x33, 0, 0x01, 0, 1, 2),    /* MUL  x0, x1, x2  -> discarded */
+            enc_i(0x13, 0, 11, 0, 100),       /* x11 = 100                   */
+            enc_i(0x13, 0, 12, 0, 10),        /* x12 = 10                    */
+            enc_r(0x33, 4, 0x01, 13, 11, 12), /* DIV   x13, x11, x12 -> 10    */
+            enc_r(0x33, 6, 0x01, 14, 11, 12), /* REM   x14, x11, x12 -> 0     */
+            enc_i(0x13, 0, 15, 0, 7),         /* x15 = 7                     */
+            enc_i(0x13, 0, 16, 0, 2),         /* x16 = 2                     */
+            enc_r(0x33, 4, 0x01, 17, 15, 16), /* DIV   x17, x15, x16 -> 3     */
+            enc_r(0x33, 6, 0x01, 18, 15, 16), /* REM   x18, x15, x16 -> 1     */
+            enc_i(0x13, 0, 19, 0, -7),        /* x19 = -7                    */
+            enc_r(0x33, 4, 0x01, 20, 19, 16), /* DIV   x20, x19, x16 -> -3    */
+            enc_r(0x33, 6, 0x01, 21, 19, 16), /* REM   x21, x19, x16 -> -1    */
+            enc_r(0x33, 4, 0x01, 22, 15, 0),  /* DIV   x22, x15, x0 -> -1     */
+            enc_r(0x33, 5, 0x01, 23, 15, 0),  /* DIVU  x23, x15, x0 -> -1     */
+            enc_r(0x33, 6, 0x01, 24, 19, 0),  /* REM   x24, x19, x0 -> -7     */
+            enc_r(0x33, 7, 0x01, 25, 15, 0),  /* REMU  x25, x15, x0 -> 7      */
+            enc_u(0x37, 26, 0x80000),         /* x26 = 0x80000000 (INT_MIN)   */
+            enc_r(0x33, 4, 0x01, 27, 26, 7),  /* DIV  x27, x26, x7 -> INT_MIN */
+            enc_r(0x33, 6, 0x01, 28, 26, 7),  /* REM  x28, x26, x7 -> 0       */
+            enc_r(0x33, 5, 0x01, 29, 7, 16),  /* DIVU x29, x7, x16 -> 0x7FFFFFFF */
+            enc_r(0x33, 7, 0x01, 30, 7, 11),  /* REMU x30, x7, x11 -> 95      */
+        };
+        load(prog, 31);
+        for (int i = 0; i < 31; i++) arcade1_cpu_step(&cpu, &bus);
+
+        assert(cpu.regs[3]  == 42                && "MUL 6*7");
+        assert(cpu.regs[5]  == 0                 && "MUL low half wraps to 0");
+        assert(cpu.regs[6]  == 0x40000000u       && "MULH INT_MIN*INT_MIN");
+        assert(cpu.regs[7]  == 0xFFFFFFFFu       && "ADDI -1");
+        assert(cpu.regs[8]  == 0                 && "MULH (-1)*(-1) high=0");
+        assert(cpu.regs[9]  == 0xFFFFFFFEu       && "MULHU max*max high");
+        assert(cpu.regs[10] == 0xFFFFFFFFu       && "MULHSU (-1)*maxu high");
+        assert(cpu.regs[0]  == 0                 && "MUL x0 write discarded");
+        assert(cpu.regs[13] == 10                && "DIV 100/10");
+        assert(cpu.regs[14] == 0                 && "REM 100%10");
+        assert(cpu.regs[17] == 3                 && "DIV 7/2 truncates to 3");
+        assert(cpu.regs[18] == 1                 && "REM 7%2");
+        assert(cpu.regs[20] == 0xFFFFFFFDu       && "DIV -7/2 -> -3 (toward 0)");
+        assert(cpu.regs[21] == 0xFFFFFFFFu       && "REM -7%2 -> -1 (dividend sign)");
+        assert(cpu.regs[22] == 0xFFFFFFFFu       && "DIV by zero -> -1");
+        assert(cpu.regs[23] == 0xFFFFFFFFu       && "DIVU by zero -> -1");
+        assert(cpu.regs[24] == 0xFFFFFFF9u       && "REM by zero -> dividend");
+        assert(cpu.regs[25] == 7                 && "REMU by zero -> dividend");
+        assert(cpu.regs[27] == 0x80000000u       && "DIV overflow INT_MIN/-1");
+        assert(cpu.regs[28] == 0                 && "REM overflow INT_MIN%-1 -> 0");
+        assert(cpu.regs[29] == 0x7FFFFFFFu       && "DIVU 0xFFFFFFFF/2");
+        assert(cpu.regs[30] == 95                && "REMU 0xFFFFFFFF%100");
+        assert(cpu.pc == 124 && cpu.instret == 31 &&
+               "M instructions must advance PC and instret like any other");
+    }
+
     printf("milestone09: all assertions passed\n");
     printf("  verified: x0==0, arithmetic, logical, shifts, comparisons,\n");
     printf("            LUI/AUIPC, all 6 branches (taken/skipped, sgn/uns),\n");
     printf("            backward loop, JAL/JALR, byte/half/word loads+stores,\n");
-    printf("            immediates, PC advance, NOP for unknown/system\n");
+    printf("            immediates, PC advance, NOP for unknown/system,\n");
+    printf("            M extension (MUL..REMU incl. div0/overflow cases)\n");
 
     return 0;
 }

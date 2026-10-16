@@ -22,9 +22,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 13        | ARCADE-1 video device      | COMPLETE |
 | 14        | Simple rectangle API       | COMPLETE |
 | 15        | Breakout (first game)      | COMPLETE |
-| 16+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 16        | M extension (RV32IM)       | COMPLETE |
+| 17+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 16 — M extension.** See `docs.md` for the exact scope.
+Next up: **Milestone 17 — Proper ROM format.** See `docs.md` for the exact scope.
 
 ## Architecture
 
@@ -34,8 +35,10 @@ src/
         machine.h/.c   machine state + per-frame logic (frontend-independent);
                        from M15 owns the guest CPU and boots firmware per frame
         memory.h/.c    memory/bus: ROM + RAM + MMIO (device handler), 8/16/32-bit r/w
-        cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
-        exec.h/.c      RV32I interpreter: registers + PC + single-step
+        cpu.h/.c       RV32IM decoder (stateless field/immediate/classification;
+                       M extension MUL..REMU added at M16)
+        exec.h/.c      RV32IM interpreter: registers + PC + single-step
+                       (multiply/divide semantics added at M16)
         timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
         video.h/.c     guest-driven CLEAR/SET_PIXEL/PRESENT -> framebuffer (M13)
         audio.h/.c     guest-driven tone regs (FREQ/CTRL), rendered per frame (M15)
@@ -72,8 +75,9 @@ make test-square  # M04 moving square
 make test-beep    # M05 audio beep
 make test-machine # M06 machine standalone (no libretro/.so)
 make test-memory  # M07 memory bus (links ONLY memory.c)
-make test-cpu     # M08 RV32I decoder (links ONLY cpu.c)
-make test-exec    # M09 RV32I interpreter (links exec+cpu+memory, no .so)
+make test-cpu     # M08 RV32IM decoder (links ONLY cpu.c)
+make test-exec    # M09 RV32IM interpreter (links exec+cpu+memory, no .so;
+                  #     extended at M16 with MUL..REMU semantics)
 make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
 make test-program # M10 run compiled C on the VM, assert counter == 123
 make test-mmio    # M11 guest reads/writes an MMIO device register
@@ -153,17 +157,23 @@ measurable, one commit per task:
   tilemaps, alpha blending or hardware-accelerated rectangles yet (forbidden
   by docs.md until a later milestone).
 - Breakout (M15): full-screen clear + repaint of every rectangle each frame
-  (~78k instructions/frame — the measured CPU load of this game); no dirty
+  (77,836 instructions/frame avg, 80,497 max over 595 frames — the measured
+  CPU load of this game, M16 build); no dirty
   rectangles, no text beyond a 3x5 digit font, one level/fixed launch
   trajectory, no title screen. The frame protocol is present-yield with a
   1,000,000-instruction safety cap per frame. Game state (score/lives/state)
   is read from guest RAM by the test via `nm` symbol addresses.
-- Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
+- Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
   zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
-  ROM (largest so far: breakout at 1714 bytes). No libgcc either, so guest C
-  must avoid variable multiplication/division (M16's M extension lifts this).
+  ROM (largest so far: breakout at 1718 bytes). Since M16 the ISA is RV32IM,
+  so guest C may use `*` and `/` directly (spec-exact semantics, no traps —
+  division by zero and `INT_MIN / -1` return the defined results) with no
+  libgcc.
+- The M extension (M16) is interpreter-only: all eight instructions are
+  single-step interpreted with no special fast path or early-out, so a divide
+  costs the same as an add per instruction.
 - FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
   OS/syscall/halt handling yet. Unknown words also act as NOP. `crt0` "ends"
   a program by parking in a self-loop (`j .`), which the harness detects.

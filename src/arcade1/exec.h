@@ -1,9 +1,10 @@
-/* ARCADE-1 CPU execution — RV32I interpreter (milestone 09).
+/* ARCADE-1 CPU execution — RV32IM interpreter (milestones 09 + 16).
  *
  * Architectural CPU state (32 general registers + PC) and single-instruction
- * stepping. Instruction *decoding* lives in cpu.h (milestone 08); this module
- * fetches a word from the bus, decodes it, and executes it, honouring the
- * RISC-V rule that x0 is hardwired to zero.
+ * stepping. Instruction *decoding* lives in cpu.h (milestones 08 + 16); this
+ * module fetches a word from the bus, decodes it, and executes it, honouring
+ * the RISC-V rule that x0 is hardwired to zero. RV32I plus the M extension
+ * (multiply/divide) from milestone 16.
  *
  * This is a plain interpreter, not a hardware simulator: no caches, pipelines,
  * speculation, or interrupts. Every access goes through the bus (memory.h), so
