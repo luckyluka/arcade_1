@@ -7,13 +7,15 @@
  * the harness asserts the device handler observed exactly that write — only
  * possible if the guest reached the device through the bus's MMIO dispatch.
  * A reset-and-compare pass then re-runs the program to confirm the dispatch is
- * deterministic.
+ * deterministic, checked via an identical state fingerprint (hash) across both
+ * runs.
  *
  * Usage: test_mmio <image.bin>
  * Links exec.c + cpu.c + memory.c — no libretro, no machine, no .so.
  */
 
 #include "exec.h"
+#include "state_hash.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -112,6 +114,9 @@ int main(int argc, char **argv)
     assert(bus.stray_accesses == 0 &&
            "guest must not perform any stray bus access");
 
+    /* Fingerprint the end-of-run state (regs, PC, instret, RAM, strays). */
+    const uint64_t hash1 = state_hash(&cpu, &bus);
+
     /* --- Determinism: reset reproduces the identical MMIO write ----------- */
     /* Snapshot the observed write, then reset (RAM + CPU; ROM and the attached
      * device survive) and replay the same program with the same host input.
@@ -130,8 +135,15 @@ int main(int argc, char **argv)
     assert(dev.writes == snap_writes && dev.seen == snap_seen &&
            "reset + same input must reproduce the identical MMIO write");
 
+    /* The full state fingerprint must match across the two runs. */
+    const uint64_t hash2 = state_hash(&cpu, &bus);
+    assert(hash1 == hash2 && "reset + replay must reproduce the state hash");
+    printf("  state hash: run1=0x%016llX run2=0x%016llX\n",
+           (unsigned long long)hash1, (unsigned long long)hash2);
+
     printf("milestone11: all assertions passed\n");
     printf("  verified: guest read + wrote an MMIO device register,\n");
-    printf("            deterministic under reset (reset-and-compare)\n");
+    printf("            deterministic under reset (reset-and-compare),\n");
+    printf("            identical state hash across both runs\n");
     return 0;
 }

@@ -6,18 +6,36 @@
  *
  * Loads a compiled guest image into ROM, resets the CPU, and steps until the
  * program parks in crt0's self-loop (PC stops changing), then checks its
- * observable side effect (counter == 123).
+ * observable side effect (counter == 123), the stray/instruction counters,
+ * and that a reset-and-replay reproduces an identical state hash.
  *
  * Usage: test_program <image.bin> <counter_addr_hex>
  * Links exec.c + cpu.c + memory.c — no libretro, no machine, no .so.
  */
 
 #include "exec.h"
+#include "state_hash.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+
+/* Step the CPU until crt0 parks at `j .` (PC stops changing) or a safety cap.
+ * Returns the number of steps taken. Extracted so the determinism check below
+ * can replay the exact same run after a reset. */
+static int run_to_park(arcade1_cpu_t *cpu, arcade1_bus_t *bus, int max_steps)
+{
+    uint32_t prev = 0xFFFFFFFFu;
+    int steps = 0;
+
+    while (steps < max_steps && cpu->pc != prev) {
+        prev = cpu->pc;
+        arcade1_cpu_step(cpu, bus);
+        steps++;
+    }
+    return steps;
+}
 
 int main(int argc, char **argv)
 {
@@ -48,13 +66,7 @@ int main(int argc, char **argv)
 
     /* Run until crt0 parks at `j .` (PC stops changing) or a safety cap. */
     const int MAX_STEPS = 200000;
-    uint32_t prev = 0xFFFFFFFFu;
-    int steps = 0;
-    while (steps < MAX_STEPS && cpu.pc != prev) {
-        prev = cpu.pc;
-        arcade1_cpu_step(&cpu, &bus);
-        steps++;
-    }
+    int steps = run_to_park(&cpu, &bus, MAX_STEPS);
 
     uint32_t counter = arcade1_read32(&bus, addr);
     printf("  image: %zu bytes, ran %d steps, stopped at PC=0x%08X\n",
@@ -69,7 +81,23 @@ int main(int argc, char **argv)
     assert(cpu.instret == (uint64_t)steps &&
            "instruction counter must equal the steps taken");
 
+    /* --- Determinism: reset reproduces the identical state hash ----------- */
+    /* Fingerprint the end-of-run state (regs, PC, instret, RAM, strays),
+     * then reset (RAM + CPU; ROM persists) and replay the same program. The
+     * fingerprint must match — the run must be fully deterministic. */
+    const uint64_t hash1 = state_hash(&cpu, &bus);
+
+    arcade1_bus_reset(&bus);   /* clears RAM + stray counter; keeps ROM */
+    arcade1_cpu_reset(&cpu);   /* clears regs, PC, instret             */
+    run_to_park(&cpu, &bus, MAX_STEPS);
+
+    const uint64_t hash2 = state_hash(&cpu, &bus);
+    assert(hash1 == hash2 && "reset + replay must reproduce the state hash");
+    printf("  state hash: run1=0x%016llX run2=0x%016llX\n",
+           (unsigned long long)hash1, (unsigned long long)hash2);
+
     printf("milestone10: all assertions passed\n");
-    printf("  verified: C -> riscv gcc -> RV32 ELF -> flat binary -> VM runs\n");
+    printf("  verified: C -> riscv gcc -> RV32 ELF -> flat binary -> VM runs,\n");
+    printf("            deterministic state hash across two runs\n");
     return 0;
 }
