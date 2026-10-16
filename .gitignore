@@ -1,0 +1,9 @@
+# Build output
+arcade1_libretro.so
+*.o
+*.a
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store

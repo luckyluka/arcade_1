@@ -1,0 +1,112 @@
+/* ARCADE-1 memory subsystem — implementation.
+ *
+ * See memory.h for the interface. All accesses route through a single region
+ * resolver so ROM/RAM (and future MMIO) share one decode path. No host
+ * dependency; deterministic and fault-free by construction.
+ */
+
+#include "memory.h"
+
+#include <string.h>
+
+/* --- Region resolution --------------------------------------------------- */
+
+/* Which region an address belongs to. */
+typedef enum {
+    REGION_NONE,
+    REGION_ROM,
+    REGION_RAM,
+} region_t;
+
+/* Decode an address to a region. Callers pass the access width in bytes so we
+ * can reject accesses that straddle a region boundary.
+ *
+ * Uses the overflow-safe "addr - base <= size - width" idiom: if addr < base,
+ * the unsigned subtraction wraps to a large value that fails the test, so no
+ * explicit lower-bound comparison (and no "unsigned >= 0" warning) is needed.
+ * Callers must pass width <= region size, which holds for 32-bit accesses. */
+static region_t resolve(const arcade1_bus_t *bus, uint32_t addr,
+                        uint32_t width)
+{
+    (void)bus;   /* Regions are fixed by the map, not by bus contents. */
+
+    if (addr - ARCADE1_ROM_BASE <= ARCADE1_ROM_SIZE - width)
+        return REGION_ROM;
+
+    if (addr - ARCADE1_RAM_BASE <= ARCADE1_RAM_SIZE - width)
+        return REGION_RAM;
+
+    return REGION_NONE;
+}
+
+/* --- Lifecycle ----------------------------------------------------------- */
+
+void arcade1_bus_init(arcade1_bus_t *bus)
+{
+    memset(bus, 0, sizeof(*bus));
+}
+
+void arcade1_bus_reset(arcade1_bus_t *bus)
+{
+    /* RAM is volatile; ROM persists across runs. */
+    memset(bus->ram, 0, sizeof(bus->ram));
+}
+
+/* --- ROM loading --------------------------------------------------------- */
+
+size_t arcade1_load_rom(arcade1_bus_t *bus, const void *data, size_t size)
+{
+    size_t n = size;
+
+    if (n > ARCADE1_ROM_SIZE)
+        n = ARCADE1_ROM_SIZE;
+
+    /* Zero first so any tail beyond the image is defined. */
+    memset(bus->rom, 0, sizeof(bus->rom));
+    if (n && data)
+        memcpy(bus->rom, data, n);
+
+    return n;
+}
+
+/* --- Bus accesses -------------------------------------------------------- */
+
+uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr)
+{
+    const uint8_t *base;
+
+    switch (resolve(bus, addr, 4)) {
+    case REGION_ROM:
+        base = bus->rom + (addr - ARCADE1_ROM_BASE);
+        break;
+    case REGION_RAM:
+        base = bus->ram + (addr - ARCADE1_RAM_BASE);
+        break;
+    case REGION_NONE:
+    default:
+        return 0;   /* Out of range: deterministic zero, no fault. */
+    }
+
+    /* Little-endian assemble. */
+    return (uint32_t)base[0] |
+           ((uint32_t)base[1] << 8) |
+           ((uint32_t)base[2] << 16) |
+           ((uint32_t)base[3] << 24);
+}
+
+void arcade1_write32(arcade1_bus_t *bus, uint32_t addr, uint32_t value)
+{
+    uint8_t *base;
+
+    /* ROM is read-only at runtime; only RAM accepts writes. */
+    if (resolve(bus, addr, 4) != REGION_RAM)
+        return;
+
+    base = bus->ram + (addr - ARCADE1_RAM_BASE);
+
+    /* Little-endian scatter. */
+    base[0] = (uint8_t)(value & 0xFFu);
+    base[1] = (uint8_t)((value >> 8) & 0xFFu);
+    base[2] = (uint8_t)((value >> 16) & 0xFFu);
+    base[3] = (uint8_t)((value >> 24) & 0xFFu);
+}
