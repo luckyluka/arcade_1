@@ -596,18 +596,20 @@ implemented (M12 timer, M13 video, ...).
   device state at the instruction that performs it. This is what keeps
   execution deterministic and identical across hosts.
 
-**Register table** — the canonical list of machine device registers. It is
-empty at M11 (infrastructure only, no peripheral attached yet); each device
-appends its rows here when it lands:
+**Register table** — the canonical list of machine device registers. It was
+empty at M11 (infrastructure only); each device appends its rows here when it
+lands. The timer's rows were pinned at M12:
 
-| Offset | Register | Access | Function | When it takes effect |
-|--------|----------|--------|----------|----------------------|
-| —      | Timer    | TBD    | defined at M12 | pinned at M12 |
-| —      | Video    | TBD    | defined at M13 | pinned at M13 |
+| Offset | Register    | Access | Function | When it takes effect |
+|--------|-------------|--------|----------|----------------------|
+| 0x00   | TIMER_COUNT | R      | Tick count, +1 per completed frame while enabled. Read-only: writes are ignored by the device. | Advances once per `arcade1_run_frame()` while CTRL bit0 is set; a `lw` observes the value at the instruction that performs it |
+| 0x04   | TIMER_CTRL  | R/W    | bit0 = enable (1) / pause (0); all other bits are ignored on write and read as 0 | The register latches at the `sw` instruction; the new state governs every frame that completes after that write |
+| —      | Video       | TBD    | defined at M13 | pinned at M13 |
 
-(M11's harness `tests/test_mmio.c` demonstrates read/write dispatch with a
-scratch register pair, but that lives in the test — the machine itself attaches
-no device yet.)
+(Both timer registers are serviced by the one device handler, so every access
+reaches the device — `stray_accesses` stays 0. M11's harness `tests/test_mmio.c`
+demonstrates read/write dispatch with a scratch register pair that lives in the
+test; as of M12 the machine itself attaches the timer to this window.)
 
 ---
 
@@ -628,6 +630,24 @@ timer
 Avoid depending on host wall-clock time for the machine's internal semantics.
 
 The VM may run as fast as possible while emulation timing is controlled by the host/frontend.
+
+## Timer decisions (pinned at M12)
+
+- **Tick source: one tick per frame.** `TIMER_COUNT` advances exactly once
+  per completed `arcade1_run_frame()` while enabled. Nothing reads a host
+  wall clock, so the count is a pure function of the frames executed and is
+  identical on every host; the host/frontend only decides how fast frames are
+  produced.
+- **Registers:** `TIMER_COUNT` (R, read-only) at offset 0x00 and `TIMER_CTRL`
+  (R/W, bit0 = enable) at offset 0x04, appended to the register table in
+  §15. Unknown offsets read 0 and ignore writes.
+- **Relationship:** the CPU counts instructions (`instret`), the machine
+  counts frames, and the timer hands frame time to the guest over MMIO. If
+  the timer is never paused, `TIMER_COUNT == frame_counter`.
+- **Scope:** the timer has no interrupt/pending logic yet, and no guest
+  firmware reads it until the CPU is wired into the frame loop (later
+  milestone) — `tests/test_timer.c` drives frames and reads the registers
+  from the host and from a hand-assembled `lw`.
 
 ---
 

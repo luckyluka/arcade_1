@@ -9,6 +9,7 @@
 #define ARCADE1_MACHINE_H
 
 #include "memory.h"
+#include "timer.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -50,9 +51,14 @@ typedef struct arcade1_machine {
     uint16_t framebuffer[ARCADE1_FB_PIXELS];    /* RGB565, row-major.       */
     int16_t  audio[ARCADE1_AUDIO_FRAMES * 2];   /* interleaved stereo L,R.  */
 
-    /* Memory bus (ROM + RAM). The CPU (milestone 08+) will access this via
-     * arcade1_read32()/arcade1_write32(); see memory.h. */
+    /* Memory bus (ROM + RAM + MMIO). The CPU accesses it via
+     * arcade1_read32()/arcade1_write32(); see memory.h. The MMIO window is
+     * serviced by the timer device below (milestone 12). */
     arcade1_bus_t bus;
+
+    /* Timer device (M12): ticks once per frame while enabled and is exposed
+     * to the guest as two MMIO registers (see docs.md register table). */
+    arcade1_timer_t timer;
 
     /* Input for the current frame (set via arcade1_set_input). */
     arcade1_input_t input;

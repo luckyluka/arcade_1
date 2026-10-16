@@ -1,9 +1,10 @@
 /* ARCADE-1 machine — implementation.
  *
  * Self-contained machine logic: RGB565 software framebuffer, test pattern,
- * RetroPad indicator overlay, D-pad moving square, and a 440 Hz beep. This
- * file has NO dependency on libretro or any host frontend; it is driven
- * purely through the arcade1_* API in machine.h.
+ * RetroPad indicator overlay, D-pad moving square, a 440 Hz beep, and the
+ * milestone-12 timer (one tick per frame, exposed over MMIO). This file has
+ * NO dependency on libretro or any host frontend; it is driven purely through
+ * the arcade1_* API in machine.h.
  */
 
 #include "machine.h"
@@ -167,6 +168,12 @@ void arcade1_init(arcade1_machine_t *m)
 {
     memset(m, 0, sizeof(*m));
     arcade1_bus_init(&m->bus);
+    arcade1_timer_reset(&m->timer);
+    /* Attach the timer as the machine's first device on the MMIO window (the
+     * M11 handler mechanism). arcade1_bus_reset() keeps this attachment, so a
+     * reset restarts the timer without re-registering it. */
+    arcade1_set_mmio(&m->bus, arcade1_timer_mmio_read,
+                     arcade1_timer_mmio_write, &m->timer);
 }
 
 void arcade1_reset(arcade1_machine_t *m)
@@ -176,7 +183,11 @@ void arcade1_reset(arcade1_machine_t *m)
     m->square_x      = (ARCADE1_WIDTH  - SQUARE_SIZE) / 2;
     m->square_y      = (ARCADE1_HEIGHT - SQUARE_SIZE) / 2;
 
-    /* RAM is volatile; a reset clears it but preserves any loaded ROM. */
+    /* The timer restarts with the machine (count 0, enabled). */
+    arcade1_timer_reset(&m->timer);
+
+    /* RAM is volatile; a reset clears it but preserves any loaded ROM and the
+     * timer's MMIO attachment. */
     arcade1_bus_reset(&m->bus);
 }
 
@@ -209,6 +220,11 @@ void arcade1_run_frame(arcade1_machine_t *m)
     audio_render(m);
 
     m->frame_counter++;
+
+    /* Frame time -> timer: exactly one tick per completed frame while the
+     * timer is enabled (M12). Never wall-clock: the count is a pure function
+     * of frames executed, so it is identical across hosts. */
+    arcade1_timer_tick(&m->timer);
 }
 
 const uint16_t *arcade1_framebuffer(const arcade1_machine_t *m)

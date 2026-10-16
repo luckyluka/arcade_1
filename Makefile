@@ -15,7 +15,7 @@ LDFLAGS += -shared
 
 TARGET  := arcade1_libretro.so
 SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
-           src/arcade1/exec.c src/libretro/libretro.c
+           src/arcade1/exec.c src/arcade1/timer.c src/libretro/libretro.c
 
 # Test executables are built into this directory (gitignored) instead of /tmp.
 TESTDIR := build
@@ -23,7 +23,7 @@ TESTDIR := build
 # Every test target builds into $(TESTDIR), so make sure the directory exists
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
-test-exec test-program test-mmio: | $(TESTDIR)
+test-exec test-program test-mmio test-timer: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -47,7 +47,7 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 .SECONDARY: $(GUEST_ELFS)
 
 .PHONY: all clean program test test-input test-square test-beep test-machine \
-        test-memory test-cpu test-exec test-program test-mmio
+        test-memory test-cpu test-exec test-program test-mmio test-timer
 
 all: $(TARGET)
 
@@ -83,7 +83,8 @@ test-beep: $(TARGET)
 # RetroArch.
 test-machine:
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_machine \
-	    tests/test_machine.c src/arcade1/machine.c src/arcade1/memory.c
+	    tests/test_machine.c src/arcade1/machine.c src/arcade1/memory.c \
+	    src/arcade1/timer.c
 	$(TESTDIR)/test_machine
 
 # Build and run the milestone-07 memory/bus harness. Links ONLY memory.c —
@@ -137,6 +138,16 @@ test-mmio: $(GUEST_BUILD)/mmio_demo.bin
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_mmio tests/test_mmio.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/memory.c
 	$(TESTDIR)/test_mmio $(GUEST_BUILD)/mmio_demo.bin
+
+# Build and run the milestone-12 timer harness: drive real machine frames and
+# check the timer's MMIO registers (host-level rw + a hand-assembled CPU lw),
+# CTRL pause/resume, read-only COUNT, and reset-and-compare determinism. Links
+# machine+timer+memory+exec+cpu (no libretro, no .so).
+test-timer:
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_timer \
+	    tests/test_timer.c src/arcade1/machine.c src/arcade1/timer.c \
+	    src/arcade1/memory.c src/arcade1/exec.c src/arcade1/cpu.c
+	$(TESTDIR)/test_timer
 
 clean:
 	rm -f $(TARGET)

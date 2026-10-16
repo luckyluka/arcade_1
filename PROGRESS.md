@@ -18,9 +18,11 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 09        | RV32I execution            | COMPLETE |
 | 10        | Load compiled C program    | COMPLETE |
 | 11        | MMIO                       | COMPLETE |
-| 12+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 12        | Timer                      | COMPLETE |
+| 13+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 12 — Timer.** See `docs.md` for the exact scope.
+Next up: **Milestone 13 — ARCADE-1 video device.** See `docs.md` for the
+exact scope.
 
 ## Architecture
 
@@ -31,6 +33,7 @@ src/
         memory.h/.c    memory/bus: ROM + RAM + MMIO (device handler), 8/16/32-bit r/w
         cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
         exec.h/.c      RV32I interpreter: registers + PC + single-step
+        timer.h/.c     deterministic timer: 1 tick/frame, 2 MMIO regs (M12)
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
 programs/               guest code compiled by RISC-V GCC (M10+)
@@ -64,6 +67,7 @@ make test-exec    # M09 RV32I interpreter (links exec+cpu+memory, no .so)
 make program      # M10 build guest programs: C -> RV32 ELF -> flat .bin
 make test-program # M10 run compiled C on the VM, assert counter == 123
 make test-mmio    # M11 guest reads/writes an MMIO device register
+make test-timer   # M12 deterministic timer: frames, MMIO regs, CPU lw, reset
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -94,15 +98,17 @@ measurable, one commit per task:
 - **Build tidy-up** — test executables now build into gitignored `build/`
   (not `/tmp/arcade1_test_*`); target names unchanged. `test_pattern` prints a
   PPM path only when the file was really written (warnings stay non-fatal).
+  A follow-up commit pinned `.DEFAULT_GOAL := all` so plain `make` still only
+  builds the `.so` (the new prerequisite rule had made it run the tests).
 
 ## Known limitations
 
 - 320x240 @ 60 fps, 48 kHz audio — placeholder resolution/rate, NOT final
   (per roadmap: do not freeze the display resolution yet).
 - Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
-  gap) is a placeholder, not the final ARCADE-1 map. MMIO now routes to a
-  host-registered device handler, but there are **no concrete peripherals**
-  attached yet (timer is M12, the video device is M13).
+  gap) is a placeholder, not the final ARCADE-1 map. MMIO routes to a
+  host-registered device handler; since M12 the machine attaches the **timer**
+  device to it (video is M13).
 - The test pattern, moving square, and beep are host-driven demo logic inside
   the machine; they will be replaced by the RV32 CPU + real devices in
   milestones 08–13.
@@ -113,9 +119,14 @@ measurable, one commit per task:
   (square/beep); the machine does not yet *boot* a program as firmware (that
   wiring comes in a later milestone, now that the MMIO infrastructure exists).
 - MMIO is minimal by design (M11): one 4 KiB window (0x4000) routed to a single
-  host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops), and
-  the machine attaches no device yet. Timer/video attach via the same handler in
-  M12/M13.
+  host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops).
+  The machine attaches the timer through it (M12); video attaches the same way
+  in M13.
+- Timer (M12): exactly 1 tick per frame, registers `TIMER_COUNT` (read-only)
+  and `TIMER_CTRL` (bit0 = enable), no interrupt/pending logic. It is driven
+  and read by the host test today — a guest cannot read it yet because the CPU
+  is **not wired into the frame loop** (that arrives with the firmware-boot
+  milestone).
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
