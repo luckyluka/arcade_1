@@ -574,6 +574,41 @@ Do not yet create every ARCADE-1 peripheral.
 
 The important thing is that a guest program can write/read a device register.
 
+## MMIO decisions (pinned at M11)
+
+The MMIO contract is expensive to rework later, so it is fixed here now.
+Specific device registers are appended to the table as each device is
+implemented (M12 timer, M13 video, ...).
+
+**Region & access**
+
+- Window `0x4000..0x4FFF` (4 KiB); `0x2000..0x3FFF` is an unused gap, keeping
+  MMIO a distinct region rather than a continuation of RAM.
+- Registers are 32-bit, accessed with `lw`/`sw` only. 8/16-bit accesses to the
+  window are no-ops (read 0, write ignored).
+- One host handler services the whole window and dispatches on the byte offset.
+  With no device attached, reads return 0 and writes are ignored.
+
+**When a write takes effect**
+
+- Synchronously, at the instruction that performs the `sw`, in program order,
+  within that CPU step. No buffering and no frame-end deferral. A `lw` observes
+  device state at the instruction that performs it. This is what keeps
+  execution deterministic and identical across hosts.
+
+**Register table** — the canonical list of machine device registers. It is
+empty at M11 (infrastructure only, no peripheral attached yet); each device
+appends its rows here when it lands:
+
+| Offset | Register | Access | Function | When it takes effect |
+|--------|----------|--------|----------|----------------------|
+| —      | Timer    | TBD    | defined at M12 | pinned at M12 |
+| —      | Video    | TBD    | defined at M13 | pinned at M13 |
+
+(M11's harness `tests/test_mmio.c` demonstrates read/write dispatch with a
+scratch register pair, but that lives in the test — the machine itself attaches
+no device yet.)
+
 ---
 
 # 16. Milestone 12 — Timer
@@ -985,9 +1020,20 @@ Reset/frame execution tests.
 
 Deterministic rendering tests.
 
+### Determinism
+
+Determinism is a test, not an assumption: establish a state, reset, replay the
+same inputs, and assert the identical result (frame, waveform, or
+register-write stream). The beep, machine, and pattern harnesses already do
+this reset-and-compare check — keep doing it for every new test.
+
 ### Games
 
 Golden-frame or behavior tests where practical.
+
+Each game must be headless-runnable (no frontend) and print a hash per frame,
+so runs can be diffed byte-for-byte across hosts and after a reset. Record each
+game's CPU load as a number once it runs, so regressions are visible.
 
 The same ARCADE-1 game should eventually be executable by:
 

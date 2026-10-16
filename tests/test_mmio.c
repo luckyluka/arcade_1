@@ -6,6 +6,8 @@
  * reads a host-provided value from one register and writes value+1 to another;
  * the harness asserts the device handler observed exactly that write — only
  * possible if the guest reached the device through the bus's MMIO dispatch.
+ * A reset-and-compare pass then re-runs the program to confirm the dispatch is
+ * deterministic.
  *
  * Usage: test_mmio <image.bin>
  * Links exec.c + cpu.c + memory.c — no libretro, no machine, no .so.
@@ -51,6 +53,22 @@ static void demo_write(void *ctx, uint32_t offset, uint32_t value)
 
 /* --- Harness -------------------------------------------------------------- */
 
+/* Step the CPU until crt0 parks at `j .` (PC stops changing) or a safety cap.
+ * Returns the number of steps taken. Extracted so the determinism check below
+ * can replay the exact same run after a reset. */
+static int run_to_park(arcade1_cpu_t *cpu, arcade1_bus_t *bus, int max_steps)
+{
+    uint32_t prev = 0xFFFFFFFFu;
+    int steps = 0;
+
+    while (steps < max_steps && cpu->pc != prev) {
+        prev = cpu->pc;
+        arcade1_cpu_step(cpu, bus);
+        steps++;
+    }
+    return steps;
+}
+
 int main(int argc, char **argv)
 {
     static arcade1_bus_t bus;          /* Static: the bus embeds 8 KiB. */
@@ -79,13 +97,7 @@ int main(int argc, char **argv)
 
     /* Run until crt0 parks at `j .` (PC stops changing) or a safety cap. */
     const int MAX_STEPS = 200000;
-    uint32_t prev = 0xFFFFFFFFu;
-    int steps = 0;
-    while (steps < MAX_STEPS && cpu.pc != prev) {
-        prev = cpu.pc;
-        arcade1_cpu_step(&cpu, &bus);
-        steps++;
-    }
+    int steps = run_to_park(&cpu, &bus, MAX_STEPS);
 
     printf("  image: %zu bytes, ran %d steps, stopped at PC=0x%08X\n",
            n, steps, cpu.pc);
@@ -98,7 +110,26 @@ int main(int argc, char **argv)
     assert(dev.seen == DEV_IN_VALUE + 1 &&
            "guest must read REG_IN and write back value+1");
 
+    /* --- Determinism: reset reproduces the identical MMIO write ----------- */
+    /* Snapshot the observed write, then reset (RAM + CPU; ROM and the attached
+     * device survive) and replay the same program with the same host input.
+     * The result must be identical — MMIO dispatch must be deterministic. */
+    const uint32_t snap_seen   = dev.seen;
+    const int      snap_writes = dev.writes;
+
+    dev.in     = DEV_IN_VALUE;   /* same host input */
+    dev.seen   = 0;
+    dev.writes = 0;
+    arcade1_bus_reset(&bus);     /* clears RAM; keeps ROM + MMIO handler */
+    arcade1_cpu_reset(&cpu);
+
+    int steps2 = run_to_park(&cpu, &bus, MAX_STEPS);
+    assert(steps2 == steps && "reset must re-run the program identically");
+    assert(dev.writes == snap_writes && dev.seen == snap_seen &&
+           "reset + same input must reproduce the identical MMIO write");
+
     printf("milestone11: all assertions passed\n");
-    printf("  verified: guest read + wrote an MMIO device register\n");
+    printf("  verified: guest read + wrote an MMIO device register,\n");
+    printf("            deterministic under reset (reset-and-compare)\n");
     return 0;
 }

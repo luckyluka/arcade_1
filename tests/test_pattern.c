@@ -10,6 +10,7 @@
 #include "libretro.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -65,10 +66,28 @@ static unsigned r5(uint16_t p) { return ((p >> 11) & 0x1Fu) * 255 / 31; }
 static unsigned g6(uint16_t p) { return ((p >>  5) & 0x3Fu) * 255 / 63; }
 static unsigned b5(uint16_t p) { return ( p        & 0x1Fu) * 255 / 31; }
 
-static void dump_ppm(const char *path)
+/* Resolve a writable temp directory for the diagnostic PPM dumps so the test
+ * passes on any machine — never depend on a machine-specific path. */
+static const char *temp_dir(void)
 {
+    const char *d = getenv("TMPDIR");
+    return (d && *d) ? d : "/tmp";
+}
+
+/* Best-effort PPM dump for manual inspection. Non-fatal: if the file cannot be
+ * written we warn and continue, so `make test` passes regardless of the host's
+ * temp layout. The assertions verify frame content via `cap`, not the dump. */
+static void dump_ppm(const char *name)
+{
+    char path[512];
+    snprintf(path, sizeof path, "%s/%s", temp_dir(), name);
+
     FILE *f = fopen(path, "wb");
-    if (!f) { perror(path); exit(1); }
+    if (!f) {
+        fprintf(stderr, "  (note: could not write %s: %s)\n",
+                path, strerror(errno));
+        return;
+    }
     fprintf(f, "P6\n%u %u\n255\n", cap_w, cap_h);
     for (unsigned y = 0; y < cap_h; y++)
         for (unsigned x = 0; x < cap_w; x++) {
@@ -115,13 +134,13 @@ int main(void)
     uint16_t bottom_f0 = cap[200 * W + 19];
     assert(r5(bottom_f0) == 0 && "frame0 bottom x=19 must be black");
 
-    dump_ppm("/tmp/opencode/frame0.ppm");
+    dump_ppm("arcade1_frame0.ppm");
 
     /* --- Frame 1: bottom band must scroll by 1px ------------------------ */
     retro_run();
     uint16_t bottom_f1 = cap[200 * W + 19];
     assert(r5(bottom_f1) == 255 && "frame1 bottom x=19 must be white (scroll+1)");
-    dump_ppm("/tmp/opencode/frame1.ppm");
+    dump_ppm("arcade1_frame1.ppm");
 
     /* --- Determinism: reset returns us to the same frame 0 image -------- */
     uint16_t snapshot[W * H];
@@ -139,7 +158,8 @@ int main(void)
     printf("  geometry   : %ux%u pitch=%u\n", cap_w, cap_h, cap_pitch);
     printf("  frames     : %d\n", frames_seen);
     printf("  rgb565     : %s\n", got_rgb565 ? "yes" : "no");
-    printf("  dumped     : /tmp/opencode/frame0.ppm, frame1.ppm\n");
+    printf("  dumped     : %s/arcade1_frame0.ppm, arcade1_frame1.ppm\n",
+           temp_dir());
 
     retro_unload_game();
     retro_deinit();
