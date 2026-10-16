@@ -14,10 +14,11 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 05        | Audio beep                 | COMPLETE |
 | 06        | ARCADE-1 machine abstraction | COMPLETE |
 | 07        | Memory subsystem           | COMPLETE |
-| 08        | RV32I decoder              | NOT STARTED |
+| 08        | RV32I decoder              | COMPLETE |
 | 09+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 08 — RV32I decoder.**
+Next up: **Milestone 09 — RV32I execution (CPU state + stepping).** See
+`docs.md` for the exact scope.
 
 ## Architecture
 
@@ -26,6 +27,7 @@ src/
     arcade1/
         machine.h/.c   machine state + per-frame logic (frontend-independent)
         memory.h/.c    memory/bus: ROM + RAM behind read32/write32
+        cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
 deps/libretro/
@@ -48,6 +50,7 @@ make test-square  # M04 moving square
 make test-beep    # M05 audio beep
 make test-machine # M06 machine standalone (no libretro/.so)
 make test-memory  # M07 memory bus (links ONLY memory.c)
+make test-cpu     # M08 RV32I decoder (links ONLY cpu.c)
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -67,7 +70,10 @@ square is a unique orange `0xFD00` so tests can locate it by scanning).
 - The test pattern, moving square, and beep are host-driven demo logic inside
   the machine; they will be replaced by the RV32 CPU + real devices in
   milestones 08–13.
-- No RV32 CPU yet (starts at M08).
+- No RV32 CPU execution yet. M08 added a **decoder only** (classifies a
+  32-bit word into fields/immediate/format/op); registers, PC, and stepping
+  arrive in M09. `cpu.c` builds into the `.so` but is not yet called by the
+  machine (wired up in M09).
 - Save states / cheats unsupported (stubs).
 
 ## Notes for whoever picks this up

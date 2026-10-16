@@ -10,9 +10,11 @@ CFLAGS  += -fPIC -Ideps/libretro -Isrc/arcade1
 LDFLAGS += -shared
 
 TARGET  := arcade1_libretro.so
-SRC     := src/arcade1/machine.c src/arcade1/memory.c src/libretro/libretro.c
+SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
+           src/libretro/libretro.c
 
-.PHONY: all clean test test-input test-square test-beep test-machine test-memory
+.PHONY: all clean test test-input test-square test-beep test-machine test-memory \
+        test-cpu
 
 all: $(TARGET)
 
@@ -57,6 +59,13 @@ test-memory:
 	$(CC) $(CFLAGS) -o /tmp/arcade1_test_memory \
 	    tests/test_memory.c src/arcade1/memory.c
 	/tmp/arcade1_test_memory
+
+# Build and run the milestone-08 RV32I decoder harness. Links ONLY cpu.c — no
+# libretro, no machine, no .so — proving the decoder is independently testable.
+test-cpu:
+	$(CC) $(CFLAGS) -o /tmp/arcade1_test_cpu \
+	    tests/test_cpu.c src/arcade1/cpu.c
+	/tmp/arcade1_test_cpu
 
 clean:
 	rm -f $(TARGET)
