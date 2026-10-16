@@ -2,6 +2,8 @@
 
 Living record of milestone status. The roadmap itself is in `docs.md`; this
 file tracks what is actually done, how to verify it, and known limitations.
+The M23 architecture review is a standalone document in `ARCHITECTURE.md`, and
+the v0.1 machine specification it produced (M24) is in `SPEC.md`.
 
 ## Status summary
 
@@ -29,9 +31,10 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 20        | Tilemap engine             | COMPLETE |
 | 21        | Scrolling (camera)         | COMPLETE |
 | 22        | Platformer (integration)   | COMPLETE |
-| 23+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 23        | Architecture Review        | COMPLETE |
+| 24+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 23 — Architecture Review** (a written review, then v0.1). See `docs.md` for the exact scope.
+Next up: **Milestone 24 — ARCADE-1 v0.1 Candidate** (write the machine spec from the review). See `docs.md` for the exact scope.
 
 ## Architecture
 

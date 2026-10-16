@@ -1426,6 +1426,11 @@ offloaded to the device; the guest only runs the physics loop and issues a
 handful of MMIO commands per frame, so a full layered game sits comfortably
 inside a 60 fps frame budget.
 
+The roadmap's M22 instruction — "After this milestone, stop and review the
+architecture... Only then define ARCADE-1 v0.1" — is discharged in the next two
+milestones: the **architecture review** (M23) lives in `ARCHITECTURE.md`, and the
+**v0.1 machine specification** it produces (M24) lives in `SPEC.md`.
+
 ---
 
 # 27. Graphics philosophy
