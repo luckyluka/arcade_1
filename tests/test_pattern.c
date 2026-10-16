@@ -98,6 +98,9 @@ static void dump_ppm(const char *name)
             fwrite(rgb, 1, 3, f);
         }
     fclose(f);
+    /* Only announce a path that was really written (a failed dump printed its
+     * warning above and stays silent here). */
+    printf("  dumped     : %s\n", path);
 }
 
 int main(void)
@@ -158,8 +161,7 @@ int main(void)
     printf("  geometry   : %ux%u pitch=%u\n", cap_w, cap_h, cap_pitch);
     printf("  frames     : %d\n", frames_seen);
     printf("  rgb565     : %s\n", got_rgb565 ? "yes" : "no");
-    printf("  dumped     : %s/arcade1_frame0.ppm, arcade1_frame1.ppm\n",
-           temp_dir());
+    /* PPM dump paths are printed by dump_ppm() above, one per file written. */
 
     retro_unload_game();
     retro_deinit();

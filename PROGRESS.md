@@ -74,6 +74,27 @@ link the sources directly with no libretro at all, proving frontend
 independence. Pixel/audio values are verified deterministically (e.g. the
 square is a unique orange `0xFD00` so tests can locate it by scanning).
 
+## Housekeeping
+
+A maintenance round (no roadmap change) that made three existing practices
+measurable, one commit per task:
+
+- **Stray bus access counter** — `bus.stray_accesses` counts every access the
+  bus ignores or answers with a default (sub-word MMIO, out-of-range, ROM
+  write, MMIO with no device); cleared by `arcade1_bus_init`/`_reset`.
+  Tests assert it is 0 unless the test intentionally causes strays. To record
+  it on reads, the three `arcade1_read*` entry points are no longer `const`.
+- **Executed-instruction counter** — `cpu.instret` counts steps (including
+  NOPs), cleared by `arcade1_cpu_reset`. A game's CPU load = instructions per
+  frame (read before/after each frame).
+- **State fingerprint** — `tests/state_hash.h` (test-only, header-only): an
+  FNV-1a 64-bit hash over regs, PC, instret, RAM and the stray counter,
+  hashed little-endian so it is host-independent. Used by `test_mmio` and
+  `test_program` to assert a reset-and-replay yields an identical hash.
+- **Build tidy-up** — test executables now build into gitignored `build/`
+  (not `/tmp/arcade1_test_*`); target names unchanged. `test_pattern` prints a
+  PPM path only when the file was really written (warnings stay non-fatal).
+
 ## Known limitations
 
 - 320x240 @ 60 fps, 48 kHz audio — placeholder resolution/rate, NOT final
