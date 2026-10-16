@@ -71,6 +71,43 @@ size_t arcade1_load_rom(arcade1_bus_t *bus, const void *data, size_t size)
 
 /* --- Bus accesses -------------------------------------------------------- */
 
+uint8_t arcade1_read8(const arcade1_bus_t *bus, uint32_t addr)
+{
+    const uint8_t *base;
+
+    switch (resolve(bus, addr, 1)) {
+    case REGION_ROM:
+        base = bus->rom + (addr - ARCADE1_ROM_BASE);
+        break;
+    case REGION_RAM:
+        base = bus->ram + (addr - ARCADE1_RAM_BASE);
+        break;
+    case REGION_NONE:
+    default:
+        return 0;   /* Out of range: deterministic zero, no fault. */
+    }
+    return base[0];
+}
+
+uint16_t arcade1_read16(const arcade1_bus_t *bus, uint32_t addr)
+{
+    const uint8_t *base;
+
+    switch (resolve(bus, addr, 2)) {
+    case REGION_ROM:
+        base = bus->rom + (addr - ARCADE1_ROM_BASE);
+        break;
+    case REGION_RAM:
+        base = bus->ram + (addr - ARCADE1_RAM_BASE);
+        break;
+    case REGION_NONE:
+    default:
+        return 0;   /* Out of range: deterministic zero, no fault. */
+    }
+    /* Little-endian assemble. */
+    return (uint16_t)base[0] | ((uint16_t)base[1] << 8);
+}
+
 uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr)
 {
     const uint8_t *base;
@@ -92,6 +129,29 @@ uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr)
            ((uint32_t)base[1] << 8) |
            ((uint32_t)base[2] << 16) |
            ((uint32_t)base[3] << 24);
+}
+
+void arcade1_write8(arcade1_bus_t *bus, uint32_t addr, uint8_t value)
+{
+    /* ROM is read-only at runtime; only RAM accepts writes. */
+    if (resolve(bus, addr, 1) != REGION_RAM)
+        return;
+
+    bus->ram[addr - ARCADE1_RAM_BASE] = value;
+}
+
+void arcade1_write16(arcade1_bus_t *bus, uint32_t addr, uint16_t value)
+{
+    uint8_t *base;
+
+    if (resolve(bus, addr, 2) != REGION_RAM)
+        return;
+
+    base = bus->ram + (addr - ARCADE1_RAM_BASE);
+
+    /* Little-endian scatter. */
+    base[0] = (uint8_t)(value & 0xFFu);
+    base[1] = (uint8_t)(value >> 8);
 }
 
 void arcade1_write32(arcade1_bus_t *bus, uint32_t addr, uint32_t value)

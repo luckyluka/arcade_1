@@ -106,12 +106,38 @@ int main(void)
                "truncated image must fill ROM");
     }
 
+    /* --- Byte/halfword widths (added for M09 loads/stores) --------------- */
+    arcade1_write16(&bus, ARCADE1_RAM_BASE + 0x40, 0x1234u);
+    assert(arcade1_read16(&bus, ARCADE1_RAM_BASE + 0x40) == 0x1234u &&
+           "RAM halfword round-trip must preserve value");
+    assert(arcade1_read8(&bus, ARCADE1_RAM_BASE + 0x40) == 0x34u &&
+           "halfword low byte must be little-endian");
+    assert(arcade1_read8(&bus, ARCADE1_RAM_BASE + 0x41) == 0x12u &&
+           "halfword high byte must be little-endian");
+
+    arcade1_write8(&bus, ARCADE1_RAM_BASE + 0x42, 0xABu);
+    assert(arcade1_read8(&bus, ARCADE1_RAM_BASE + 0x42) == 0xABu &&
+           "RAM byte round-trip must preserve value");
+
+    /* Byte/halfword writes to ROM are ignored (read-only), as is write32. */
+    arcade1_write8(&bus, ARCADE1_ROM_BASE + 0x10, 0xFFu);
+    arcade1_write16(&bus, ARCADE1_ROM_BASE + 0x10, 0xFFFFu);
+    assert(arcade1_read8(&bus, ARCADE1_ROM_BASE + 0x10) == 0x5Au &&
+           "byte write to ROM must be ignored");
+
+    /* Out-of-range / boundary-straddling sub-word reads return 0. */
+    assert(arcade1_read8(&bus, 0xFFFFF000u) == 0 &&
+           "far out-of-range byte read must return 0");
+    assert(arcade1_read16(&bus, ARCADE1_ROM_BASE + ARCADE1_ROM_SIZE - 1) == 0 &&
+           "halfword straddling ROM/RAM must return 0");
+
     printf("milestone07: all assertions passed\n");
     printf("  map: ROM 0x%04X+%u, RAM 0x%04X+%u\n",
            ARCADE1_ROM_BASE, ARCADE1_ROM_SIZE,
            ARCADE1_RAM_BASE, ARCADE1_RAM_SIZE);
     printf("  verified: ROM r/o, RAM r/w, little-endian, boundaries,\n");
-    printf("            straddle/out-of-range -> 0, reset, load truncation\n");
+    printf("            straddle/out-of-range -> 0, reset, load truncation,\n");
+    printf("            byte/halfword widths\n");
 
     return 0;
 }

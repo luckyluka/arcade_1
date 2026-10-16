@@ -48,14 +48,19 @@ void arcade1_bus_reset(arcade1_bus_t *bus);
  * leaves the remainder zeroed. Returns the number of bytes loaded. */
 size_t arcade1_load_rom(arcade1_bus_t *bus, const void *data, size_t size);
 
-/* --- Bus accesses (the one clear interface) ------------------------------ */
+/* --- Bus accesses (the one clear interface) ------------------------------ *
+ * Widths: 8, 16, and 32 bits, little-endian (RV32I loads/stores need all
+ * three). A read returns 0 if the address is out of range or the access
+ * straddles a region boundary. A write is accepted only when the whole access
+ * lands in RAM (ROM and out-of-range writes are ignored). Deterministic;
+ * never faults. */
 
-/* Read a 32-bit little-endian word. Returns 0 if the address is out of range
- * or straddles a region boundary. Deterministic; never faults. */
+uint8_t  arcade1_read8 (const arcade1_bus_t *bus, uint32_t addr);
+uint16_t arcade1_read16(const arcade1_bus_t *bus, uint32_t addr);
 uint32_t arcade1_read32(const arcade1_bus_t *bus, uint32_t addr);
 
-/* Write a 32-bit little-endian word. Only RAM is writable; writes to ROM or
- * out-of-range addresses are ignored. Deterministic; never faults. */
+void arcade1_write8 (arcade1_bus_t *bus, uint32_t addr, uint8_t value);
+void arcade1_write16(arcade1_bus_t *bus, uint32_t addr, uint16_t value);
 void arcade1_write32(arcade1_bus_t *bus, uint32_t addr, uint32_t value);
 
 #endif /* ARCADE1_MEMORY_H */

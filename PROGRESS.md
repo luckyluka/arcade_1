@@ -15,10 +15,11 @@ file tracks what is actually done, how to verify it, and known limitations.
 | 06        | ARCADE-1 machine abstraction | COMPLETE |
 | 07        | Memory subsystem           | COMPLETE |
 | 08        | RV32I decoder              | COMPLETE |
-| 09+       | (see `docs.md` roadmap)    | NOT STARTED |
+| 09        | RV32I execution            | COMPLETE |
+| 10+       | (see `docs.md` roadmap)    | NOT STARTED |
 
-Next up: **Milestone 09 — RV32I execution (CPU state + stepping).** See
-`docs.md` for the exact scope.
+Next up: **Milestone 10 — Load compiled C program.** See `docs.md` for the
+exact scope (RISC-V GCC → RV32 executable → ARCADE-1 VM).
 
 ## Architecture
 
@@ -26,8 +27,9 @@ Next up: **Milestone 09 — RV32I execution (CPU state + stepping).** See
 src/
     arcade1/
         machine.h/.c   machine state + per-frame logic (frontend-independent)
-        memory.h/.c    memory/bus: ROM + RAM behind read32/write32
+        memory.h/.c    memory/bus: ROM + RAM, 8/16/32-bit read/write
         cpu.h/.c       RV32I decoder (stateless field/immediate/classification)
+        exec.h/.c      RV32I interpreter: registers + PC + single-step
     libretro/
         libretro.c     thin adapter: RetroPad <-> arcade1_* <-> frontend
 deps/libretro/
@@ -51,6 +53,7 @@ make test-beep    # M05 audio beep
 make test-machine # M06 machine standalone (no libretro/.so)
 make test-memory  # M07 memory bus (links ONLY memory.c)
 make test-cpu     # M08 RV32I decoder (links ONLY cpu.c)
+make test-exec    # M09 RV32I interpreter (links exec+cpu+memory, no .so)
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -70,10 +73,12 @@ square is a unique orange `0xFD00` so tests can locate it by scanning).
 - The test pattern, moving square, and beep are host-driven demo logic inside
   the machine; they will be replaced by the RV32 CPU + real devices in
   milestones 08–13.
-- No RV32 CPU execution yet. M08 added a **decoder only** (classifies a
-  32-bit word into fields/immediate/format/op); registers, PC, and stepping
-  arrive in M09. `cpu.c` builds into the `.so` but is not yet called by the
-  machine (wired up in M09).
+- The RV32I **interpreter** (M09) exists and is instruction-tested, but is
+  **not yet wired into the machine's frame loop** — there is no program to run
+  until M10 loads one. `exec.c` builds into the `.so` but `arcade1_run_frame`
+  still drives the host-side demo logic (square/beep) directly.
+- FENCE/ECALL/EBREAK currently execute as **NOP** (PC advances); there is no
+  OS/syscall/halt handling yet. Unknown words also act as NOP.
 - Save states / cheats unsupported (stubs).
 
 ## Notes for whoever picks this up

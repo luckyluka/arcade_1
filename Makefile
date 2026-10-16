@@ -11,10 +11,10 @@ LDFLAGS += -shared
 
 TARGET  := arcade1_libretro.so
 SRC     := src/arcade1/machine.c src/arcade1/memory.c src/arcade1/cpu.c \
-           src/libretro/libretro.c
+           src/arcade1/exec.c src/libretro/libretro.c
 
 .PHONY: all clean test test-input test-square test-beep test-machine test-memory \
-        test-cpu
+        test-cpu test-exec
 
 all: $(TARGET)
 
@@ -66,6 +66,15 @@ test-cpu:
 	$(CC) $(CFLAGS) -o /tmp/arcade1_test_cpu \
 	    tests/test_cpu.c src/arcade1/cpu.c
 	/tmp/arcade1_test_cpu
+
+# Build and run the milestone-09 RV32I execution harness. Links exec.c +
+# cpu.c + memory.c (no libretro, no machine, no .so) — proving the interpreter
+# runs without a frontend.
+test-exec:
+	$(CC) $(CFLAGS) -o /tmp/arcade1_test_exec \
+	    tests/test_exec.c src/arcade1/exec.c src/arcade1/cpu.c \
+	    src/arcade1/memory.c
+	/tmp/arcade1_test_exec
 
 clean:
 	rm -f $(TARGET)
