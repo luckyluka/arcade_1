@@ -2,7 +2,8 @@
 #
 # Produces arcade1_libretro.so, loadable by RetroArch (or any libretro frontend).
 # The machine (src/arcade1/) is frontend-independent; src/libretro/ is a thin
-# adapter.
+# adapter. `make android` cross-compiles the same core for RetroArch on Android
+# (Google TV / Android TV boxes) — see the Android section below.
 
 # Keep plain `make` building the .so: the test-* prerequisite rules are
 # declared before `all` and would otherwise become the default goal.
@@ -50,7 +51,8 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # reads symbols (e.g. counter's address) from them.
 .SECONDARY: $(GUEST_ELFS)
 
-.PHONY: all clean program test test-input test-square test-beep test-machine \
+.PHONY: all clean program android android-arm64 android-arm \
+        test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-breakout
 
@@ -58,6 +60,40 @@ all: $(TARGET)
 
 $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRC)
+
+# --- Android cross-builds (RetroArch on Google TV / Android TV) -------------
+# The desktop rule above targets the host (x86-64 Linux). RetroArch on Android
+# needs a core for the *device* ABI, and the ABI must match the installed
+# RetroArch build: arm64-v8a (most Google TV devices and 64-bit RetroArch) or
+# armeabi-v7a (32-bit devices / 32-bit RetroArch). The core is plain C11 with
+# no host dependencies, so both cross-compile with only the NDK's clang:
+#
+#   make android          # both ABIs
+#   make android-arm64    # -> arcade1_libretro_android_arm64.so
+#   make android-arm      # -> arcade1_libretro_android_arm.so
+#
+# Install on the TV: copy the matching .so into the device's Downloads folder,
+# then RetroArch -> Load Core -> Install or Restore a Core -> pick the file.
+# API 21 is the minimum that supports arm64 (and is what RetroArch itself
+# targets). ANDROID_NDK can be overridden to point at a different NDK.
+ANDROID_NDK ?= $(shell ls -d $(HOME)/Android/Sdk/ndk/* 2>/dev/null | sort -V | tail -1)
+NDK_LLVM    := $(ANDROID_NDK)/toolchains/llvm/prebuilt/linux-x86_64/bin
+NDK_API     := 21
+A64_CC      := $(NDK_LLVM)/aarch64-linux-android$(NDK_API)-clang
+A32_CC      := $(NDK_LLVM)/armv7a-linux-androideabi$(NDK_API)-clang
+A64_TARGET  := arcade1_libretro_android_arm64.so
+A32_TARGET  := arcade1_libretro_android_arm.so
+
+android: android-arm64 android-arm
+
+android-arm64: $(A64_TARGET)
+android-arm: $(A32_TARGET)
+
+$(A64_TARGET): $(SRC)
+	$(A64_CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRC)
+
+$(A32_TARGET): $(SRC)
+	$(A32_CC) $(CFLAGS) $(LDFLAGS) -o $@ $(SRC)
 
 # Build and run the milestone-02 test-pattern harness against the real .so.
 test: $(TARGET)
@@ -203,6 +239,6 @@ test-breakout: $(GUEST_BUILD)/breakout.bin
 	   0x$$SCORE 0x$$LIVES 0x$$STATE 0x$$PADDLE
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(A64_TARGET) $(A32_TARGET)
 	rm -rf $(GUEST_BUILD)
 	rm -rf $(TESTDIR)

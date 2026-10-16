@@ -68,7 +68,10 @@ The machine is directly drivable via the `arcade1_*` API (see M06 test).
 ## Build & test
 
 ```
-make              # build arcade1_libretro.so
+make              # build arcade1_libretro.so (desktop, x86-64 Linux)
+make android      # cross-build the same core for RetroArch on Android TV /
+                  # Google TV via the NDK: arcade1_libretro_android_arm64.so
+                  # (aarch64) + arcade1_libretro_android_arm.so (armv7)
 make test         # M02 test pattern (loads the .so)
 make test-input   # M03 RetroPad input
 make test-square  # M04 moving square

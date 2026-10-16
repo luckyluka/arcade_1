@@ -1,5 +1,6 @@
 # Build output
 arcade1_libretro.so
+arcade1_libretro_android_*.so
 *.o
 *.a
 
