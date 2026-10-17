@@ -52,6 +52,18 @@
 #define ARCADE1_VIDEO_REG_CAM_X    0x130u  /* R/W : camera X (signed pixels)  */
 #define ARCADE1_VIDEO_REG_CAM_Y    0x134u  /* R/W : camera Y (signed pixels)  */
 
+/* M27 (docs.md "Color decisions, pinned at M27"): a 256-entry RGB565 palette
+ * inside the device, addressed through an index register. PAL_INDEX selects
+ * the entry; a PAL_DATA write stores value&0xFFFF into that entry and then
+ * auto-increments the index (wrapping 255 -> 0), so a guest uploads a whole
+ * block with one PAL_INDEX write followed by N PAL_DATA writes. A PAL_DATA
+ * read returns the entry at the current index without incrementing. The
+ * palette is what the 4-bit commands (SPRITE4/TILEMAP4) colour their pixels
+ * with; the 1-bit commands (FILL/SPRITE/...) ignore it entirely. */
+#define ARCADE1_VIDEO_REG_PAL_INDEX 0x138u /* R/W : palette entry index 0..255 */
+#define ARCADE1_VIDEO_REG_PAL_DATA  0x13Cu /* R/W : entry data (RGB565); write
+                                            * auto-increments PAL_INDEX       */
+
 /* VIDEO_CMD values. Any other value is ignored. */
 #define ARCADE1_VIDEO_CMD_CLEAR     0x1u  /* fill the screen with COLOR       */
 #define ARCADE1_VIDEO_CMD_SET_PIXEL 0x2u  /* plot COLOR at (X, Y), clipped    */
@@ -110,6 +122,8 @@ typedef struct arcade1_video {
     uint32_t tile_addr;      /* tile-set image address (TILEMAP, M20)     */
     uint32_t cols, rows;     /* grid size in cells (TILEMAP, M20)         */
     uint32_t cam_x, cam_y;   /* camera offset (SPRITE/TILEMAP origin, M21)*/
+    uint16_t palette[256];   /* RGB565 palette (M27), 256 entries         */
+    uint8_t  pal_index;      /* PAL_INDEX register (auto-increment target)*/
     uint32_t presents;       /* PRESENT commands executed (STATUS)        */
     arcade1_video_stats_t stats;        /* work done so far this frame    */
     arcade1_video_stats_t frame_totals; /* snapshot at end of last frame  */

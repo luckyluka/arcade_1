@@ -13,6 +13,30 @@
 
 #include <string.h>    /* memset: the per-frame stats reset (task C counters) */
 
+/* --- M27: power-on palette ------------------------------------------------ *
+ * A fixed 16-colour default (an EGA-like set) occupies entries 0..15; entry 0
+ * is black (the transparent/empty colour of a 4-bit image), and entries 16..255
+ * are black too. The guest rewrites any entry through PAL_INDEX/PAL_DATA. The
+ * exact RGB565 values are pinned in docs.md "Color decisions, pinned at M27". */
+static const uint16_t k_default_palette[16] = {
+    0x0000u, /*  0 black         */
+    0x001Fu, /*  1 blue          */
+    0x03E0u, /*  2 green         */
+    0x03FFu, /*  3 cyan          */
+    0xF800u, /*  4 red           */
+    0xF81Fu, /*  5 magenta       */
+    0xAAA0u, /*  6 brown         */
+    0xAD55u, /*  7 light gray    */
+    0x52AAu, /*  8 dark gray     */
+    0x52BFu, /*  9 light blue    */
+    0x57EAu, /* 10 light green   */
+    0x57FFu, /* 11 light cyan    */
+    0xFAAAu, /* 12 light red     */
+    0xFABFu, /* 13 light magenta */
+    0xFFE0u, /* 14 yellow        */
+    0xFFFFu, /* 15 white         */
+};
+
 /* --- Lifecycle ------------------------------------------------------------ */
 
 void arcade1_video_reset(arcade1_video_t *v)
@@ -29,6 +53,12 @@ void arcade1_video_reset(arcade1_video_t *v)
     v->rows      = 0u;
     v->cam_x     = 0u;
     v->cam_y     = 0u;
+    /* Power-on palette: entry 0 = black, 1..15 = the fixed default set,
+     * 16..255 = black. Deterministic on every reset. */
+    memcpy(v->palette, k_default_palette, sizeof k_default_palette);
+    memset(v->palette + 16, 0,
+           sizeof v->palette - sizeof k_default_palette);
+    v->pal_index = 0u;
     v->presents = 0u;
     arcade1_video_stats_begin_frame(v);   /* counters start clean too */
     v->frame_totals = v->stats;           /* and read as zero until a frame */
@@ -334,6 +364,9 @@ uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
     case ARCADE1_VIDEO_REG_ROWS:      return v->rows;
     case ARCADE1_VIDEO_REG_CAM_X:     return v->cam_x;
     case ARCADE1_VIDEO_REG_CAM_Y:     return v->cam_y;
+    case ARCADE1_VIDEO_REG_PAL_INDEX: return v->pal_index;
+    case ARCADE1_VIDEO_REG_PAL_DATA:
+        return v->palette[v->pal_index];   /* read entry, no auto-increment */
     default:                       return 0u;   /* CMD is write-only, rest 0 */
     }
 }
@@ -378,6 +411,13 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         return;
     case ARCADE1_VIDEO_REG_CAM_Y:
         v->cam_y = value;             /* camera Y; SPRITE/TILEMAP subtract */
+        return;
+    case ARCADE1_VIDEO_REG_PAL_INDEX:
+        v->pal_index = (uint8_t)(value & 0xFFu);   /* 256 entries */
+        return;
+    case ARCADE1_VIDEO_REG_PAL_DATA:
+        v->palette[v->pal_index] = (uint16_t)(value & 0xFFFFu);
+        v->pal_index = (uint8_t)((v->pal_index + 1u) & 0xFFu);  /* auto-inc */
         return;
     case ARCADE1_VIDEO_REG_CMD:
         switch (value) {
