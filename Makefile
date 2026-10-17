@@ -84,7 +84,8 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray test-sandbox test-systems test-persist roms-update
+        test-ray test-sandbox test-systems test-persist roms-update \
+        test-golden golden-update
 
 all: $(TARGET)
 
@@ -492,6 +493,54 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 	 $(TESTDIR)/test_tetris $(ARC1_ROM_DIR)/tetris.arc1 \
 	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
 	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
+
+# --- Golden per-frame regression (Task A step 5) ----------------------------
+# tests/golden/<game>.txt holds every "frame N hash=... fb=..." line from a
+# golden run of the game against the committed images in tests/roms/.
+# `make test-golden` re-runs that and diffs; on mismatch it prints the first
+# differing frame. It needs ONLY the committed artifacts + the host compiler
+# (verified with the RISC-V tools off PATH) — no cross toolchain.
+# `make golden-update` regenerates the files; like roms-update it is MANUAL,
+# and a golden change is a behaviour change that the commit message must
+# explain (see docs.md "Golden regression policy").
+GOLDEN_OUT := $(TESTDIR)/golden
+
+test-golden: | $(TESTDIR)
+	@mkdir -p $(GOLDEN_OUT)
+	@fail=0; \
+	for g in $(GOLDEN_GAMES); do \
+	  $(MAKE) --no-print-directory ARC1_ROM_DIR=$(GOLDEN_ROMDIR) test-$$g \
+	    > $(GOLDEN_OUT)/$$g.log 2>&1 || { \
+	    echo "test-golden: $$g FAILED to run (see $(GOLDEN_OUT)/$$g.log):"; \
+	    tail -5 $(GOLDEN_OUT)/$$g.log; fail=1; continue; }; \
+	  grep '^frame ' $(GOLDEN_OUT)/$$g.log > $(GOLDEN_OUT)/$$g.txt; \
+	  if diff -u $(GOLDEN_DIR)/$$g.txt $(GOLDEN_OUT)/$$g.txt \
+	       > $(GOLDEN_OUT)/$$g.diff 2>&1; then \
+	    echo "test-golden: $$g ok ($$(wc -l < $(GOLDEN_OUT)/$$g.txt) frames)"; \
+	  else \
+	    echo "test-golden: $$g DIFFERS — first differing frame:"; \
+	    grep -m2 '^[-+]frame ' $(GOLDEN_OUT)/$$g.diff | sed 's/^/    /'; \
+	    echo "    (full diff: $(GOLDEN_OUT)/$$g.diff)"; \
+	    fail=1; \
+	  fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then \
+	  echo "test-golden: FAILED — a golden change means a behaviour change."; \
+	  echo "  If intended: make golden-update (+ roms-update) and say why in the commit."; \
+	  exit 1; \
+	fi; \
+	echo "test-golden: all $(words $(GOLDEN_GAMES)) games match tests/golden/"
+
+golden-update: | $(TESTDIR)
+	@mkdir -p $(GOLDEN_DIR) $(GOLDEN_OUT)
+	@for g in $(GOLDEN_GAMES); do \
+	  $(MAKE) --no-print-directory ARC1_ROM_DIR=$(GOLDEN_ROMDIR) test-$$g \
+	    > $(GOLDEN_OUT)/$$g.log 2>&1 || { \
+	    echo "golden-update: $$g FAILED to run (see $(GOLDEN_OUT)/$$g.log)"; exit 1; }; \
+	  grep '^frame ' $(GOLDEN_OUT)/$$g.log > $(GOLDEN_DIR)/$$g.txt; \
+	  echo "golden-update: $(GOLDEN_DIR)/$$g.txt ($$(wc -l < $(GOLDEN_DIR)/$$g.txt) frames)"; \
+	done
+	@echo "goldens refreshed (commit deliberately, with the reason)"
 
 # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
 # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
