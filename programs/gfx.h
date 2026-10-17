@@ -31,6 +31,11 @@
 /* M21 camera registers (docs.md "Scrolling decisions, pinned at M21"). */
 #define GFX_REG_CAM_X     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x130))
 #define GFX_REG_CAM_Y     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x134))
+/* M27 palette + 4-bit registers (docs.md "Color decisions, pinned at M27"). */
+#define GFX_REG_PAL_INDEX (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x138))
+#define GFX_REG_PAL_DATA  (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x13C))
+#define GFX_REG_PAL_BANK  (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x140))
+#define GFX_REG_FLAGS     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x144))
 /* 0x110 (STATUS, PRESENT count) exists but the API never needs to read it. */
 
 /* VIDEO_CMD values (docs.md register table). */
@@ -40,6 +45,8 @@
 #define GFX_CMD_FILL      0x4u
 #define GFX_CMD_SPRITE    0x5u
 #define GFX_CMD_TILEMAP   0x6u
+#define GFX_CMD_SPRITE4   0x7u
+#define GFX_CMD_TILEMAP4  0x8u
 
 /* Fill the whole screen with color (RGB565). */
 static inline void gfx_clear(unsigned int color)
@@ -125,6 +132,72 @@ static inline void gfx_camera(int cam_x, int cam_y)
 {
     GFX_REG_CAM_X = (unsigned int)cam_x;
     GFX_REG_CAM_Y = (unsigned int)cam_y;
+}
+
+/* --- M27 paletted 4-bit drawing ------------------------------------------- */
+
+/* Upload `n` RGB565 entries to the palette starting at entry `start`: set the
+ * index once, then the device auto-increments after each data write. */
+static inline void gfx_pal_upload(unsigned int start,
+                                  const unsigned short *data, int n)
+{
+    GFX_REG_PAL_INDEX = start;
+    for (int i = 0; i < n; i++)
+        GFX_REG_PAL_DATA = data[i];
+}
+
+/* Set the palette bank (0..15) that gfx_sprite4() draws from. */
+static inline void gfx_pal_bank(unsigned int bank)
+{
+    GFX_REG_PAL_BANK = bank & 0xFu;
+}
+
+/* Set the sprite flip flags: bit0 = flip X, bit1 = flip Y. */
+static inline void gfx_flip(unsigned int flags)
+{
+    GFX_REG_FLAGS = flags & 0x3u;
+}
+
+/* Draw a 4-bit image (two pixels per byte, HIGH nibble = left pixel, width
+ * even) at top-left (x, y). Pixel value 0 is transparent; value v (1..15)
+ * draws PALETTE[bank*16 + v]. World-space (camera-subtracted) like
+ * gfx_sprite(); clipped to the screen. flips: bit0 = flip X, bit1 = flip Y. */
+static inline void gfx_sprite4(int x, int y, const void *img, int w, int h,
+                               unsigned int bank, unsigned int flags)
+{
+    if (w <= 0 || h <= 0)
+        return;
+    GFX_REG_X        = (unsigned int)x;
+    GFX_REG_Y        = (unsigned int)y;
+    GFX_REG_ADDR     = (unsigned int)img;
+    GFX_REG_W        = (unsigned int)w;
+    GFX_REG_H        = (unsigned int)h;
+    GFX_REG_PAL_BANK = bank & 0xFu;
+    GFX_REG_FLAGS    = flags & 0x3u;
+    GFX_REG_CMD      = GFX_CMD_SPRITE4;
+}
+
+/* Draw a cols x rows tilemap of 4-bit tiles at top-left (x, y). `cells` points
+ * at cols*rows 32-bit little-endian words: [15:0] tile index (0 = empty),
+ * [19:16] palette bank, [20] flip X, [21] flip Y. Tile N (>= 1) has its 4-bit
+ * image at `tiles + (N-1) * (tile_w/2 * tile_h)` (tile_w even). World-space,
+ * clipped and windowed like gfx_tilemap(); PAL_BANK/FLAGS are ignored (each
+ * cell supplies its own). */
+static inline void gfx_tilemap4(int x, int y, const void *cells,
+                                const void *tiles, int cols, int rows,
+                                int tile_w, int tile_h)
+{
+    if (cols <= 0 || rows <= 0 || tile_w <= 0 || tile_h <= 0)
+        return;
+    GFX_REG_X         = (unsigned int)x;
+    GFX_REG_Y         = (unsigned int)y;
+    GFX_REG_MAP_ADDR  = (unsigned int)cells;
+    GFX_REG_TILE_ADDR = (unsigned int)tiles;
+    GFX_REG_COLS      = (unsigned int)cols;
+    GFX_REG_ROWS      = (unsigned int)rows;
+    GFX_REG_W         = (unsigned int)tile_w;
+    GFX_REG_H         = (unsigned int)tile_h;
+    GFX_REG_CMD       = GFX_CMD_TILEMAP4;
 }
 
 /* Mark a frame as presented (counted by the device's STATUS register). */

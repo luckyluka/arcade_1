@@ -29,7 +29,7 @@ test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
 test-persist test-frame-rules test-video-worst test-video-palette \
-test-video-sprite4 test-video-tilemap4: | $(TESTDIR)
+test-video-sprite4 test-video-tilemap4 test-color: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -46,7 +46,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -87,7 +87,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
-        test-video-palette test-video-sprite4 test-video-tilemap4
+        test-video-palette test-video-sprite4 test-video-tilemap4 test-color
 
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
@@ -98,7 +98,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
         test-video-worst test-video-palette test-video-sprite4 \
-        test-video-tilemap4 test-golden
+        test-video-tilemap4 test-color test-golden
 
 all: $(TARGET)
 
@@ -343,6 +343,17 @@ test-scroll: $(ARC1_ROM_DIR)/scroll_demo.arc1
 	@CELLS=$$($(call nm_src,scroll_demo) | awk '$$3=="cells"{print $$1}'); \
 	 echo "cells @ 0x$$CELLS"; \
 	 $(TESTDIR)/test_scroll $(ARC1_ROM_DIR)/scroll_demo.arc1 0x$$CELLS
+
+# Build and run the M27 colour harness: boot color_demo.c on the machine's own
+# CPU, drive it for 120 frames, verify the palette/SPRITE4/TILEMAP4 result by
+# property checks (HUD + both palette banks + a sprite colour), per-frame
+# determinism, pinned final hashes, and dump a PPM to $TMPDIR.
+test-color: $(ARC1_ROM_DIR)/color_demo.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_color \
+	    tests/test_color.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	$(TESTDIR)/test_color $(ARC1_ROM_DIR)/color_demo.arc1
 
 # Build and run the milestone-22 platformer harness: boot platformer.c on the
 # machine's own CPU as firmware and drive a scripted RetroPad through the whole
