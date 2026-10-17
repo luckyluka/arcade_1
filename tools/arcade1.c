@@ -27,6 +27,8 @@
  *     --syms FILE          load an `nm` symbol dump (<game>.syms)
  *     --vars LIST          print named game variables (comma list, or "all")
  *     --var-every K        also print the selected variables every K frames
+ *     --record FILE         write the applied per-frame buttons to FILE, in the
+ *                           input script format (run-length, "none" = idle)
  *     --quiet              suppress the per-frame hash lines (summary only)
  *
  * Exit codes: 0 success, 1 runtime error (bad image, unreadable file,
@@ -39,6 +41,13 @@
  * score/lives/state. Final values print as `var <name> = <value>`; with
  * --var-every K a `vars <frame> <name>=<value> ...` trace line prints every K
  * frames.
+ *
+ * RECORD (--record): the write side of the replay primitive. Every frame's
+ * applied button state (what --input resolved to, or all-idle without it) is
+ * run-length encoded to FILE in the input script format above — consecutive
+ * frames in the same state merge into one entry, idle stretches record as
+ * "none". A recording feeds straight back through --input, so a recorded
+ * session replays bit-identically (this is what make test-run asserts).
  *
  * INPUT SCRIPT FORMAT (plain text, deterministic, AI-friendly):
  *   - one run-length entry per line:  <first_frame> <last_frame> <buttons...>
@@ -162,6 +171,75 @@ static void input_for_frame(unsigned frame, arcade1_input_t *out)
     for (unsigned i = 0; i < g_nentries; i++)
         if (frame >= g_entries[i].first && frame <= g_entries[i].last)
             *out = g_entries[i].in;
+}
+
+/* --- Record (write side of the replay primitive) ----------------------------
+ * Run-length encode the applied per-frame button state to an open FILE in the
+ * input script format: one "<first> <last> <buttons...>" line per run of
+ * identical state, "none" for an idle run. */
+
+static FILE             *g_record;
+static arcade1_input_t   g_run_state;   /* button state of the open run    */
+static unsigned          g_run_start;   /* first frame of the open run     */
+static int               g_run_open;    /* a run is being accumulated      */
+
+/* Write one run [first, last] with the given button state. */
+static void record_write_run(unsigned first, unsigned last,
+                             const arcade1_input_t *in)
+{
+    int any = 0;
+
+    fprintf(g_record, "%u %u", first, last);
+    if (in->up)     { fprintf(g_record, " up");     any = 1; }
+    if (in->down)   { fprintf(g_record, " down");   any = 1; }
+    if (in->left)   { fprintf(g_record, " left");   any = 1; }
+    if (in->right)  { fprintf(g_record, " right");  any = 1; }
+    if (in->a)      { fprintf(g_record, " a");      any = 1; }
+    if (in->b)      { fprintf(g_record, " b");      any = 1; }
+    if (in->start)  { fprintf(g_record, " start");  any = 1; }
+    if (in->select) { fprintf(g_record, " select"); any = 1; }
+    if (!any)         fprintf(g_record, " none");
+    fprintf(g_record, "\n");
+}
+
+/* Open the record file and write its one-line header. Call only after the
+ * frame count is known. Returns 0 ok, -1 error (message on stderr). */
+static int record_open(const char *path, unsigned frames)
+{
+    g_record = fopen(path, "w");
+    if (!g_record) {
+        fprintf(stderr, "arcade1: cannot write record file '%s'\n", path);
+        return -1;
+    }
+    fprintf(g_record, "# arcade1 run --record: %u frames\n", frames);
+    g_run_open = 0;
+    return 0;
+}
+
+/* Note the applied button state for one frame, closing the open run when the
+ * state changes. */
+static void record_frame(unsigned frame, const arcade1_input_t *in)
+{
+    if (!g_record)
+        return;
+    if (g_run_open && memcmp(in, &g_run_state, sizeof *in) == 0)
+        return;                             /* still the same run          */
+    if (g_run_open)
+        record_write_run(g_run_start, frame - 1, &g_run_state);
+    g_run_state = *in;
+    g_run_start = frame;
+    g_run_open  = 1;
+}
+
+/* Close the final run and the file. Safe to call more than once. */
+static void record_close(unsigned last_frame)
+{
+    if (!g_record)
+        return;
+    if (g_run_open)
+        record_write_run(g_run_start, last_frame, &g_run_state);
+    fclose(g_record);
+    g_record = NULL;
 }
 
 /* --- PPM (P6) frame dump -------------------------------------------------- */
@@ -308,6 +386,7 @@ static int cmd_run(int argc, char **argv)
 {
     const char *rom_path = NULL, *input_path = NULL;
     const char *capture = NULL, *capture_dir = NULL;
+    const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     unsigned frames = 600, capture_every = 1, var_every = 0;
     int quiet = 0;
@@ -326,6 +405,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--capture") && i + 1 < argc)  capture = argv[++i];
         else if (!strcmp(a, "--capture-dir") && i + 1 < argc) capture_dir = argv[++i];
         else if (!strcmp(a, "--capture-every") && i + 1 < argc) capture_every = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--record") && i + 1 < argc)    record_path = argv[++i];
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
@@ -345,12 +425,18 @@ static int cmd_run(int argc, char **argv)
         fprintf(stderr,
                 "usage: arcade1 run <game.arc1|bin> [--frames N] [--input FILE]\n"
                 "                   [--capture FILE] [--capture-dir DIR]\n"
-                "                   [--capture-every K] [--syms FILE]\n"
-                "                   [--vars LIST] [--var-every K] [--quiet]\n"
+                "                   [--capture-every K] [--record FILE]\n"
+                "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
+                "                   [--quiet]\n"
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
-                "  it requires --syms, and --var-every requires --vars.\n");
+                "  it requires --syms, and --var-every requires --vars.\n"
+                "  --record writes the applied buttons in the script format.\n");
         return 2;
     }
+
+    /* Fail fast on an unwritable record file (before running anything). */
+    if (record_path && record_open(record_path, frames) != 0)
+        return 1;
 
     /* Load the image (accept a raw flat binary too, like the tests). */
     f = fopen(rom_path, "rb");
@@ -396,6 +482,7 @@ static int cmd_run(int argc, char **argv)
     for (unsigned fr = 0; fr < frames; fr++) {
         input_for_frame(fr, &in);
         arcade1_set_input(&m, &in);
+        record_frame(fr, &in);
         arcade1_run_frame(&m);
         if (!quiet)
             printf("frame %4u hash=0x%016llX fb=0x%016llX\n", fr,
@@ -411,10 +498,14 @@ static int cmd_run(int argc, char **argv)
         if (capture_dir && fr % capture_every == 0) {
             char path[512];
             snprintf(path, sizeof path, "%s/frame_%04u.ppm", capture_dir, fr);
-            if (write_ppm(path, arcade1_framebuffer(&m)) != 0)
+            if (write_ppm(path, arcade1_framebuffer(&m)) != 0) {
+                record_close(fr);
                 return 1;
+            }
         }
     }
+
+    record_close(frames - 1);
 
     if (capture && write_ppm(capture, arcade1_framebuffer(&m)) != 0)
         return 1;

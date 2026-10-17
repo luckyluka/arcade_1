@@ -15,6 +15,8 @@
 #   5. exit codes         — 0 success, 1 bad image/file, 2 usage error
 #   6. named variables    — --syms/--vars read a game's RAM globals by name,
 #                           --var-every traces them, bad names/symbols error out
+#   7. record/replay       — --record writes the applied buttons in the script
+#                           format (normalized); a recording replays bit-identically
 #
 # usage: test_run.sh <arcade1-cli> <rom-dir> <golden-dir>
 
@@ -123,4 +125,33 @@ else
     note "named variables skipped — no breakout.syms and no riscv nm to make one"
 fi
 
-echo "test-run: arcade1 run ok (determinism, golden, capture, input, exit codes, variables)"
+# --- 7) record/replay --------------------------------------------------------
+# --record run-length encodes the applied per-frame buttons into the input
+# script format. Overlapping entries (later lines win) must normalize into
+# canonical runs, an idle session records as "none", two recordings of the
+# same session are byte-identical, and a recording fed back through --input
+# must replay the original session bit-for-bit (same per-frame hashes).
+printf '# overlapping entries: later line wins\n0 10 right\n5 29 a\n' > "$OUT/inp7.txt"
+"$CLI" run "$BREAK" --frames 30 --input "$OUT/inp7.txt" --record "$OUT/rec1.txt" --quiet > /dev/null
+grep -q '^0 4 right$' "$OUT/rec1.txt" || fail "record: expected '0 4 right'"
+grep -q '^5 29 a$'    "$OUT/rec1.txt" || fail "record: expected '5 29 a'"
+"$CLI" run "$BREAK" --frames 30 --record "$OUT/rec2.txt" --quiet > /dev/null
+grep -q '^0 29 none$' "$OUT/rec2.txt" || fail "record: idle session should record 'none'"
+"$CLI" run "$BREAK" --frames 30 --input "$OUT/inp7.txt" --record "$OUT/rec3.txt" --quiet > /dev/null
+if ! cmp -s "$OUT/rec1.txt" "$OUT/rec3.txt"; then
+    diff "$OUT/rec1.txt" "$OUT/rec3.txt" >&2
+    fail "two recordings of the same session differ"
+fi
+"$CLI" run "$BREAK" --frames 30 --input "$OUT/inp7.txt" > "$OUT/h1.txt" 2>/dev/null
+"$CLI" run "$BREAK" --frames 30 --input "$OUT/rec1.txt"   > "$OUT/h2.txt" 2>/dev/null
+grep '^frame ' "$OUT/h1.txt" > "$OUT/h1f.txt"
+grep '^frame ' "$OUT/h2.txt" > "$OUT/h2f.txt"
+if ! cmp -s "$OUT/h1f.txt" "$OUT/h2f.txt"; then
+    diff "$OUT/h1f.txt" "$OUT/h2f.txt" | head -5 >&2
+    fail "replaying the recording changed the session's hashes"
+fi
+rc=0; "$CLI" run "$BREAK" --frames 10 --record "$OUT/nope/x.txt" 2>/dev/null || rc=$?
+[ "$rc" -eq 1 ] || fail "unwritable record file should exit 1, got $rc"
+note "record/replay ok — normalized recording replays bit-identically"
+
+echo "test-run: arcade1 run ok (determinism, golden, capture, input, exit codes, variables, record)"

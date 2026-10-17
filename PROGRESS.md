@@ -422,6 +422,33 @@ Added paletted 4-bit graphics on top of the unchanged 1-bit commands:
 
 Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
 
+## Record/replay capture (M28, step 3)
+
+Third slice of the developer SDK (`MILESTONES_2.md` M28; design principles
+in `AI_NATIVE_DEVELOPMENT.md`, contract in `SDK.md`). The write side of the
+replay primitive: an input script is already the complete, reproducible
+record of a session's controls — `--record` produces one from a run.
+
+* **`--record FILE`** (`tools/arcade1.c`): run-length encodes the applied
+  per-frame button state (what `--input` resolved to, or all-idle without
+  it) into the input script format — consecutive frames in the same state
+  merge into one entry, idle stretches record as `none`, overlapping script
+  entries (later lines win) normalize into canonical runs. Recording works
+  with or without `--input`; an unwritable record file is a runtime error
+  (exit 1), failed fast before the run starts.
+* **Round-trip by construction**: a recording fed back through `--input`
+  replays the session bit-identically (same per-frame hashes) — the property
+  `make test-run` asserts.
+* **Test coverage** — `make test-run` (`tests/test_run.sh`) gained check 7:
+  normalization of an overlapping script, an all-`none` idle recording,
+  byte-identical repeat recordings, the record→replay hash round-trip, and
+  the unwritable-file exit.
+* **Docs** — `SDK.md` gained a "Record/replay" section (encoding, canonical
+  form, round-trip contract); the feature moved out of "Remaining M28
+  deliverables".
+
+Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
+
 ## Named game variables (M28, step 2)
 
 Second slice of the developer SDK (`MILESTONES_2.md` M28; design principles

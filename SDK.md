@@ -6,10 +6,11 @@ Libretro, no RetroArch, no GPU, no host input devices — so it runs identically
 in a terminal, in CI, and inside an AI agent's sandbox.
 
 This document covers the **foundation** landed in M28 step 1: the headless
-runner `arcade1 run`, plus **named game variables** (step 2). The remaining
-M28 deliverables (record/replay capture, the full `arcade1 build/test/capture`
-command set, a cheat sheet, and two example games) are listed under
-[Remaining](#remaining-m28-deliverables) and are not built yet.
+runner `arcade1 run`, plus **named game variables** (step 2) and
+**record/replay** (step 3). The remaining M28 deliverables (the full
+`arcade1 build/test/capture` command set, a cheat sheet, and two example
+games) are listed under [Remaining](#remaining-m28-deliverables) and are not
+built yet.
 
 ---
 
@@ -25,6 +26,8 @@ arcade1 run <game.arc1|bin> [options]
   --syms FILE          load an `nm` symbol dump (<game>.syms)
   --vars LIST          print named game variables (comma list, or "all")
   --var-every K        also print the selected variables every K frames
+  --record FILE         write the applied per-frame buttons to FILE, in the
+                        input script format (run-length, "none" = idle)
   --quiet              suppress the per-frame hash lines (summary only)
 ```
 
@@ -137,12 +140,37 @@ one from the freshly built ELF with `riscv64-unknown-elf-nm`.
 
 ---
 
+## Record/replay
+
+An input script is the complete, reproducible record of a session's controls
+(see [Determinism contract](#determinism-contract)). `--record` is the write
+side of that primitive: it logs the buttons actually applied each frame —
+what `--input` resolved to, or nothing — to a file in the input script format:
+
+```
+arcade1 run breakout.arc1 --frames 30 --input session.txt --record out.txt
+```
+
+* Output is run-length encoded: consecutive frames in the same button state
+  merge into one `<first> <last> <buttons…>` entry; an idle stretch records
+  as `none`. Overlapping script entries (later lines win) are normalized into
+  canonical runs, so a recording is the canonical form of a session.
+* Recording works without `--input` too (an all-`none` log).
+* A recording feeds straight back through `--input`: replaying it reproduces
+  the original session **bit-identically** (same per-frame hashes). This is
+  the round-trip `make test-run` asserts, along with recording determinism
+  (two recordings are byte-identical) and the unwritable-file error (exit 1).
+
+In a headless tool the recorded stream is the scripted one; when interactive
+host sessions exist (RetroArch, tests), they can be recorded the same way and
+replayed here — the replay format is the script format.
+
+---
+
 ## Remaining M28 deliverables
 
 Not built yet (future steps, then the rest of the roadmap):
 
-- **Record/replay capture** — `--record FILE` to log a live session's input to
-  the script format above (the read side, `--input`, already exists).
 - **Full `arcade1` command set** — `build` (RISC-V guest → `.arc1`), `test`
   (run + assert hashes), `capture` (dump frames), built on `run`.
 - **Cheat sheet** — a short reference for humans and agents.
