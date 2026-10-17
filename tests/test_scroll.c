@@ -282,6 +282,8 @@ static void scenario(bool verify)
 
         /* --- Per-frame determinism hash ------------------------------------ */
         h = state_hash(&m.cpu, &m.bus);
+        printf("frame %4u hash=0x%016llX fb=0x%016llX\n", frame_count,
+               (unsigned long long)h, (unsigned long long)fb_hash(&m));
         if (verify_hashes) {
             assert(frame_count < nhist1 && "replay longer than original run");
             assert(h == hist1[frame_count] && "per-frame hash diverged");
