@@ -2,8 +2,9 @@
 
 > **Status:** research document. Not a milestone, not a roadmap change, not a
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
-> Nothing in this file is implemented or tested; every number that is *measured*
-> says so, every number that is *estimated* says so.
+> Every number that is *measured* says so, every number that is *estimated*
+> says so. **P0 (graphics micro-benchmarks) is complete** — its measured
+> numbers are in §0.1 and already folded into §2/§3.
 
 The experiment asks one question:
 
@@ -39,8 +40,49 @@ Everything below is extrapolated from facts measured on the reference VM:
 | Device-side niceties | per-cell 16-bit tint on TILEMAP, 1-bpp transparent blit, world-space camera, windowing | M19–M21 |
 | RAM | 4 KiB total (platformer already uses 2,680 B, ~1.4 KiB stack free) | measured `_ebss` |
 | ROM | 4 KiB (largest game: Tetris 3,176 B) | measured payloads |
-| Guest instruction cost, rough | ~4–6 guest inst per guest per-pixel loop iteration (address math + `sw` + branch) — **estimate**, P0 below measures it exactly | interpreter structure |
+| Guest instruction cost, rough | **measured at P0**: all-in SET_PIXEL = **8.0 guest inst/op** (loop + coordinate math + 4 register writes); FILL 1×1 = 10.0; SPRITE 16×16 = 13.0; one full-screen TILEMAP command = 13.4; one full-screen CLEAR = 4.0 — see §0.1 | `make test-bench` |
 | Determinism | no interrupts, no entropy, no FP, reset-and-compare pinned hashes | `SPEC.md` §8 |
+
+### 0.1 P0 results (measured, `make test-bench`, two identical 240-frame passes)
+
+`programs/bench_gfx.c` + `tests/test_bench.c` run 8 fixed workloads (30 frames
+each, phase selected by the guest from the frame timer) and report the
+baseline-subtracted all-in cost. Guest instruction counts are exact and
+reproduce across runs (state hash `0x3D7442D14497FE28`); host times are
+indicative only (this host, the C device, never asserted):
+
+| Operation (per frame) | ops | guest inst/op | host µs/op |
+|-----------------------|----:|--------------:|-----------:|
+| baseline (present only) | — | 0 (16/frame total) | — |
+| SET_PIXEL ×1000 on-screen | 1000 | **8.00** | 0.15–0.20 |
+| SET_PIXEL ×1000 off-screen | 1000 | 9.00¹ | 0.15 |
+| FILL 1×1 ×1000 | 1000 | 10.00 | 0.18 |
+| SPRITE 16×16 ×200 | 200 | 13.04 | 0.93 |
+| TILEMAP 20×15 full-screen ×10 | 10 | **13.40** | **21** |
+| CLEAR full-screen ×100 | 100 | 4.02 | 4.3 |
+| FILL full-screen ×30 | 30 | 8.43 | 31 |
+
+¹ the off-screen path costs one extra guest instruction (the `320 + …`
+coordinate arithmetic), not a device effect; and clipping saves almost no
+host time — the device clips per pixel either way.
+
+**What this pins down:**
+
+1. The old "~4–6 guest inst per pixel" estimate was **optimistic by ~1.5×**:
+   the measured all-in cost is **8 inst/pixel** (4 register writes + loop +
+   coordinate math). All §2/§3 pixel arithmetic is recomputed on 8.
+2. **The offload ratio, measured both ways**: painting a full screen of 1-bpp
+   tiles costs the guest **13.4 instructions** (TILEMAP command) vs ≈614,400
+   (76,800 px × 8 guest SET_PIXELs) — ≈45,000×, consistent with the historical
+   30–40× whole-frame wins (which include everything else a frame does).
+3. **Device command shapes matter more than pixel counts** for the guest:
+   CLEAR is 4 inst regardless of 76,800 pixels; a raycast painting vertical
+   runs should issue **1-wide FILLs (10 inst per run)** rather than SET_PIXELs
+   (8 inst × pixels) — break-even at run length ≈1.25 px, so FILL wins for
+   essentially every ray step.
+4. Host throughput of the C device's per-pixel path is ≈5–6.7 Mpix/s —
+   irrelevant to guest budgets but why full-screen work must go through
+   device commands (76,800 per-pixel writes ≈ 11–16 ms vs 4.3 µs CLEAR).
 
 Two consequences fall out immediately:
 
@@ -119,8 +161,8 @@ guest instructions per frame (**estimates**; P0 measures the primitives).
 
 | # | Approach | How it works on ARCADE-1 | Est. inst/frame | Memory | Verdict |
 |---|----------|--------------------------|----------------:|--------|---------|
-| 1 | True low-res voxel rendering (blocky DDA raycast, Minecraft-style) | per column, integer DDA traverses blocks until hit; draw each visible face run as FILL spans with per-material tint | ~30k–90k at 80×60 (est.) | needs a **volume** store unless surface-only → §3 shows 256 KB for 64³ | feasible CPU-wise; **memory-bound** → stage experiment, surface subset only |
-| 2 | **Raycasting / heightmap voxel traversal (Comanche "voxel space")** | front-to-back column traversal over `(seed,x,z)` height function; each step paints the vertical gap with one SET_PIXEL run or FILL; occlusion stops each column early | ~58k–80k at 80×60; ~130k–230k at 160×120 (est.) | **~0 world bytes** + deltas | **primary candidate**: best richness-per-byte by far |
+| 1 | True low-res voxel rendering (blocky DDA raycast, Minecraft-style) | per column, integer DDA traverses blocks until hit; draw each visible face run as FILL spans with per-material tint | ~40k–100k at 80×60 (est., revised after P0: spans cost 10 inst each) | needs a **volume** store unless surface-only → §3 shows 256 KB for 64³ | feasible CPU-wise; **memory-bound** → stage experiment, surface subset only |
+| 2 | **Raycasting / heightmap voxel traversal (Comanche "voxel space")** | front-to-back column traversal over `(seed,x,z)` height function; each step paints the vertical gap with one 1-wide FILL (P0: cheaper than SET_PIXEL for runs ≥1.25 px); occlusion stops each column early | ~60k–90k at 80×60 (est., P0-grounded: 4,800 px × 8 inst = 38k if per-pixel, less with FILL runs, + traversal); ~150k–250k at 160×120 (est.) | **~0 world bytes** + deltas | **primary candidate**: best richness-per-byte by far |
 | 3 | Isometric voxel rendering | draw top/left/right face of each visible cube as 3 FILLs (or one 1-bpp SPRITE tinted); painter's order back-to-front | ~60k–100k for ~4k faces (est.); drops to ~1–3k if static ground stays a TILEMAP and only changed blocks FILL | cell grid 16–64 KB, or 2 KB at 32×32 | **fallback candidate** ("Cube Country"); existing-pipeline safe |
 | 4 | 2.5D voxel rendering | fixed camera pitch; depth as y-shear (mode-7-like row scaling not available → use per-column FILLs) | ~50k–120k (est.) | same as #3 | workable, no advantage over #2/#3 |
 | 5 | Layered sprite-based voxel rendering | 3–4 parallax layers of 1-bpp block silhouettes (already proven in M22 parallax) | ~1k–5k (near platformer) | tiny | cheapest, reads as "diorama" not voxel world |
@@ -177,10 +219,11 @@ graphics feature.
 | Workload | Est. guest inst/frame | vs worst shipped (14,309) | vs cap (1,000,000) |
 |----------|----------------------:|---------------------------:|-------------------:|
 | Isometric/tilemap sandbox (fallback) | 1k–3k | ≤2× | 0.3% |
-| Raycast 80×60, ~60 steps/column avg | 58k–80k | 4–6× | 6–8% |
-| Raycast 160×120 | 130k–230k | 9–16× | 13–23% |
-| Blocky DDA 80×60 (surface faces only) | 30k–90k | 2–6× | 3–9% |
-| Guest full-screen per-pixel SET_PIXEL (avoid) | ~300k+ | 21×+ | 30%+ |
+| Raycast 80×60, ~60 steps/column avg | 60k–90k | 4–6× | 6–9% |
+| Raycast 160×120 | 150k–250k | 10–18× | 15–25% |
+| Blocky DDA 80×60 (surface faces only) | 40k–100k | 3–7× | 4–10% |
+| Guest full-screen per-pixel SET_PIXEL (avoid) | ~614k (**measured** 8 inst/px × 76,800) | 43× | 61% |
+| Guest full-screen TILEMAP command (**measured**) | **13.4** | — | 0.001% |
 
 Device-side bandwidth stays trivial: the *device* paints at most one low-res
 view's worth of pixels (≤19,200 at 160×120) via FILL/SPRITE commands —
@@ -342,7 +385,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 
 | Phase | Deliverable | Exit criterion (test) |
 |-------|-------------|----------------------|
-| **P0** Micro-benchmarks | guest measuring exact inst/frame for SET_PIXEL-per-pixel, FILL, SPRITE, TILEMAP at fixed workloads | pinned numbers replace the estimates in §2/§3 |
+| **P0** Micro-benchmarks | guest measuring exact inst/frame for SET_PIXEL-per-pixel, FILL, SPRITE, TILEMAP at fixed workloads | **DONE** — `make test-bench`; numbers pinned in §0.1, estimates in §2/§3 revised |
 | **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | hash of a 64×64 heightmap pinned; identical across hosts |
 | **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | framebuffer vs independent model **or** pinned frame hashes; inst/frame + wall-clock under budget; ROM size measured |
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | scripted dig/build playthrough, determinism 2-pass |
@@ -387,7 +430,10 @@ All six exist as test-harness techniques today; the SDK's job is to make them
 1. **Instruction budget:** does a usable-resolution raycast stay under ~10% of
    the 1,000,000-instruction frame cap, or does it eat the budget? (P0/P2)
 2. **Guest pixel cost:** what is the exact inst/frame price of SET_PIXEL vs
-   FILL vs TILEMAP — validating or refuting the ~4–6 inst/pixel estimate? (P0)
+   FILL vs TILEMAP — validating or refuting the ~4–6 inst/pixel estimate?
+   **Answered by P0: 8.0 inst/pixel, and TILEMAP 13.4 inst/full screen**
+   (§0.1); the estimate was optimistic by ~1.5×, and per-pixel full-screen
+   painting is 61% of the frame cap — device commands remain mandatory.
 3. **RAM sufficiency:** can a "surprisingly rich" world live on procedural
    generation + deltas inside 4 KiB, or is RAM growth the *first real* v0.2
    requirement with a shipped game attached? (P3/P6)

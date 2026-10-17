@@ -26,7 +26,8 @@ TESTDIR := build
 # first. Order-only ("|") so its presence never affects rebuild decisions.
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
-test-sprite test-tilemap test-scroll test-platformer test-breakout test-tetris: | $(TESTDIR)
+test-sprite test-tilemap test-scroll test-platformer test-breakout \
+test-tetris test-bench: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -43,7 +44,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -57,7 +58,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
-        test-platformer test-breakout test-tetris
+        test-platformer test-breakout test-tetris test-bench
 
 all: $(TARGET)
 
@@ -290,6 +291,23 @@ test-platformer: $(GUEST_BUILD)/platformer.arc1
 	         END{print "0x"px, "0x"py, "0x"og, "0x"sc, "0x"st, "0x"cx, "0x"cy}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_platformer $(GUEST_BUILD)/platformer.arc1 $$SYMS
+
+# Voxel-experiment P0 (research, see VOXEL_EXPERIMENT.md): graphics primitive
+# micro-benchmark. Runs bench_gfx.c (one fixed workload per phase, 8 phases x
+# 30 frames, phase picked by the guest from the frame timer) twice, records
+# guest instructions retired and host time per phase, subtracts the baseline
+# to report the all-in per-operation cost of SET_PIXEL / FILL / SPRITE /
+# TILEMAP / CLEAR — the measured numbers that replace VOXEL_EXPERIMENT.md's
+# estimates. Determinism asserted (per-frame hashes + final framebuffer).
+test-bench: $(GUEST_BUILD)/bench_gfx.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_bench \
+	    tests/test_bench.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@PH=$$($(RISCV_NM) $(GUEST_BUILD)/bench_gfx.elf | \
+	    awk '$$3=="phase"{print $$1}'); \
+	 echo "phase @ 0x$$PH"; \
+	 $(TESTDIR)/test_bench $(GUEST_BUILD)/bench_gfx.arc1 0x$$PH
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

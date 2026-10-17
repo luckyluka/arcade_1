@@ -6,7 +6,9 @@ The M23 architecture review is a standalone document in `ARCHITECTURE.md`, and
 the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
 post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
-in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25.
+in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phase P0
+(graphics primitive micro-benchmarks) is complete: measured costs live in
+`VOXEL_EXPERIMENT.md` §0.1, runnable via `make test-bench`.
 
 ## Status summary
 
@@ -88,6 +90,8 @@ programs/               guest code compiled by RISC-V GCC (M10+)
                         animated player + coin sprites, camera follow,
                         AABB collision, jump physics, parallax layers, input
                         and audio, all in one side-scroller
+    bench_gfx.c         voxel-experiment P0 research guest: 8 fixed video
+                        workload phases measured by test_bench.c (not a game)
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -143,6 +147,9 @@ make test-scroll  # M21 camera scrolling: 120-frame sweep over a map larger than
 make test-platformer # M22 integration game as firmware: scripted playthrough
                   #     (fall/land, walk+coin+camera, jump/land, reach goal,
                   #     restart) + audio beeps + determinism
+make test-bench   # voxel-experiment P0 research micro-benchmark: measured
+                  #     guest/host cost of SET_PIXEL/FILL/SPRITE/TILEMAP/CLEAR
+                  #     (VOXEL_EXPERIMENT.md section 0.1) + determinism
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
