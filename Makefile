@@ -27,7 +27,7 @@ TESTDIR := build
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
-test-tetris test-bench: | $(TESTDIR)
+test-tetris test-bench test-terrain: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -44,7 +44,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -58,7 +58,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
-        test-platformer test-breakout test-tetris test-bench
+        test-platformer test-breakout test-tetris test-bench test-terrain
 
 all: $(TARGET)
 
@@ -308,6 +308,24 @@ test-bench: $(GUEST_BUILD)/bench_gfx.arc1
 	    awk '$$3=="phase"{print $$1}'); \
 	 echo "phase @ 0x$$PH"; \
 	 $(TESTDIR)/test_bench $(GUEST_BUILD)/bench_gfx.arc1 0x$$PH
+
+# Voxel-experiment P1 (research, see VOXEL_EXPERIMENT.md): deterministic
+# terrain generator. Boots terrain_gen.c as firmware (one row of the 64x64
+# grid per frame) and checks the result three ways: against an independent
+# host-C model of the same spec (per-cell row 0 + full FNV-1a-64 digest),
+# against pinned golden constants (so edits to BOTH copies still fail), and
+# via reset-and-compare determinism (per-frame hashes + final framebuffer).
+test-terrain: $(GUEST_BUILD)/terrain_gen.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_terrain \
+	    tests/test_terrain.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/terrain_gen.elf | \
+	    awk '$$3=="state"{st=$$1} $$3=="digest_lo"{dl=$$1} \
+	         $$3=="digest_hi"{dh=$$1} $$3=="sample"{sa=$$1} \
+	         END{print "0x"st, "0x"dl, "0x"dh, "0x"sa}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_terrain $(GUEST_BUILD)/terrain_gen.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

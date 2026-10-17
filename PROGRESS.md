@@ -7,8 +7,9 @@ the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
 post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
 in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phase P0
-(graphics primitive micro-benchmarks) is complete: measured costs live in
-`VOXEL_EXPERIMENT.md` §0.1, runnable via `make test-bench`.
+(graphics primitive micro-benchmarks) and P1 (deterministic terrain
+generator) are complete: measured costs live in `VOXEL_EXPERIMENT.md`
+§0.1/§0.2, runnable via `make test-bench` and `make test-terrain`.
 
 ## Status summary
 
@@ -92,6 +93,9 @@ programs/               guest code compiled by RISC-V GCC (M10+)
                         and audio, all in one side-scroller
     bench_gfx.c         voxel-experiment P0 research guest: 8 fixed video
                         workload phases measured by test_bench.c (not a game)
+    terrain_gen.c       voxel-experiment P1 research guest: deterministic
+                        (seed,x,z)->height/material generator, one row per
+                        frame, checked against a host model by test_terrain.c
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -150,6 +154,9 @@ make test-platformer # M22 integration game as firmware: scripted playthrough
 make test-bench   # voxel-experiment P0 research micro-benchmark: measured
                   #     guest/host cost of SET_PIXEL/FILL/SPRITE/TILEMAP/CLEAR
                   #     (VOXEL_EXPERIMENT.md section 0.1) + determinism
+make test-terrain # voxel-experiment P1 deterministic terrain generator:
+                  #     independent host model + golden pins + 2-pass replay
+                  #     (VOXEL_EXPERIMENT.md section 0.2)
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay

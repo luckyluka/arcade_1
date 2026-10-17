@@ -3,8 +3,9 @@
 > **Status:** research document. Not a milestone, not a roadmap change, not a
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
-> says so. **P0 (graphics micro-benchmarks) is complete** — its measured
-> numbers are in §0.1 and already folded into §2/§3.
+> says so. **P0 (graphics micro-benchmarks) and P1 (deterministic terrain
+> generator) are complete** — their measured numbers are in §0.1/§0.2 and
+> already folded into §2/§3/§8/§9.
 
 The experiment asks one question:
 
@@ -83,6 +84,29 @@ host time — the device clips per pixel either way.
 4. Host throughput of the C device's per-pixel path is ≈5–6.7 Mpix/s —
    irrelevant to guest budgets but why full-screen work must go through
    device commands (76,800 per-pixel writes ≈ 11–16 ms vs 4.3 µs CLEAR).
+
+### 0.2 P1 results (measured, `make test-terrain`, two identical runs)
+
+The terrain generator (`programs/terrain_gen.c`: splitmix32 lattice + 3-octave
+fixed-point value noise + height bands, FNV-1a-64 digest) was built and
+measured exactly as P1 specified:
+
+- **Determinism proven three ways**: the RV32IM `-Os` guest agrees cell-by-cell
+  and digest-for-digest with an independent host-C model of the same spec
+  (cross-ISA); golden pins `row0[0]=178`, digest `0x626115CD2B9A0257` pin the
+  spec against double edits; two reset-and-replay runs are frame-identical
+  (state hash `0x5D35A196048EBD05`).
+- **Generation cost (measured): 44,674 inst/frame avg, 44,902 max** to
+  generate one 64-cell row (≈698 inst/cell) — one row per frame, 64 frames
+  total, i.e. 4.5% of the frame cap per frame. The guest is 932 B of ROM and
+  stores **no world data** (the P1 thesis holds: `(seed,x,z)` is reproducible
+  from nothing).
+- **Open question handed to P2**: ≈698 inst/cell includes the FNV digest
+  (4 byte-mixes with 64-bit multiplies) which normal gameplay would only pay
+  on save/edit. A real raycast budget needs the **height-evaluation cost
+  alone**, measured inside an actual traversal loop — P2 measures that
+  directly; until then any per-pixel terrain number in §2 remains an
+  estimate-with-a-note rather than a measurement.
 
 Two consequences fall out immediately:
 
@@ -386,7 +410,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 | Phase | Deliverable | Exit criterion (test) |
 |-------|-------------|----------------------|
 | **P0** Micro-benchmarks | guest measuring exact inst/frame for SET_PIXEL-per-pixel, FILL, SPRITE, TILEMAP at fixed workloads | **DONE** — `make test-bench`; numbers pinned in §0.1, estimates in §2/§3 revised |
-| **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | hash of a 64×64 heightmap pinned; identical across hosts |
+| **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | **DONE** — `make test-terrain`; hash of 64x64 pinned (digest `0x626115CD2B9A0257`), identical across ISAs/hosts; load 44,674 inst/frame per row (§0.2) |
 | **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | framebuffer vs independent model **or** pinned frame hashes; inst/frame + wall-clock under budget; ROM size measured |
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | scripted dig/build playthrough, determinism 2-pass |
 | **P4** Game systems | inventory, crafting, entities, day/night dither, UI | scripted scenario assertions (state read via `nm`) |
@@ -442,7 +466,9 @@ All six exist as test-harness techniques today; the SDK's job is to make them
 5. **Does the command model extend beyond 2D games** — camera + FILL + tint +
    dither — without new device features? (P2–P4)
 6. **Is determinism structurally preserved** under procedural generation,
-   raycasting and save/load (it should be — no FP, no entropy, no I/O)? (P5)
+   raycasting and save/load (it should be — no FP, no entropy, no I/O)?
+   **Partially answered by P1: procedural generation is — cross-ISA identical,
+   golden-pinned** (§0.2); raycast + save/load still open (P2/P5).
 7. **Is the save story viable** without a storage device — snapshot vs input
    replay, and what must the *host/SDK* provide? (P5)
 8. **What must the SDK expose** for an AI loop to iterate on a game visually,
