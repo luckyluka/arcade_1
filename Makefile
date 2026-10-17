@@ -28,7 +28,7 @@ test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
-test-persist test-frame-rules: | $(TESTDIR)
+test-persist test-frame-rules test-video-worst: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -85,7 +85,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
-        test-golden golden-update check test-frame-rules
+        test-golden golden-update check test-frame-rules test-video-worst
 
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
@@ -95,7 +95,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
-        test-golden
+        test-video-worst test-golden
 
 all: $(TARGET)
 
@@ -464,6 +464,20 @@ test-frame-rules: | $(TESTDIR)
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
 	$(TESTDIR)/test_frame_rules
+
+# Build and run the synthetic video worst-case harness (BEFORE_M25 task C
+# step 3): five hand-assembled guests that drive the video device through the
+# heaviest frames a guest can produce (1 and 100 full-screen CLEARs, a
+# full-screen 20x15 TILEMAP, 128 overlapping 32x32 sprites, and the most
+# commands that fit in the 1,000,000-step cap), reading the device's own
+# end-of-frame counters and checking each against its arithmetic. Sizes a
+# per-frame work budget from data. Hand-assembled: needs NO RISC-V toolchain.
+test-video-worst: | $(TESTDIR)
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_video_worst \
+	    tests/test_video_worst.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	$(TESTDIR)/test_video_worst
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
