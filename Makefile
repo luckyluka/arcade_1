@@ -51,6 +51,30 @@ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
 GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 
+# --- Golden ROM directory (Task A, steps 3-6) -------------------------------
+# The four game tests take their guest image from $(ARC1_ROM_DIR), which
+# defaults to the freshly built guest directory (unchanged behaviour).
+# Pointing it at tests/roms runs the SAME tests — every assertion intact —
+# against the committed golden images plus the committed `nm` symbol dumps
+# (<name>.syms), so no RISC-V toolchain is needed. `make test-golden` does
+# exactly that and diffs the per-frame hash lines against tests/golden/.
+# `make check` = every test target + test-golden. Both test-golden and
+# golden-update are MANUAL: a golden change is a behaviour change (see
+# docs.md "Golden regression policy").
+ARC1_ROM_DIR  ?= $(GUEST_BUILD)
+GOLDEN_ROMDIR := tests/roms
+GOLDEN_DIR    := tests/golden
+GOLDEN_GAMES  := breakout tetris platformer scroll
+# Image/ELF base name for a golden game (test-target name -> guest name).
+golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,$(1))
+# Symbol source for a game in $(ARC1_ROM_DIR): the committed `nm` dump if
+# one is present, else `nm` the freshly built ELF (historical behaviour).
+# Decided at make-expansion time so the result is a single command that can
+# be piped into awk without any subshell parentheses.
+nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
+                    cat $(ARC1_ROM_DIR)/$(1).syms, \
+                    $(RISCV_NM) $(GUEST_BUILD)/$(1).elf)
+
 # Keep the ELFs (make would otherwise delete them as intermediates); the test
 # reads symbols (e.g. counter's address) from them.
 .SECONDARY: $(GUEST_ELFS)
@@ -265,14 +289,14 @@ test-tilemap: $(GUEST_BUILD)/tilemap_demo.bin
 # RAM) — proving the camera pans world-space sprites/tilemaps, leaves the HUD
 # fixed, and that the device's tilemap windowing is pixel-identical. Plus
 # register readbacks and reset-and-compare determinism.
-test-scroll: $(GUEST_BUILD)/scroll_demo.arc1
+test-scroll: $(ARC1_ROM_DIR)/scroll_demo.arc1
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_scroll \
 	    tests/test_scroll.c src/arcade1/machine.c src/arcade1/video.c \
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
-	@CELLS=$$($(RISCV_NM) $(GUEST_BUILD)/scroll_demo.elf | awk '$$3=="cells"{print $$1}'); \
+	@CELLS=$$($(call nm_src,scroll_demo) | awk '$$3=="cells"{print $$1}'); \
 	 echo "cells @ 0x$$CELLS"; \
-	 $(TESTDIR)/test_scroll $(GUEST_BUILD)/scroll_demo.arc1 0x$$CELLS
+	 $(TESTDIR)/test_scroll $(ARC1_ROM_DIR)/scroll_demo.arc1 0x$$CELLS
 
 # Build and run the milestone-22 platformer harness: boot platformer.c on the
 # machine's own CPU as firmware and drive a scripted RetroPad through the whole
@@ -281,18 +305,18 @@ test-scroll: $(GUEST_BUILD)/scroll_demo.arc1
 # guest RAM, plus audio beeps, camera clamping and reset-and-compare
 # determinism. Exercises tilemaps + sprites + scrolling + collision + animation
 # + layers + input + audio together.
-test-platformer: $(GUEST_BUILD)/platformer.arc1
+test-platformer: $(ARC1_ROM_DIR)/platformer.arc1
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_platformer \
 	    tests/test_platformer.c src/arcade1/machine.c src/arcade1/video.c \
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
-	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/platformer.elf | \
+	@SYMS=$$($(call nm_src,platformer) | \
 	    awk '$$3=="px"{px=$$1} $$3=="py"{py=$$1} $$3=="onground"{og=$$1} \
 	         $$3=="score"{sc=$$1} $$3=="state"{st=$$1} \
 	         $$3=="cam_x"{cx=$$1} $$3=="cam_y"{cy=$$1} \
 	         END{print "0x"px, "0x"py, "0x"og, "0x"sc, "0x"st, "0x"cx, "0x"cy}'); \
 	 echo "syms: $$SYMS"; \
-	 $(TESTDIR)/test_platformer $(GUEST_BUILD)/platformer.arc1 $$SYMS
+	 $(TESTDIR)/test_platformer $(ARC1_ROM_DIR)/platformer.arc1 $$SYMS
 
 # Voxel-experiment P0 (research, see VOXEL_EXPERIMENT.md): graphics primitive
 # micro-benchmark. Runs bench_gfx.c (one fixed workload per phase, 8 phases x
@@ -433,57 +457,60 @@ test-rom:
 	    tests/test_rom.c src/arcade1/rom.c src/arcade1/memory.c
 	$(TESTDIR)/test_rom
 
-test-breakout: $(GUEST_BUILD)/breakout.arc1
+test-breakout: $(ARC1_ROM_DIR)/breakout.arc1
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_breakout \
 	    tests/test_breakout.c src/arcade1/machine.c src/arcade1/video.c \
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
-	@SCORE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="score"{print $$1}'); \
-	 LIVES=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="lives"{print $$1}'); \
-	 STATE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="state"{print $$1}'); \
-	 PADDLE=$$($(RISCV_NM) $(GUEST_BUILD)/breakout.elf | awk '$$3=="paddle_x"{print $$1}'); \
+	@SCORE=$$($(call nm_src,breakout) | awk '$$3=="score"{print $$1}'); \
+	 LIVES=$$($(call nm_src,breakout) | awk '$$3=="lives"{print $$1}'); \
+	 STATE=$$($(call nm_src,breakout) | awk '$$3=="state"{print $$1}'); \
+	 PADDLE=$$($(call nm_src,breakout) | awk '$$3=="paddle_x"{print $$1}'); \
 	 echo "score @ 0x$$SCORE  lives @ 0x$$LIVES  state @ 0x$$STATE  paddle_x @ 0x$$PADDLE"; \
-	 $(TESTDIR)/test_breakout $(GUEST_BUILD)/breakout.arc1 \
+	 $(TESTDIR)/test_breakout $(ARC1_ROM_DIR)/breakout.arc1 \
 	   0x$$SCORE 0x$$LIVES 0x$$STATE 0x$$PADDLE
 
 # Build and run the milestone-18 Tetris harness against the guest firmware.
-test-tetris: $(GUEST_BUILD)/tetris.arc1
+test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 	$(CC) $(CFLAGS) -o $(TESTDIR)/test_tetris \
 	    tests/test_tetris.c src/arcade1/machine.c src/arcade1/video.c \
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
-	@SCORE=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="score"{print $$1}'); \
-	 LINES=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="lines"{print $$1}'); \
-	 LEVEL=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="level"{print $$1}'); \
-	 STATE=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="state"{print $$1}'); \
-	 LOCKED=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="locked"{print $$1}'); \
-	 FIELD=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="field"{print $$1}'); \
-	 CUR=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur"{print $$1}'); \
-	 NEXT=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="next"{print $$1}'); \
-	 ROT=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="rot"{print $$1}'); \
-	 CURX=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur_x"{print $$1}'); \
-	 CURY=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="cur_y"{print $$1}'); \
-	 PRNG=$$($(RISCV_NM) $(GUEST_BUILD)/tetris.elf | awk '$$3=="prng"{print $$1}'); \
+	@SCORE=$$($(call nm_src,tetris) | awk '$$3=="score"{print $$1}'); \
+	 LINES=$$($(call nm_src,tetris) | awk '$$3=="lines"{print $$1}'); \
+	 LEVEL=$$($(call nm_src,tetris) | awk '$$3=="level"{print $$1}'); \
+	 STATE=$$($(call nm_src,tetris) | awk '$$3=="state"{print $$1}'); \
+	 LOCKED=$$($(call nm_src,tetris) | awk '$$3=="locked"{print $$1}'); \
+	 FIELD=$$($(call nm_src,tetris) | awk '$$3=="field"{print $$1}'); \
+	 CUR=$$($(call nm_src,tetris) | awk '$$3=="cur"{print $$1}'); \
+	 NEXT=$$($(call nm_src,tetris) | awk '$$3=="next"{print $$1}'); \
+	 ROT=$$($(call nm_src,tetris) | awk '$$3=="rot"{print $$1}'); \
+	 CURX=$$($(call nm_src,tetris) | awk '$$3=="cur_x"{print $$1}'); \
+	 CURY=$$($(call nm_src,tetris) | awk '$$3=="cur_y"{print $$1}'); \
+	 PRNG=$$($(call nm_src,tetris) | awk '$$3=="prng"{print $$1}'); \
 	 echo "score @ 0x$$SCORE  lines @ 0x$$LINES  state @ 0x$$STATE  locked @ 0x$$LOCKED"; \
-	 $(TESTDIR)/test_tetris $(GUEST_BUILD)/tetris.arc1 \
+	 $(TESTDIR)/test_tetris $(ARC1_ROM_DIR)/tetris.arc1 \
 	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
 	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
 
-# --- Golden ROM snapshot (Task A step 3) ------------------------------------
-# tests/roms/ holds the exact .arc1 images the golden regression runs against
-# (tests/golden/, `make test-golden`). They are a DELIBERATE, MANUAL snapshot:
-# refresh them ONLY when a game's behaviour is meant to change, in the same
-# commit as the golden update, and say in the commit message why (a golden
-# change IS a behaviour change — see docs.md "Golden regression policy").
+# --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
+# tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
+# (<name>.syms) the golden regression runs against (tests/golden/,
+# `make test-golden`). They are a DELIBERATE, MANUAL snapshot: refresh them
+# ONLY when a game's behaviour is meant to change, in the same commit as the
+# golden update, and say in the commit message why (a golden change IS a
+# behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
-GOLDEN_GAMES  := breakout tetris platformer scroll_demo
-GOLDEN_ROMDIR := tests/roms
+GOLDEN_IMGS   := breakout tetris platformer scroll_demo
 
-roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_GAMES)))
+roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)
-	cp $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_GAMES))) \
+	cp $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS))) \
 	   $(GOLDEN_ROMDIR)/
-	@echo "golden ROMs refreshed in $(GOLDEN_ROMDIR)/ (commit deliberately)"
+	@for g in $(GOLDEN_IMGS); do \
+	   $(RISCV_NM) $(GUEST_BUILD)/$$g.elf > $(GOLDEN_ROMDIR)/$$g.syms || exit 1; \
+	 done
+	@echo "golden ROMs + symbol dumps refreshed in $(GOLDEN_ROMDIR)/ (commit deliberately)"
 
 clean:
 	rm -f $(TARGET) $(A64_TARGET) $(A32_TARGET)

@@ -1,0 +1,12 @@
+00001000 b cells
+00001b00 B _ebss
+00001000 D _edata
+0000005c T main
+000002c0 t pal.0
+00001000 B _sbss
+00001000 D _sdata
+0000034c A _sidata
+0000032c t sprite_img
+00002000 B _stack_top
+00000000 T _start
+000002cc t tiles
