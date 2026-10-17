@@ -27,7 +27,8 @@ TESTDIR := build
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
-test-tetris test-bench test-terrain test-ray test-sandbox test-systems: | $(TESTDIR)
+test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
+test-persist: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -59,7 +60,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray test-sandbox test-systems
+        test-ray test-sandbox test-systems test-persist
 
 all: $(TARGET)
 
@@ -394,6 +395,27 @@ test-systems: $(GUEST_BUILD)/systems.arc1
 	               "0x"q1, "0x"q2, "0x"q3, "0x"q4}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_systems $(GUEST_BUILD)/systems.arc1 $$SYMS
+
+# Voxel-experiment P5 (research, see VOXEL_EXPERIMENT.md): persistence —
+# input-log replay (bit-exact whole-run reproduction) and snapshot
+# load-equals-replay (reboot + restore RAM/timer at frame 122, continue;
+# every frame's RAM digest, the final framebuffer and the end-state
+# symbols must match the recorded run). No guest changes: the save is the
+# guest's globals + RAM, measured as save sizes in section 0.6.
+test-persist: $(GUEST_BUILD)/systems.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_persist \
+	    tests/test_persist.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/systems.elf | \
+	    awk '$$3=="camx"{cx=$$1} $$3=="digs"{dg=$$1} $$3=="places"{pl=$$1} \
+	         $$3=="crafts"{cr=$$1} $$3=="inv_dirt"{di=$$1} \
+	         $$3=="inv_stone"{st=$$1} $$3=="delta_count"{dc=$$1} \
+	         $$3=="tdigest"{td=$$1} \
+	         END{print "0x"cx, "0x"dg, "0x"pl, "0x"cr, "0x"di, "0x"st, \
+	               "0x"dc, "0x"td}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_persist $(GUEST_BUILD)/systems.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

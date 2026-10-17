@@ -8,11 +8,12 @@ post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
 in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phases P0
 (graphics micro-benchmarks), P1 (deterministic terrain generator), P2
-(raycast renderer), P3 (walk/dig/place interaction) and P4 (game systems:
-inventory/crafting/entities/day-night/HUD) are complete: measured costs
-live in `VOXEL_EXPERIMENT.md` §0.1–§0.5, runnable via `make test-bench`,
-`make test-terrain`, `make test-ray`, `make test-sandbox` and
-`make test-systems`.
+(raycast renderer), P3 (walk/dig/place interaction), P4 (game systems:
+inventory/crafting/entities/day-night/HUD) and P5 (persistence:
+snapshot save/load + input replay) are complete: measured costs live in
+`VOXEL_EXPERIMENT.md` §0.1–§0.6, runnable via `make test-bench`,
+`make test-terrain`, `make test-ray`, `make test-sandbox`,
+`make test-systems` and `make test-persist`.
 
 ## Status summary
 
@@ -179,6 +180,9 @@ make test-sandbox # voxel-experiment P3 interaction (walk/dig/place over the
 make test-systems # voxel-experiment P4 game systems (inventory, crafting,
                   #     slime entities, day/night dither overlay, HUD):
                   #     scripted scenario + replayed edit-model, section 0.5
+make test-persist # voxel-experiment P5 persistence: input-log replay and
+                  #     snapshot load-equals-replay bit-exact, save sizes
+                  #     measured (section 0.6); harness-only, reuses systems
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay

@@ -4,9 +4,9 @@
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
 > says so. **P0 (graphics micro-benchmarks), P1 (deterministic terrain
-> generator), P2 (raycast renderer), P3 (interaction) and P4 (game
-> systems) are complete** — their measured numbers are in §0.1–§0.5 and
-> already folded into §2/§3/§8/§9.
+> generator), P2 (raycast renderer), P3 (interaction), P4 (game systems)
+> and P5 (persistence) are complete** — their measured numbers are in
+> §0.1–§0.6 and already folded into §2/§3/§8/§9.
 
 The experiment asks one question:
 
@@ -258,6 +258,44 @@ nightfall.
    accepted edits, and delta_count matched — inventory gating cannot
    corrupt world state.
 
+### 0.6 P5 results (measured, `make test-persist`, over the P4 scenario)
+
+Persistence has no guest code: the machine has no storage device, so a
+"save file" is a mechanism claim, and §1/§3.3 make two. P5 verifies both
+against `systems.c` unchanged, with the harness playing the filesystem:
+
+| Measurement | Value | Note |
+|-------------|------:|------|
+| input-log replay | **bit-exact, all 270 `state_hash`es** | fresh boot + 270-byte pad log reproduces the whole run including the boot frame |
+| snapshot load-equals-replay | **bit-exact, all 147 continuation frames** | reboot + restore RAM/timer/presents at frame 122, continue from the log: every frame's RAM digest matches, final framebuffer byte-identical, all end-state symbols match (incl. tdigest `0x2AA3A3F1`) |
+| final state hash | `0x26E54043DD80BE92` | equals P4's pin exactly — same guest + script, an independent cross-check |
+| continuation RAM digest | `0xE67E8DF2E722A598` | pinned |
+| save sizes (this scenario) | log 270 B; full-RAM restore 4,096 B; game save **56 B** | game save = seed 0 B (baked in ROM) + 2 deltas × 12 B + 8 scalars × 4 B |
+| 128-delta design budget | **1,568 B** | measured correction: a delta entry is three 32-bit words = **12 B**, not the 6 B §1/§3.1 estimated — "≈1 KB" becomes ≈1.6 KB; still ✅ |
+
+**What this pins down:**
+
+1. **Both save mechanisms are bit-exact, and the load model is "reboot
+   + restore RAM"**: the guest's whole mutable world is its RAM (globals
+   + delta table); one real frame runs after boot (main()'s one-time
+   initialisers), then RAM/timer/presents are restored and the machine
+   continues. RAM evolution from the loaded frame on is *identical* to
+   the recorded run — including the boundary frame itself.
+2. **`state_hash` cannot compare across a load — by design**: it folds
+   in the cumulative `instret` and the transient CPU registers, which a
+   loaded machine necessarily recomputes. The load test therefore hashes
+   RAM only (all game state lives there); `state_hash` remains the tool
+   for whole-run replay (pass B), where the boots are identical.
+3. **The save-size estimates were conservative in one direction and
+   optimistic in the other**: entries are 12 B, not 6 B (+100%), but the
+   input log is 1 B/frame, not ~2 (−50%). Both stay trivially small; the
+   numbers in §3.1/§3.3 are corrected to the measured values.
+4. **Replay is a first-class save format here**: because the machine is
+   deterministic (P1–P4), the 270-byte input log is a complete,
+   verified save of the entire scenario — the cheapest possible
+   persistence, and the one a speedrun-style "verify your run" feature
+   would use for free.
+
 ---
 
 ## 1. Proposed voxel sandbox game design (the smallest interesting one)
@@ -291,9 +329,12 @@ view while storing almost nothing.
 | Audio | event beeps (dig/place/night) via AUDIO_FREQ/CTRL | as shipped games |
 
 **Save/load models** (two, both cheap):
-- **State snapshot**: seed + ≤128 deltas + player/inventory ≈ 1 KB — small
-  enough to be a RAM region the host reads out (the test harnesses already read
-  guest RAM via `nm` symbols).
+- **State snapshot**: seed + ≤128 deltas + player/inventory ≈ 1.6 KB —
+  small enough to be a RAM region the host reads out (the test harnesses
+  already read guest RAM via `nm` symbols). *(P5 measured: a delta entry
+  is three 32-bit words = 12 B, not the 6 B estimated here — the full
+  budget is 128×12 + scalars ≈ 1,568 B; the shipped scenario's save is
+  56 B. Section 0.6.)*
 - **Input replay**: because the machine is deterministic, a run is fully
   reproduced by `(seed, input script)` — free, and it is literally how the
   existing harnesses test games.
@@ -362,7 +403,7 @@ aesthetic.
 | One chunk 16³ @ 1 B | 4 KB | ❌ (entire RAM, no stack) |
 | Heightmap 128×128 @ 1 B | 16 KB | ❌ |
 | Heightmap 64×64 @ 1 B | 4 KB | ❌ (rest of RAM gone) |
-| **Procedural terrain (0 B) + 128 deltas (~768 B)** | **< 1 KB** | ✅ |
+| **Procedural terrain (0 B) + 128 deltas (12 B each = ~1.6 KB, measured P5)** | **< 2 KB** | ✅ |
 | Palette/material table (16 × 2 B) | 32 B | ✅ |
 | Entities (8 × ~16 B) | 128 B | ✅ |
 | Player + inventory + crafting state | ~150 B | ✅ |
@@ -416,8 +457,11 @@ to change v0.1.
 
 ### 3.3 Save data
 
-≈ 1 KB (seed + ≤128 deltas + player/inventory). Replay alternative: ~2 bytes
-input/frame (M22's 295-frame playthrough ≈ 0.6 KB). Both are host-side.
+≈ 1.6 KB (seed + ≤128 deltas at 12 B each + player/inventory — measured
+correction at P5, was estimated 1 KB at 6 B/delta). Replay alternative:
+**1 byte input/frame** (measured P5: 270 B for the 270-frame scenario;
+M22's 295-frame playthrough ≈ 0.3 KB). Both are host-side. P5 verified
+both mechanisms are bit-exact (§0.6).
 
 ---
 
@@ -562,7 +606,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 | **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | **DONE** — `make test-ray`; 406,563 inst/frame (40.7% cap), height eval 431 inst (P1 handoff), render property-checked + dumped (§0.3); estimate corrected 4–6× |
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | **DONE** — `make test-sandbox`; walk 30 cells + 4 places + 1 dig scripted, edit-model digest `0x00C134B1` cross-checked, +21,253 inst for the 16-entry scan (§0.4); visibility-by-construction finding |
 | **P4** Game systems | inventory, crafting, entities, day/night dither, UI | **DONE** — `make test-systems`; scripted scenario (dig/place/craft/rejected-place) with inventory truth, replayed edit-model digest `0x2AA3A3F1`, tod timing, entity motion/visibility (§0.5); shifting-targets finding |
-| **P5** Persistence | snapshot save/load + input replay | load-equals-replay: same frames, same hash sequence |
+| **P5** Persistence | snapshot save/load + input replay | **DONE** — `make test-persist`; input-log replay bit-exact (270/270 state hashes), snapshot load-equals-replay bit-exact (147/147 RAM digests + final fb), save sizes measured (§0.6); §1/§3 save-size estimates corrected |
 | **P6** Verdict | write findings into this file: measured vs estimated, ROM/RAM actuals, go/no-go on raycast vs fallback | answers §9 with data |
 
 **Development loop for an AI-assisted developer (question 6):**
