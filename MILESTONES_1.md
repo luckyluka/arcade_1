@@ -1,5 +1,13 @@
 # ARCADE-1 Development Roadmap
 
+> **This file is the historical record of milestones M01–M24** (the "first
+> book"). The forward roadmap and active steps now live in **`MILESTONES_2.md`**
+> (M25+). Screen-size references here (320×240) describe the resolution in
+> force **at those milestones**; they are kept as written. **M25 changed the
+> game resolution to 480×270 (16:9)** — pinned in `SPEC.md` §8 and
+> `ARCADE1_WIDTH`/`ARCADE1_HEIGHT`, and documented in `MILESTONES_2.md`. See
+> also §28 "Resolution philosophy" below for the pre-M25 guidance.
+
 ## 0. Mission
 
 Build **ARCADE-1**, a small deterministic game-oriented virtual machine and eventual hardware architecture.
