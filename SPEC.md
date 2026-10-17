@@ -286,5 +286,9 @@ detail; conformance (M34) is measured against them:
 
 Any change to rules 2–6 is a **breaking change** to the v0.1 contract and
 requires a version bump and a documented migration; the three shipped games
-(Breakout, Tetris, Platformer) and their pinned state hashes are the regression
-suite that must continue to pass.
+(Breakout, Tetris, Platformer) plus the Scroll demo, run against the committed
+golden images in `tests/roms/` and diffed frame-by-frame against
+`tests/golden/` (`make test-golden`), are the regression suite that must
+continue to pass. A change to those golden files is a behaviour change and
+must be justified in the commit message with the spec section it moves
+("Golden regression policy", docs.md §30).

@@ -188,6 +188,13 @@ make test-persist # voxel-experiment P5 persistence: input-log replay and
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
+make test-golden   # Task A: re-run the 4 game tests against the COMMITTED
+                   # images in tests/roms/ and diff per-frame hash/fb lines
+                   # vs tests/golden/ (first differing frame printed); needs
+                   # no RISC-V compiler
+make golden-update # manual: regenerate tests/golden/*.txt (deliberate act)
+make roms-update   # manual: re-copy the 4 .arc1 images + nm dumps to tests/roms/
+make check         # Task A: every test target + test-golden
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -220,6 +227,19 @@ measurable, one commit per task:
   PPM path only when the file was really written (warnings stay non-fatal).
   A follow-up commit pinned `.DEFAULT_GOAL := all` so plain `make` still only
   builds the `.so` (the new prerequisite rule had made it run the tests).
+
+## Regression suite (BEFORE_M25 task A)
+
+A real golden regression, not just two-run comparisons. `tests/state_hash.h`
+gained `fb_hash()` (FNV-1a over the RGB565 framebuffer); the four game tests
+print `frame N hash=... fb=...` per frame. `tests/roms/` commits the exact
+`.arc1` images + `nm` dumps; `tests/golden/<game>.txt` commits the per-frame
+lines of a run against them. `make test-golden` re-runs and diffs (no RISC-V
+compiler needed — verified with the cross tools off PATH); `make check` is
+every test target + `test-golden`. The four final state hashes are unchanged
+from before the work and match the reference host (see BEFORE_M25.md task A
+report). Refreshing `tests/roms/` or `tests/golden/` is manual and deliberate:
+a golden change is a behaviour change (docs.md §30 "Golden regression policy").
 
 ## Known limitations
 

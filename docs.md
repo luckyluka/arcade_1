@@ -1583,6 +1583,21 @@ CPU load is instructions executed per frame; read the counter before and after
 each frame. Record each game's CPU load as a number once it runs, so
 regressions are visible.
 
+### Golden regression policy
+
+The pinned per-frame hashes are not just printed — they are stored and
+compared. `tests/roms/` holds the committed game images (`.arc1`) plus their
+`nm` symbol dumps (`.syms`); `tests/golden/<game>.txt` holds every
+per-frame `hash=`/`fb=` line from a run against those images.
+`make test-golden` re-runs the four game tests against `tests/roms/` and
+diffs, printing the first differing frame; it needs no RISC-V compiler.
+`make check` runs every test target plus `test-golden`.
+
+A golden change **is** a behaviour change: refreshing `tests/roms/` or
+`tests/golden/` (via the manual `make roms-update` / `make golden-update`)
+must happen in the same commit as the change that caused it, and the commit
+message must say why the behaviour changed and which spec section it moves.
+
 The same ARCADE-1 game should eventually be executable by:
 
 ```text
