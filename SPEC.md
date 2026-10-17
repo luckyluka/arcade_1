@@ -138,6 +138,10 @@ Registers (offsets from window base):
 | `0x12C` | `ROWS` | R/W | TILEMAP grid height in cells (0 = draws nothing) |
 | `0x130` | `CAM_X` | R/W | camera X, **signed** pixels; power-on 0 |
 | `0x134` | `CAM_Y` | R/W | camera Y, **signed** pixels; power-on 0 |
+| `0x138` | `PAL_INDEX` | R/W | palette entry index 0..255 (see palette) |
+| `0x13C` | `PAL_DATA` | R/W | RGB565 entry at `PAL_INDEX`; a **write** stores it and auto-increments `PAL_INDEX` (wrapping 255→0); a **read** returns the entry without incrementing |
+| `0x140` | `PAL_BANK` | R/W | palette bank 0..15 (masked to 4 bits) used by `SPRITE4`; power-on 0 |
+| `0x144` | `FLAGS` | R/W | bit0 = flip X, bit1 = flip Y (masked to 2 bits), used by `SPRITE4`; power-on 0 |
 
 **Commands** (`CMD`):
 
@@ -149,6 +153,8 @@ Registers (offsets from window base):
 | 4 | `FILL` | fill the `W`×`H` rectangle at (`X`,`Y`) with `COLOR`, clipped |
 | 5 | `SPRITE` | blit the 1-bpp image at `ADDR`, size `W`×`H`, at (`X`,`Y`) |
 | 6 | `TILEMAP` | draw the `COLS`×`ROWS` grid of 32-bit cells at `MAP_ADDR`, using the tile set at `TILE_ADDR` |
+| 7 | `SPRITE4` | blit the **4-bit** image at `ADDR`, size `W`×`H`, at (`X`,`Y`), coloured from a palette bank with optional flips |
+| 8 | `TILEMAP4` | draw the `COLS`×`ROWS` grid of **4-bit** tiles at `MAP_ADDR`/`TILE_ADDR`, each cell supplying its own palette bank and flips |
 
 **World-space vs screen-space (camera).** `SPRITE` and `TILEMAP` are
 **world-space**: they draw at (`X − CAM_X`, `Y − CAM_Y`). `CLEAR`,
@@ -173,7 +179,64 @@ before any fetch. Skipping it cannot change a pixel (the per-tile clip would
 draw nothing), so the framebuffer is identical to visiting every cell, but a map
 larger than the screen costs only its visible cells in bandwidth.
 
-**Power-on:** all parameters zeroed, `STATUS` = 0, nothing presented.
+### Palette (M27)
+
+The device holds a **256-entry RGB565 palette** used only by the 4-bit commands
+(`SPRITE4`, `TILEMAP4`); the 1-bit commands ignore it. Entries are addressed
+through `PAL_INDEX`/`PAL_DATA`: a guest writes the start index once, then streams
+values — each `PAL_DATA` write stores `value & 0xFFFF` at the current index and
+auto-increments it (wrapping 255→0), so a whole block uploads with one index
+write plus N data writes. A `PAL_DATA` **read** returns the entry at the current
+index and does **not** increment.
+
+The palette is organised as **16 banks of 16 colours**: a 4-bit pixel value `v`
+(1..15) selects `PALETTE[bank×16 + v]`. Pixel value **0 is transparent**.
+
+**Power-on palette:** entry 0 = black; entries 1..15 = a fixed 16-colour default
+(an EGA-like set, exact RGB565 values pinned in docs.md "Color decisions,
+pinned at M27"); entries 16..255 = black. Any reset restores this exactly.
+
+### 4-bit image format (M27)
+
+Shared by `SPRITE4` and each `TILEMAP4` tile: **two pixels per byte**, the
+**leftmost pixel in the HIGH nibble**, row-major, and the **width must be even**
+(so a row is exactly `W/2` bytes, no padding). Pixel value 0 is transparent;
+value `v` (1..15) draws `PALETTE[bank×16 + v]`. The image source must lie in ROM
+or RAM; anything else (in particular the MMIO window) reads as 0 pixels, so it
+draws nothing and has no side effects.
+
+### SPRITE4 (M27)
+
+Draws the 4-bit image at `ADDR`, size `W`×`H`, at (`X`,`Y`). It is **world-space**
+like `SPRITE` (drawn at `X − CAM_X`, `Y − CAM_Y`), clipped to the screen. The
+palette **bank** comes from `PAL_BANK` and the **flips** from `FLAGS`
+(bit0 = mirror horizontally, bit1 = mirror vertically); a flipped sprite that
+hangs off an edge still shows the correct image pixels.
+
+### TILEMAP4 (M27)
+
+Like `TILEMAP` (same windowing, camera and per-tile clipping) but each tile is a
+4-bit image of size `W`×`H`; tile *N* (≥ 1) lives at `tile_addr + (N−1) ×
+(W/2 × H)` bytes. Each 32-bit little-endian cell supplies its **own** palette
+bank and flips, and `PAL_BANK`/`FLAGS` are **ignored**:
+
+| Bits | Meaning |
+|------|---------|
+| `[15:0]` | tile index (**0 = empty**, skipped) |
+| `[19:16]` | palette bank (0..15) |
+| `[20]` | flip X |
+| `[21]` | flip Y |
+| `[31:22]` | reserved, ignored |
+
+### Invalid sizes / ignore rules (M27)
+
+For the 4-bit commands, a zero `W` or `H` draws nothing, and an **odd `W`** draws
+nothing (the format is undefined for it). A source address outside ROM/RAM draws
+nothing and performs no bus access (no stray count, no device side effects). All
+registers are still written/read normally regardless of what is drawn.
+
+**Power-on:** all parameters zeroed (`PAL_INDEX`, `PAL_BANK`, `FLAGS` = 0),
+`STATUS` = 0, nothing presented, palette at its default.
 
 **Display conformance.** The presented frame is the **framebuffer contents at
 the end of the frame** (§8 "Frame boundaries"). `PRESENT` does exactly two

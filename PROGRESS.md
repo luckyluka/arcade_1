@@ -48,9 +48,10 @@ via `make test-bench`, `make test-terrain`, `make test-ray`,
 | 24        | ARCADE-1 v0.1 Candidate    | COMPLETE |
 | 25        | Machine v0.2a: 480×270 screen | COMPLETE |
 | 26        | Machine v0.2b: Memory (256 KiB ROM / 64 KiB RAM) | COMPLETE |
+| 27        | Machine v0.2c: Color Graphics (palette + SPRITE4/TILEMAP4) | COMPLETE |
 | 27+       | (see `MILESTONES_2.md`)    | NOT STARTED |
 
-Next up: **Milestone 27 — Machine v0.2c: Color Graphics** (paletted 4-bit graphics: a 256-entry palette, `SPRITE4`/`TILEMAP4`). See `MILESTONES_2.md` for the exact scope.
+Next up: **Milestone 28 — Machine v0.2d: Audio** (32-slot polyphonic mixer, following M25–M27). See `MILESTONES_2.md` for the exact scope.
 
 ## Architecture
 
@@ -382,6 +383,40 @@ The map is pinned in `SPEC.md` §2; the guest mirror is `programs/arcade1_map.h`
   `fb=` values are byte-identical for all four games; only `hash=` changed.
 
 Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
+
+## Machine v0.2c: Color Graphics (M27)
+
+Added paletted 4-bit graphics on top of the unchanged 1-bit commands:
+
+* **Palette**: 256 RGB565 entries (16 banks × 16 colours) in the video device,
+  addressed via `PAL_INDEX` (0x138) / `PAL_DATA` (0x13C; a write stores
+  `value & 0xFFFF` and auto-increments, wrapping 255→0; a read does not
+  increment). Power-on: entry 0 = black, entries 1..15 = a fixed EGA-like
+  default, 16..255 = black (exact values pinned in MILESTONES_1.md "Color
+  decisions, pinned at M27" and mirrored by the tests).
+* **SPRITE4** (command 7): draws a 4-bit image (two pixels per byte, HIGH nibble
+  first, even width; pixel 0 transparent, `v` → `PALETTE[bank×16 + v]`),
+  world-space + clipped like `SPRITE`. Bank from `PAL_BANK` (0x140), flips from
+  `FLAGS` (0x144, bit0 X / bit1 Y).
+* **TILEMAP4** (command 8): like `TILEMAP` (same windowing/camera/clip) but each
+  32-bit cell supplies its own bank `[19:16]` and flips `[20]`/`[21]` (index in
+  `[15:0]`, 0 = empty); tile *N* at `tile_addr + (N−1) × (W/2 × H)`.
+* **Invalid sizes ignored**: zero or odd `W` draws nothing; out-of-ROM/RAM source
+  draws nothing with no bus access. `bytes_fetched` for 4-bit commands counts
+  one byte per two pixels examined; new host-only `cmds_sprite4`/`cmds_tilemap4`
+  counters.
+* **Existing commands/behaviour/goldens unchanged** — the four game goldens and
+  their ROMs are byte-identical (sha256-verified); the palette is unused by
+  1-bit commands.
+* **New tests**: `test-video-palette`, `test-video-sprite4`, `test-video-tilemap4`
+  (each re-verifies the whole framebuffer against an independent model), and
+  `test-color` (color_demo: scrolling TILEMAP4 world + SPRITE4 discs + 1-bit HUD,
+  property checks + determinism + pinned hashes + PPM dump). **color_demo is the
+  5th golden game** (`tests/roms/color_demo.arc1`, `tests/golden/color.txt`).
+* `programs/gfx.h` gained `gfx_pal_upload`/`gfx_pal_bank`/`gfx_flip`/`gfx_sprite4`/
+  `gfx_tilemap4`.
+
+Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
 
 ## Known limitations
 

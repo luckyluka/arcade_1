@@ -1352,6 +1352,64 @@ byte-identical final framebuffer). Steady-state guest CPU load is ~49
 instructions/frame (one TILEMAP command does all the pixel work on the device),
 with 17,140 on the boot frame (map construction).
 
+## Color decisions (pinned at M27)
+
+**What was added.** Paletted 4-bit graphics on top of the unchanged 1-bit
+commands: a 256-entry RGB565 palette inside the video device, plus two new
+commands — `SPRITE4` (command 7) and `TILEMAP4` (command 8) — that draw 4-bit
+images coloured from that palette. `FILL`/`SPRITE`/`TILEMAP` and their golden
+hashes are byte-for-byte unchanged.
+
+**Palette.** 256 RGB565 entries organised as **16 banks × 16 colours**. A 4-bit
+pixel value `v` (1..15) selects `PALETTE[bank×16 + v]`; value **0 is
+transparent**. Two new registers address it: `PAL_INDEX` (0x138) and `PAL_DATA`
+(0x13C). A `PAL_INDEX` write sets the entry; each `PAL_DATA` write stores
+`value & 0xFFFF` there and **auto-increments** the index (wrapping 255→0), so a
+guest uploads a block with one index write + N data writes. A `PAL_DATA` *read*
+returns the current entry and does not increment.
+
+**Power-on palette (exact RGB565).** Entry 0 = black `0x0000`; entries 1..15 =
+a fixed EGA-like default; entries 16..255 = black. The 16 values (0..15):
+`0x0000, 0x001F, 0x03E0, 0x03FF, 0xF800, 0xF81F, 0xAAA0, 0xAD55, 0x52AA,
+0x52BF, 0x57EA, 0x57FF, 0xFAAA, 0xFABF, 0xFFE0, 0xFFFF` (black, blue, green,
+cyan, red, magenta, brown, light grey, dark grey, light blue, light green,
+light cyan, light red, light magenta, yellow, white). Reset restores this.
+
+**4-bit image format.** Two pixels per byte, **leftmost pixel in the HIGH
+nibble**, row-major, **width must be even** (a row is exactly `W/2` bytes). Pixel
+0 transparent; `v` (1..15) draws the palette colour. Source in ROM or RAM;
+anything else (e.g. the MMIO window) reads as 0 pixels → draws nothing, no bus
+access, no stray count.
+
+**SPRITE4.** World-space (camera-subtracted) and clipped like `SPRITE`. Palette
+**bank** comes from `PAL_BANK` (0x140, masked to 4 bits), **flips** from `FLAGS`
+(0x144: bit0 = flip X, bit1 = flip Y, masked to 2 bits). A flipped sprite that
+hangs off an edge still shows the correct image pixels (the image column/row is
+recovered from the clipped screen coordinate, then flipped).
+
+**TILEMAP4.** Same windowing, camera and per-tile clipping as `TILEMAP`, but
+each tile is a 4-bit image and tile *N* lives at `tile_addr + (N−1) × (W/2 × H)`.
+Each 32-bit little-endian cell supplies its **own** bank and flips — `[15:0]`
+index (0 = empty), `[19:16]` bank, `[20]` flip X, `[21]` flip Y, `[31:22]`
+reserved — and `PAL_BANK`/`FLAGS` are **ignored** for TILEMAP4.
+
+**Invalid sizes / ignores (both 4-bit commands).** Zero `W`/`H` draws nothing;
+an **odd `W`** draws nothing (the format is undefined for it). An out-of-ROM/RAM
+source draws nothing with no side effects. Registers read/write normally
+regardless.
+
+**Work counters.** `bytes_fetched` for the 4-bit commands counts **one byte per
+two pixels examined** (two pixels share a byte), counting only the clipped
+window. New per-type counters `cmds_sprite4`/`cmds_tilemap4` were added (host
+measurement only, never guest-visible, never in a state hash).
+
+**Testing.** `test-video-palette` (registers + default + auto-increment/wrap),
+`test-video-sprite4` and `test-video-tilemap4` each re-verify the **whole
+framebuffer** against an independent model of the documented semantics, and
+`test-color` boots `color_demo.c` (scrolling TILEMAP4 world + SPRITE4 discs +
+1-bit HUD) for 120 frames with colour property checks, per-frame determinism,
+pinned final state/fb hashes and a PPM dump. color_demo is the 5th golden game.
+
 ---
 
 # 26. Milestone 22 — Platformer
