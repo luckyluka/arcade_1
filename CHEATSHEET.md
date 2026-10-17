@@ -5,7 +5,7 @@
 - Build guest: `arcade1 build program.c out.arc1`
 - Run: `arcade1 run game.arc1 --frames 600`
 - Capture frames: `arcade1 run game.arc1 --capture-dir frames/ --capture-every 1`
-- Record input: `arcade1 run game.arc1 --input script.txt --record rec.txt`
+- Inspect state: `arcade1 inspect game.arc1 --frames N`- Record input: `arcade1 run game.arc1 --input script.txt --record rec.txt`
 - Replay: `arcade1 run game.arc1 --input rec.txt`
 - Full check: `make check`
 
