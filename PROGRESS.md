@@ -262,6 +262,41 @@ error, behaviour then implementation-defined) with B recommended; §10 rule 6
 points at it. No `src/` change was made — the code matches the facts as
 written.
 
+## Device work budget (BEFORE_M25 task C)
+
+Per-frame video-work counters, sized from data, to budget a future hardware
+port. **`src/` change is host-only, guest-invisible, and in no state hash.**
+`arcade1_video_t` gained two counter sets: `stats` (live, reset each frame by
+`arcade1_video_stats_begin_frame`) and `frame_totals` (frozen by
+`arcade1_video_stats_end_frame` just before `arcade1_run_frame` returns);
+read via `arcade1_video_stats()` / `arcade1_video_frame_totals()`. Counted:
+`cmds_*` per command kind, `commands`, `pixels_written` (post-clipping,
+transparent bits excluded), `bytes_fetched` (one per pixel examined by the
+reference blitter), `cells_visited` (post-windowing).
+
+`tests/video_budget.h` accumulates an avg/max per frame over each game's run;
+`tests/test_video_worst.c` (`make test-video-worst`, hand-assembled, no
+RISC-V toolchain) drives five synthetic worst-case one-frame guests and
+checks each counter against independent arithmetic. Both are in `make check`.
+`DEVICE_BUDGET.md` holds the measured per-game and synthetic tables plus the
+FPGA cycle conversion (1 px/clock, 1 byte/clock) against a 60 fps frame at
+50/100 MHz, every number labelled MEASURED or ESTIMATED.
+
+Key measured facts: the four games write 91k–130k px/frame and fetch 0–75k
+bytes; CPU is negligible (≤2.1% of a frame). The worst *shipped* frame fits
+one display frame with 3.8x–8.7x headroom depending on the cost model. But
+two pathological synthetic frames (100 full-screen CLEARs; the max-command
+unrolled loop) and the 1,000,000-step cap itself overrun a single frame even
+at 100 MHz, so a hardware port needs a deterministic overrun policy.
+
+**DECISION NEEDED (owner):** `DEVICE_BUDGET.md` §4 proposes three cost
+models (serialized `inst+px+bytes`; pixels-only `px`; weighted
+`inst+px/32+bytes`) with concrete budgets, headroom over the worst shipped
+frame, and effect on the worst synthetic case, plus a shared deterministic
+overrun-stretch policy (`N = ceil(cost/budget)` display frames). None is
+implemented. The owner must pick a model, the budget number, and whether
+overrun stretches or traps.
+
 ## Known limitations
 
 - 320x240 @ 60 fps, 48 kHz audio — placeholder resolution/rate, NOT final

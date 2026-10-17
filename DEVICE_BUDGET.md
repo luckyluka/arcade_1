@@ -152,6 +152,163 @@ that is what section 4 (cost models) is for.
 
 ---
 
-## 4. Candidate cost models
+## 4. Candidate cost models **[proposal — nothing here is implemented]**
 
-*(added in the next step — see `BEFORE_M25.md` task C step 5)*
+A **cost model** is a single integer charged to each guest frame, and a
+**budget** the machine guarantees one display frame can absorb. If a frame's
+cost stays within the budget it is presented on the very next display frame;
+if it overruns, a deterministic policy (below) decides what happens. The
+purpose is to give a hardware port one number to reserve for, and to give
+guest authors one number to stay under.
+
+The budget used throughout this section is one 60 fps display frame's cycle
+count **[E]**: **833,333 units at 50 MHz**, **1,666,667 at 100 MHz** (the
+same conversion as section 3).
+
+**What we are sizing against.** The true "worst shipped frame" is the frame
+that maximises the *combined* cost, but our per-metric maxima (section 1)
+come from *different* frames (tetris holds max `cmd`/`px`; scroll holds max
+`bytes`/`inst`). So we use the **sum of the per-metric maxima** as a
+**conservative upper bound [M-measured components, E-summed]**:
+
+| component | value | held by |
+|---|---:|---|
+| `inst`  |  17,140 | scroll |
+| `cmd`   |    488 | tetris |
+| `px`    | 129,692 | tetris |
+| `bytes` |  74,560 | scroll |
+
+Any single shipped frame costs **at most** what these models below compute;
+the real worst frame is somewhere at or below that. This is the honest way
+to state headroom without re-running every game to find the true joint
+worst frame.
+
+Each model is a weighted sum of the measured counters. The weights are the
+design decision; the sums are arithmetic on measured data.
+
+### Model 1 — serialized bound (`inst + px + bytes`)
+
+Charges one unit per instruction, per pixel written, and per byte fetched.
+This is the **most conservative**: it equals the hardware *serialized*
+bound of section 3 (fetch and write never overlap), plus CPU cycles.
+`cmd` is omitted because its decode cost is a rounding error next to
+`px`/`bytes` (assumption 3 in section 3).
+
+* **cost of the worst shipped frame** = 17,140 + 129,692 + 74,560
+  = **221,392 [E]**.
+* **headroom**: uses **26.6 %** of a 50 MHz frame → **3.76x** headroom;
+  **13.3 %** at 100 MHz → **7.53x**.
+* **on the worst synthetic cases**: (b) 100 CLEARs costs ~7,680,104 →
+  **overruns**; (e) max-commands costs ~1,999,020 (its `inst` is the full
+  1,000,000-step cap) → **overruns**.
+* **overrun policy**: stretch. The frame is spread over
+  `N = ceil(cost / budget)` display frames, deterministically. (b) needs
+  **N=10** → 6 fps; (e) needs **N=3** → 20 fps. Nothing is dropped or
+  clipped — the guest's frame completes, it simply presents late, and the
+  *same* input replay produces the *same* N every run.
+
+### Model 2 — pixels-only (`px`)
+
+Charges only for pixels written; instructions and byte fetches are free.
+This is the **simplest contract to document and to honour in hardware**:
+"a guest frame may write at most `budget` pixels." It matches the physical
+reality that the **write port is the scarce resource** (section 3 shows
+every game writes ~91k–130k pixels per frame regardless of instruction
+count), and it treats the read port / CPU as provisioned to keep up.
+
+* **cost of the worst shipped frame** = **129,692 [M]** (`px` alone).
+* **headroom**: uses **15.6 %** of a 50 MHz frame → **6.43x**; **7.8 %** at
+  100 MHz → **12.85x**. The most generous of the three for shipped games.
+* **on the worst synthetic cases**: (b) 7,680,000 px → **overruns**
+  (**N=10**, 6 fps); (e) 999,020 px → **overruns** (**N=2**, 30 fps).
+* **overrun policy**: stretch, exactly as Model 1 — `N = ceil(px / budget)`
+  display frames, deterministic. Because only `px` is charged, the N is a
+  pure function of pixels drawn, trivially reproducible on any port.
+* **caveat [E]**: a guest that spins the CPU for the whole cap while drawing
+  nothing would cost ~0 here yet still eat 1.2 display frames of *CPU* at
+  50 MHz (section 3.3). Model 2 leaves CPU overrun unbudgeted; it assumes
+  CPU headroom (≤2.1 % measured) absorbs it. If that assumption is
+  unacceptable, Model 1 or 3 is safer.
+
+### Model 3 — weighted (`inst + px/32 + bytes`)
+
+Charges instructions and byte fetches in full but amortises pixels over 32
+(a 32-pixel-wide burst write port, one byte per clock feeding 32 pixels).
+This reflects a **realistic pipelined blitter**: the read port and CPU run
+at full rate, the write port is wide.
+
+* **cost of the worst shipped frame** = 17,140 + 129,692/32 + 74,560
+  = 17,140 + 4,052 + 74,560 = **95,752 [E]**.
+* **headroom**: uses **11.5 %** of a 50 MHz frame → **8.70x**; **5.7 %** at
+  100 MHz → **17.41x**. The most permissive budget for shipped content.
+* **on the worst synthetic cases**: (b) ~240,104 → **fits** in one 50 MHz
+  frame (N=1) — the wide write port turns the 100-CLEAR flood into normal
+  work; (e) ~1,031,219 (CPU-dominated) → **overruns** (**N=2**, 30 fps).
+  Model 3 is the only one under which *every* shipped frame **and** the
+  pathological pixel-flood fit; only the CPU-cap case overruns.
+* **overrun policy**: stretch, `N = ceil(cost / budget)`, deterministic.
+  Here overrun is driven by CPU/`bytes`, so the stretch protects the read
+  port and core rather than the write port.
+* **caveat [E]**: the "/32" is an assumed write-port width, not a measured
+  property. It is the most aggressive and the least conservative; if the
+  eventual hardware write port is narrower than 32, this model's budget is
+  optimistic and shipped frames could overrun where the table says they
+  fit.
+
+### Summary
+
+| model | cost of worst shipped frame | headroom @50 MHz | worst synthetic behaviour | overrun |
+|---|---:|---:|---|---|
+| 1 serialized (`inst+px+bytes`) | 221,392 | 3.76x | (b) and (e) overrun | stretch, N=10 / N=3 |
+| 2 pixels-only (`px`) | 129,692 | 6.43x | (b) and (e) overrun | stretch, N=10 / N=2 |
+| 3 weighted (`inst+px/32+bytes`) | 95,752 | 8.70x | only (e) overruns | stretch, N=2 |
+
+All three keep the shipped games **far inside** one display frame (3.8x–8.7x
+headroom at 50 MHz). They differ in **what they promise a hardware port**
+(conservative vs. permissive), **what they leave unbudgeted** (Model 2
+ignores CPU), and **how often a pathological guest is forced to stretch**.
+
+**Common overrun policy (all three).** On overrun the frame is **stretched
+over `N = ceil(cost / budget)` display frames, deterministically**. No
+pixels are dropped, no commands are skipped, and the guest's state hash is
+unaffected — the frame does exactly the same work, it just presents on a
+later display frame. Because N is a pure function of the frame's own
+measured counters, the same input replay yields the same N on the C
+reference and on any hardware port, preserving the determinism guarantee.
+The alternative — dropping work to fit one frame — is rejected: it would
+make output depend on host speed and break the pinned-state-hash regression.
+
+---
+
+## DECISION NEEDED (owner)
+
+Pick one cost model to adopt as ARCADE-1's per-frame work budget (and, with
+it, the hardware-port contract). This is a design decision, not a
+measurement — the data above constrains but does not choose it:
+
+* **Model 1 (serialized `inst+px+bytes`)** — safest, most conservative;
+  promises the least to hardware and therefore can never be wrong about a
+  frame fitting. Costs the most headroom (only 3.76x over the worst shipped
+  frame at 50 MHz) and forces pathological guests to stretch the most
+  (N=10 for the 100-CLEAR flood).
+* **Model 2 (pixels-only `px`)** — simplest contract to document and honour;
+  matches the measured reality that the write port is the scarce resource.
+  Leaves CPU overrun unbudgeted (fine given measured CPU ≤2.1% of a frame,
+  but an assumption).
+* **Model 3 (weighted `inst+px/32+bytes`)** — most permissive; every shipped
+  frame and even the pixel-flood synthetic fit in one frame, only the
+  CPU-cap case stretches. Depends on an assumed 32-wide write port that has
+  not been built; if the real port is narrower the budget is optimistic.
+
+Also decide, once a model is chosen:
+
+1. **The budget number itself** — one display frame's cycles at the target
+   clock (833,333 @ 50 MHz / 1,666,667 @ 100 MHz), or a rounder, clock-
+   agnostic cap (e.g. 1,000,000 units) that both clocks fit inside?
+2. **Whether overrun-stretch is the committed policy**, or whether a
+   hardware port may instead *trap* a guest that overruns (making the
+   budget a hard limit rather than a stretch hint).
+
+No model has been implemented; nothing in `src/` was changed by this task.
+The counters that produced every number above are host-only, guest-invisible,
+and in no state hash — the four pinned hashes are unchanged.
