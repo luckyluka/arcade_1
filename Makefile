@@ -85,7 +85,16 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
-        test-golden golden-update
+        test-golden golden-update check
+
+# `make check` = the whole regression: every test target plus the golden
+# per-frame comparison (Task A step 6). This is the command CI/humans should
+# run before pushing.
+CHECK_TARGETS := test test-input test-square test-beep test-machine \
+        test-memory test-cpu test-exec test-program test-mmio test-timer \
+        test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
+        test-platformer test-breakout test-tetris test-bench test-terrain \
+        test-ray test-sandbox test-systems test-persist test-golden
 
 all: $(TARGET)
 
@@ -504,6 +513,11 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 # and a golden change is a behaviour change that the commit message must
 # explain (see docs.md "Golden regression policy").
 GOLDEN_OUT := $(TESTDIR)/golden
+
+# `make check` (Task A step 6): everything — every test target plus the
+# golden per-frame comparison. Run this before pushing.
+check: $(CHECK_TARGETS)
+	@echo "check: all tests + test-golden passed"
 
 test-golden: | $(TESTDIR)
 	@mkdir -p $(GOLDEN_OUT)
