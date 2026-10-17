@@ -28,7 +28,8 @@ test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
-test-persist test-frame-rules test-video-worst test-video-palette: | $(TESTDIR)
+test-persist test-frame-rules test-video-worst test-video-palette \
+test-video-sprite4: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -86,7 +87,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
-        test-video-palette
+        test-video-palette test-video-sprite4
 
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
@@ -96,7 +97,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
-        test-video-worst test-video-palette test-golden
+        test-video-worst test-video-palette test-video-sprite4 test-golden
 
 all: $(TARGET)
 
@@ -267,6 +268,16 @@ test-video-palette: | $(TESTDIR)
 	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
 	    src/arcade1/exec.c src/arcade1/cpu.c
 	$(TESTDIR)/test_video_palette
+
+# Build and run the M27-step-2 SPRITE4 harness: drive the SPRITE4 command over
+# MMIO and verify the whole framebuffer against the documented 4-bit semantics
+# (transparency, palette bank, flip X/Y, clipping + camera, even-width rule).
+test-video-sprite4: | $(TESTDIR)
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_video_sprite4 \
+	    tests/test_video_sprite4.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c
+	$(TESTDIR)/test_video_sprite4
 
 # Build and run the milestone-14 graphics-API harness: gfx_demo.c draws ONLY
 # via gfx_clear/gfx_rect/gfx_present (programs/gfx.h), and the harness counts

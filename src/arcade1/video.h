@@ -63,6 +63,13 @@
 #define ARCADE1_VIDEO_REG_PAL_INDEX 0x138u /* R/W : palette entry index 0..255 */
 #define ARCADE1_VIDEO_REG_PAL_DATA  0x13Cu /* R/W : entry data (RGB565); write
                                             * auto-increments PAL_INDEX       */
+/* M27: the palette BANK a 4-bit sprite draws from, and its flip FLAGS. A
+ * 4-bit pixel value v (1..15) becomes PALETTE[PAL_BASE + v] where
+ * PAL_BASE = (PAL_BANK & 0xF) * 16, i.e. 16 banks of 16 colours in the 256
+ * entries. FLAGS only affects SPRITE4 (TILEMAP4 takes its flips per cell):
+ * bit0 = flip X (mirror horizontally), bit1 = flip Y (mirror vertically). */
+#define ARCADE1_VIDEO_REG_PAL_BANK 0x140u  /* R/W : palette bank 0..15 (SPRITE4)*/
+#define ARCADE1_VIDEO_REG_FLAGS    0x144u  /* R/W : bit0 flipX, bit1 flipY     */
 
 /* VIDEO_CMD values. Any other value is ignored. */
 #define ARCADE1_VIDEO_CMD_CLEAR     0x1u  /* fill the screen with COLOR       */
@@ -71,6 +78,11 @@
 #define ARCADE1_VIDEO_CMD_FILL      0x4u  /* solid WxH rect at (X, Y)         */
 #define ARCADE1_VIDEO_CMD_SPRITE    0x5u  /* blit 1-bpp image at ADDR at (X,Y) */
 #define ARCADE1_VIDEO_CMD_TILEMAP   0x6u  /* draw the COLSxROWS tile grid     */
+/* M27: paletted 4-bit commands. SPRITE4 colours pixels from the palette bank
+ * in PAL_BANK with flips from FLAGS; TILEMAP4 takes bank + flips per cell. */
+#define ARCADE1_VIDEO_CMD_SPRITE4   0x7u  /* blit 4-bit image at ADDR at (X,Y) */
+#define ARCADE1_VIDEO_CMD_TILEMAP4  0x8u  /* draw the COLSxROWS grid of 4-bit
+                                           * tiles                            */
 
 /* --- Host-side work counters (DEVICE_BUDGET.md, BEFORE_M25 task C) --------- *
  *
@@ -99,6 +111,8 @@ typedef struct arcade1_video_stats {
     uint32_t cmds_fill;       /* FILL commands executed                   */
     uint32_t cmds_sprite;     /* SPRITE commands executed                 */
     uint32_t cmds_tilemap;    /* TILEMAP commands executed                */
+    uint32_t cmds_sprite4;    /* SPRITE4 commands executed (M27)          */
+    uint32_t cmds_tilemap4;   /* TILEMAP4 commands executed (M27)         */
     uint32_t cmds_present;    /* PRESENT commands executed                */
     uint32_t commands;        /* total commands executed (all types)      */
     uint32_t pixels_written;  /* framebuffer writes after clipping        */
@@ -124,6 +138,8 @@ typedef struct arcade1_video {
     uint32_t cam_x, cam_y;   /* camera offset (SPRITE/TILEMAP origin, M21)*/
     uint16_t palette[256];   /* RGB565 palette (M27), 256 entries         */
     uint8_t  pal_index;      /* PAL_INDEX register (auto-increment target)*/
+    uint8_t  pal_bank;       /* PAL_BANK register (SPRITE4 bank, M27)     */
+    uint8_t  flags;          /* FLAGS register (bit0 flipX, bit1 flipY)   */
     uint32_t presents;       /* PRESENT commands executed (STATUS)        */
     arcade1_video_stats_t stats;        /* work done so far this frame    */
     arcade1_video_stats_t frame_totals; /* snapshot at end of last frame  */

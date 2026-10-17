@@ -59,6 +59,8 @@ void arcade1_video_reset(arcade1_video_t *v)
     memset(v->palette + 16, 0,
            sizeof v->palette - sizeof k_default_palette);
     v->pal_index = 0u;
+    v->pal_bank  = 0u;
+    v->flags     = 0u;
     v->presents = 0u;
     arcade1_video_stats_begin_frame(v);   /* counters start clean too */
     v->frame_totals = v->stats;           /* and read as zero until a frame */
@@ -251,6 +253,73 @@ static void video_sprite(arcade1_video_t *v)
                     v->w, v->h, (uint16_t)v->color);
 }
 
+/* --- M27: SPRITE4 (paletted 4-bit blit) ----------------------------------- *
+ * The 4-bit image format (docs.md "Color decisions, pinned at M27"): two
+ * pixels per byte, the leftmost pixel in the HIGH nibble, rows padded to
+ * whole bytes, and the WIDTH MUST BE EVEN (so a row is exactly W/2 bytes with
+ * no padding). Pixel value 0 is transparent; value v (1..15) draws
+ * PALETTE[pal_bank*16 + v]. This is the single pixel pipeline shared by the
+ * SPRITE4 command and by each cell of TILEMAP4. Clipping is identical to the
+ * 1-bpp path (signed origin, 64-bit, intersection with the screen).
+ *
+ * Invalid sizes are ignored, exactly: a zero width/height draws nothing, and
+ * an ODD width draws nothing (the format has no meaning for it). The image
+ * column/row is recovered from the clipped screen coordinate and then the
+ * flips are applied, so a flipped sprite that hangs off an edge still shows
+ * the correct image pixels. */
+static void video_blit_4bpp(arcade1_video_t *v, uint64_t src_addr,
+                            int64_t x, int64_t y, uint64_t w, uint64_t h,
+                            uint8_t pal_bank, int flip_x, int flip_y)
+{
+    int64_t x0, x1, y0, y1, sx, sy;
+    const uint64_t stride = (w + 1u) / 2u;   /* bytes per row (even w: w/2) */
+    const uint16_t *pal = &v->palette[(uint32_t)pal_bank * 16u];
+
+    if (v->framebuffer == 0)
+        return;
+    if (w == 0u || h == 0u)
+        return;
+    if ((w & 1u) != 0u)
+        return;                      /* width must be even: odd W draws nothing */
+
+    video_clip(x, y, w, h, &x0, &x1, &y0, &y1);
+
+    for (sy = y0; sy < y1; sy++) {
+        uint64_t row = (uint64_t)(sy - y);
+        if (flip_y) row = h - 1u - row;
+        for (sx = x0; sx < x1; sx++) {
+            uint64_t col = (uint64_t)(sx - x);
+            uint8_t byte, nib;
+
+            if (flip_x) col = w - 1u - col;
+            byte = video_fetch_byte(v, src_addr + row * stride + col / 2u);
+            nib = ((col & 1u) != 0u) ? (uint8_t)(byte & 0x0Fu)
+                                     : (uint8_t)(byte >> 4);
+            if (nib != 0u) {
+                v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = pal[nib];
+                v->stats.pixels_written++;   /* transparent: writes nothing */
+            }
+        }
+    }
+    /* bytes fetched: one per two pixels examined (two 4-bit pixels share a
+     * byte), counting only the clipped window like the 1-bpp path. */
+    v->stats.bytes_fetched +=
+        (uint32_t)(((uint64_t)(x1 - x0) * (uint64_t)(y1 - y0)) / 2u);
+}
+
+/* SPRITE4 is WORLD-space like SPRITE (camera subtracted), takes its palette
+ * bank from PAL_BANK and its flips from FLAGS. */
+static void video_sprite4(arcade1_video_t *v)
+{
+    v->stats.cmds_sprite4++;
+    v->stats.commands++;
+    video_blit_4bpp(v, v->addr,
+                    (int32_t)v->x - (int32_t)v->cam_x,
+                    (int32_t)v->y - (int32_t)v->cam_y,
+                    v->w, v->h, v->pal_bank,
+                    (v->flags & 1u) != 0u, (v->flags & 2u) != 0u);
+}
+
 /* --- M20: TILEMAP --------------------------------------------------------- *
  * Draw a COLSxROWS grid of cells in one command. Each cell is one 32-bit
  * little-endian word: bits [15:0] = tile index (0 = empty, skipped), bits
@@ -367,6 +436,8 @@ uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
     case ARCADE1_VIDEO_REG_PAL_INDEX: return v->pal_index;
     case ARCADE1_VIDEO_REG_PAL_DATA:
         return v->palette[v->pal_index];   /* read entry, no auto-increment */
+    case ARCADE1_VIDEO_REG_PAL_BANK:  return v->pal_bank;
+    case ARCADE1_VIDEO_REG_FLAGS:     return v->flags;
     default:                       return 0u;   /* CMD is write-only, rest 0 */
     }
 }
@@ -419,6 +490,12 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         v->palette[v->pal_index] = (uint16_t)(value & 0xFFFFu);
         v->pal_index = (uint8_t)((v->pal_index + 1u) & 0xFFu);  /* auto-inc */
         return;
+    case ARCADE1_VIDEO_REG_PAL_BANK:
+        v->pal_bank = (uint8_t)(value & 0x0Fu);   /* 16 banks of 16 colours */
+        return;
+    case ARCADE1_VIDEO_REG_FLAGS:
+        v->flags = (uint8_t)(value & 0x03u);      /* bit0 flipX, bit1 flipY */
+        return;
     case ARCADE1_VIDEO_REG_CMD:
         switch (value) {
         case ARCADE1_VIDEO_CMD_CLEAR:     video_clear(v);     return;
@@ -427,6 +504,7 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         case ARCADE1_VIDEO_CMD_FILL:      video_fill(v);      return;
         case ARCADE1_VIDEO_CMD_SPRITE:    video_sprite(v);    return;
         case ARCADE1_VIDEO_CMD_TILEMAP:   video_tilemap(v);   return;
+        case ARCADE1_VIDEO_CMD_SPRITE4:   video_sprite4(v);   return;
         default:                          return;             /* ignored */
         }
     default:
