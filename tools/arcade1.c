@@ -24,10 +24,21 @@
  *     --capture FILE       write the final framebuffer to FILE as a PPM (P6)
  *     --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every
  *     --capture-every K    frame stride for --capture-dir (default 1)
+ *     --syms FILE          load an `nm` symbol dump (<game>.syms)
+ *     --vars LIST          print named game variables (comma list, or "all")
+ *     --var-every K        also print the selected variables every K frames
  *     --quiet              suppress the per-frame hash lines (summary only)
  *
- * Exit codes: 0 success, 1 runtime error (bad image, unreadable file, ...),
- * 2 usage error.
+ * Exit codes: 0 success, 1 runtime error (bad image, unreadable file,
+ * unknown/non-RAM variable, ...), 2 usage error.
+ *
+ * NAMED GAME VARIABLES (--vars): reads a game's globals out of guest RAM by
+ * name, from an `nm` dump (the same <game>.syms the game tests use). Only
+ * RAM-resident data/bss symbols count as variables; each is read as one 32-bit
+ * word (the guest's `int`) and printed signed — exactly how the tests read
+ * score/lives/state. Final values print as `var <name> = <value>`; with
+ * --var-every K a `vars <frame> <name>=<value> ...` trace line prints every K
+ * frames.
  *
  * INPUT SCRIPT FORMAT (plain text, deterministic, AI-friendly):
  *   - one run-length entry per line:  <first_frame> <last_frame> <buttons...>
@@ -173,13 +184,132 @@ static int write_ppm(const char *path, const uint16_t *fb)
     return 0;
 }
 
+/* --- Named game variables --------------------------------------------------
+ * "What does the game believe is happening?" (AI_NATIVE_DEVELOPMENT.md): read a
+ * game's globals out of guest RAM by name, from an `nm` symbol dump (the same
+ * <game>.syms the game tests use). Only RAM-resident data/bss symbols are
+ * variables; each is read as one 32-bit word (the guest's `int`, cast to signed
+ * — exactly how test-breakout etc. read score/lives/state). */
+
+#define SYM_MAX 8192
+#define VAR_MAX 1024
+
+typedef struct symbol {
+    uint32_t addr;
+    char     type;                 /* nm type letter: B/b/D/d = RAM data/bss   */
+    char     name[64];
+} symbol_t;
+
+static symbol_t        g_syms[SYM_MAX];
+static unsigned        g_nsyms;
+static const symbol_t *g_vars[VAR_MAX];    /* the resolved --vars selection    */
+static unsigned        g_nvars;
+
+/* Parse an `nm` dump: "<hexaddr> <type> <name>" per line. Blank lines and nm
+ * section headers (which don't match 3 fields) are skipped. 0 ok, -1 error. */
+static int load_syms(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[512];
+
+    if (!f) {
+        fprintf(stderr, "arcade1: cannot open symbol dump '%s'\n", path);
+        return -1;
+    }
+    g_nsyms = 0;
+    while (fgets(line, sizeof line, f)) {
+        unsigned addr;
+        char type, name[64];
+
+        if (sscanf(line, "%x %c %63s", &addr, &type, name) != 3)
+            continue;                        /* blank line or nm header */
+        if (g_nsyms >= SYM_MAX) {
+            fprintf(stderr, "arcade1: %s: too many symbols (max %d)\n",
+                    path, SYM_MAX);
+            fclose(f); return -1;
+        }
+        g_syms[g_nsyms].addr = (uint32_t)addr;
+        g_syms[g_nsyms].type = type;
+        snprintf(g_syms[g_nsyms].name, sizeof g_syms[g_nsyms].name, "%s", name);
+        g_nsyms++;
+    }
+    fclose(f);
+    if (g_nsyms == 0) {
+        fprintf(stderr, "arcade1: %s: no symbols found\n", path);
+        return -1;
+    }
+    return 0;
+}
+
+static const symbol_t *find_sym(const char *name)
+{
+    for (unsigned i = 0; i < g_nsyms; i++)
+        if (!strcmp(g_syms[i].name, name))
+            return &g_syms[i];
+    return NULL;
+}
+
+/* A RAM-resident data/bss symbol (a game variable), not code or a linker mark. */
+static int sym_is_ram_var(const symbol_t *s)
+{
+    if (s->addr < ARCADE1_RAM_BASE ||
+        s->addr + 4u > ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE)
+        return 0;
+    return s->type == 'B' || s->type == 'b' || s->type == 'D' || s->type == 'd';
+}
+
+/* Resolve the --vars selection ("all", or a comma list) into g_vars.
+ * 0 ok, -1 error (message on stderr). */
+static int resolve_vars(const char *list)
+{
+    g_nvars = 0;
+
+    if (!strcmp(list, "all")) {
+        for (unsigned i = 0; i < g_nsyms && g_nvars < VAR_MAX; i++) {
+            const symbol_t *s = &g_syms[i];
+            if (s->name[0] == '_')            /* linker internals (_sbss, ...) */
+                continue;
+            if (sym_is_ram_var(s))
+                g_vars[g_nvars++] = s;
+        }
+        return g_nvars ? 0 : -1;
+    }
+
+    { char buf[1024], *tok, *save = NULL;
+      if (strlen(list) >= sizeof buf) {
+          fprintf(stderr, "arcade1: --vars list too long\n");
+          return -1;
+      }
+      snprintf(buf, sizeof buf, "%s", list);
+      for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+          const symbol_t *s = find_sym(tok);
+          if (!s) {
+              fprintf(stderr, "arcade1: no symbol named '%s'\n", tok);
+              return -1;
+          }
+          if (!sym_is_ram_var(s)) {
+              fprintf(stderr, "arcade1: '%s' is not a RAM variable "
+                              "(type '%c' @ 0x%08x)\n", tok, s->type, s->addr);
+              return -1;
+          }
+          if (g_nvars >= VAR_MAX) {
+              fprintf(stderr, "arcade1: too many variables (max %d)\n", VAR_MAX);
+              return -1;
+          }
+          g_vars[g_nvars++] = s;
+      } }
+
+    return g_nvars ? 0 : -1;
+}
+
 /* --- run subcommand ------------------------------------------------------- */
 
 static int cmd_run(int argc, char **argv)
 {
     const char *rom_path = NULL, *input_path = NULL;
     const char *capture = NULL, *capture_dir = NULL;
-    unsigned frames = 600, capture_every = 1;
+    const char *syms_path = NULL, *var_list = NULL;
+    unsigned frames = 600, capture_every = 1, var_every = 0;
     int quiet = 0;
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
@@ -196,6 +326,9 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--capture") && i + 1 < argc)  capture = argv[++i];
         else if (!strcmp(a, "--capture-dir") && i + 1 < argc) capture_dir = argv[++i];
         else if (!strcmp(a, "--capture-every") && i + 1 < argc) capture_every = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
+        else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
+        else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
         else if (a[0] == '-') {
             fprintf(stderr, "arcade1 run: unknown option '%s'\n", a);
@@ -207,11 +340,15 @@ static int cmd_run(int argc, char **argv)
             return 2;
         }
     }
-    if (!rom_path || frames == 0 || capture_every == 0) {
+    if (!rom_path || frames == 0 || capture_every == 0 ||
+        (var_list && !syms_path) || (var_every && !var_list)) {
         fprintf(stderr,
                 "usage: arcade1 run <game.arc1|bin> [--frames N] [--input FILE]\n"
                 "                   [--capture FILE] [--capture-dir DIR]\n"
-                "                   [--capture-every K] [--quiet]\n");
+                "                   [--capture-every K] [--syms FILE]\n"
+                "                   [--vars LIST] [--var-every K] [--quiet]\n"
+                "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
+                "  it requires --syms, and --var-every requires --vars.\n");
         return 2;
     }
 
@@ -243,6 +380,10 @@ static int cmd_run(int argc, char **argv)
 
     if (input_path && load_input(input_path) != 0)
         return 1;
+    if (syms_path && load_syms(syms_path) != 0)
+        return 1;
+    if (var_list && resolve_vars(var_list) != 0)
+        return 1;
 
     arcade1_init(&m);
     arcade1_reset(&m);
@@ -260,6 +401,13 @@ static int cmd_run(int argc, char **argv)
             printf("frame %4u hash=0x%016llX fb=0x%016llX\n", fr,
                    (unsigned long long)state_hash(&m.cpu, &m.bus),
                    (unsigned long long)fb_hash(&m));
+        if (var_every && var_list && fr % var_every == 0) {
+            printf("vars %4u", fr);
+            for (unsigned v = 0; v < g_nvars; v++)
+                printf(" %s=%d", g_vars[v]->name,
+                       (int)(int32_t)arcade1_read32(&m.bus, g_vars[v]->addr));
+            printf("\n");
+        }
         if (capture_dir && fr % capture_every == 0) {
             char path[512];
             snprintf(path, sizeof path, "%s/frame_%04u.ppm", capture_dir, fr);
@@ -270,6 +418,10 @@ static int cmd_run(int argc, char **argv)
 
     if (capture && write_ppm(capture, arcade1_framebuffer(&m)) != 0)
         return 1;
+
+    for (unsigned v = 0; v < g_nvars; v++)
+        printf("var %s = %d\n", g_vars[v]->name,
+               (int)(int32_t)arcade1_read32(&m.bus, g_vars[v]->addr));
 
     printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",
            frames,

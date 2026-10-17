@@ -13,6 +13,8 @@
 #   4. scripted input     — a button script changes a game's state hash, and the
 #                           same script is itself deterministic
 #   5. exit codes         — 0 success, 1 bad image/file, 2 usage error
+#   6. named variables    — --syms/--vars read a game's RAM globals by name,
+#                           --var-every traces them, bad names/symbols error out
 #
 # usage: test_run.sh <arcade1-cli> <rom-dir> <golden-dir>
 
@@ -93,4 +95,32 @@ rc=0; "$CLI" frobnicate 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "unknown command should exit 2, got $rc"
 note "exit codes ok — 0 / 1 / 2 as documented"
 
-echo "test-run: arcade1 run ok (determinism, golden, capture, input, exit codes)"
+# --- 6) named game variables ------------------------------------------------
+# --syms/--vars read a game's RAM globals by name from an `nm` dump (the same
+# <game>.syms the golden regression uses). Use the committed dump if this ROM
+# dir has one (tests/roms), else generate it from the freshly built ELF.
+SYMS="$ROM/breakout.syms"
+if [ ! -f "$SYMS" ] && [ -f "$ROM/breakout.elf" ] &&
+   command -v riscv64-unknown-elf-nm >/dev/null 2>&1; then
+    riscv64-unknown-elf-nm "$ROM/breakout.elf" > "$OUT/breakout.syms"
+    SYMS="$OUT/breakout.syms"
+fi
+if [ -f "$SYMS" ]; then
+    "$CLI" run "$BREAK" --frames 30 --syms "$SYMS" --vars score,lives --quiet > "$OUT/v0.txt"
+    grep -q '^var score = 0$' "$OUT/v0.txt" || fail "--vars: expected 'var score = 0'"
+    grep -q '^var lives = 3$' "$OUT/v0.txt" || fail "--vars: expected 'var lives = 3'"
+    "$CLI" run "$BREAK" --frames 30 --syms "$SYMS" --vars all --var-every 15 --quiet > "$OUT/v1.txt"
+    grep -q '^vars *0 ' "$OUT/v1.txt" || fail "--var-every: no trace line at frame 0"
+    grep -q 'score=' "$OUT/v1.txt" || fail "--var-every: trace does not include score"
+    rc=0; "$CLI" run "$BREAK" --vars score --quiet 2>/dev/null || rc=$?
+    [ "$rc" -eq 2 ] || fail "--vars without --syms should exit 2, got $rc"
+    rc=0; "$CLI" run "$BREAK" --syms "$SYMS" --vars nosuch --quiet 2>/dev/null || rc=$?
+    [ "$rc" -eq 1 ] || fail "unknown symbol should exit 1, got $rc"
+    rc=0; "$CLI" run "$BREAK" --syms "$SYMS" --vars main --quiet 2>/dev/null || rc=$?
+    [ "$rc" -eq 1 ] || fail "non-RAM symbol should exit 1, got $rc"
+    note "named variables ok — --syms/--vars reads globals, trace + error exits"
+else
+    note "named variables skipped — no breakout.syms and no riscv nm to make one"
+fi
+
+echo "test-run: arcade1 run ok (determinism, golden, capture, input, exit codes, variables)"

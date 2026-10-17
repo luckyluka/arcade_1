@@ -422,6 +422,33 @@ Added paletted 4-bit graphics on top of the unchanged 1-bit commands:
 
 Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
 
+## Named game variables (M28, step 2)
+
+Second slice of the developer SDK (`MILESTONES_2.md` M28; design principles
+in `AI_NATIVE_DEVELOPMENT.md`, contract in `SDK.md`). Per-frame hashes answer
+"what does the machine believe?"; named variables answer "what does the
+**game** believe?" — a game's own globals read out of guest RAM by name.
+
+* **`--syms/--vars/--var-every`** (`tools/arcade1.c`): load an `nm` symbol
+  dump (the same `<game>.syms` the golden regression uses), select RAM
+  data/bss globals by name (comma list, or `all`), and print each as one
+  signed 32-bit word — exactly how the game tests read score/lives/state.
+  Final values print as `var <name> = <value>`; `--var-every K` adds a
+  `vars <frame> <name>=<value> ...` trace line every K frames. Unknown names
+  and non-RAM symbols (code/linker marks) are runtime errors (exit 1);
+  `--vars` without `--syms` is a usage error (exit 2).
+* **Test coverage** — `make test-run` (`tests/test_run.sh`) gained check 6:
+  named reads (`breakout` `score = 0` / `lives = 3` after 30 idle frames),
+  the `--var-every` trace, and both error exits. Works against both ROM
+  layouts: committed `tests/roms/*.syms`, or a dump generated from the
+  freshly built ELF via `riscv64-unknown-elf-nm` (skipped with a note if
+  neither is available).
+* **Docs** — `SDK.md` gained a "Named game variables" section (semantics,
+  error contract, test coverage); the feature moved out of "Remaining M28
+  deliverables".
+
+Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
+
 ## AI SDK v0.1 — foundation (M28, step 1)
 
 First slice of the developer-facing SDK (`MILESTONES_2.md` M28; design principles

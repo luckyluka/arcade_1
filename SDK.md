@@ -6,9 +6,9 @@ Libretro, no RetroArch, no GPU, no host input devices — so it runs identically
 in a terminal, in CI, and inside an AI agent's sandbox.
 
 This document covers the **foundation** landed in M28 step 1: the headless
-runner `arcade1 run`. The remaining M28 deliverables (record/replay capture,
-the full `arcade1 build/test/capture` command set, named game variables, a
-short cheat sheet, and two example games) are listed under
+runner `arcade1 run`, plus **named game variables** (step 2). The remaining
+M28 deliverables (record/replay capture, the full `arcade1 build/test/capture`
+command set, a cheat sheet, and two example games) are listed under
 [Remaining](#remaining-m28-deliverables) and are not built yet.
 
 ---
@@ -22,6 +22,9 @@ arcade1 run <game.arc1|bin> [options]
   --capture FILE       write the final framebuffer to FILE as a PPM (P6)
   --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every frames
   --capture-every K    frame stride for --capture-dir (default 1)
+  --syms FILE          load an `nm` symbol dump (<game>.syms)
+  --vars LIST          print named game variables (comma list, or "all")
+  --var-every K        also print the selected variables every K frames
   --quiet              suppress the per-frame hash lines (summary only)
 ```
 
@@ -100,6 +103,40 @@ that the same script reproduces the same hash.
 
 ---
 
+## Named game variables
+
+Per-frame hashes answer "what does the machine believe?"; named variables
+answer "what does the **game** believe?" — a game's own globals, read out of
+guest RAM by name. The names come from an `nm` symbol dump (the same
+`<game>.syms` the golden regression uses; `tests/roms/*.syms` are committed):
+
+```
+arcade1 run breakout.arc1 --frames 30 \
+    --syms breakout.syms --vars score,lives
+...
+var score = 0
+var lives = 3
+```
+
+* `--syms FILE` loads the dump (`<hexaddr> <type> <name>` per line, as `nm`
+  prints it). Only RAM-resident data/bss symbols (`B/b/D/d` types inside the
+  RAM window) count as variables — code and linker marks are rejected.
+* `--vars LIST` selects what to print: a comma list of names, or `all` for
+  every RAM variable in the dump (linker internals like `_sbss` skipped).
+* Each variable is read as one 32-bit word — the guest's `int`, printed
+  signed — exactly how the game tests read `score`/`lives`/`state`.
+* `--var-every K` additionally prints a `vars <frame> <name>=<value> ...`
+  trace line every K frames, for watching a variable move.
+* Errors: `--vars` without `--syms` is a usage error (exit 2); an unknown
+  name or a non-RAM symbol is a runtime error (exit 1).
+
+`make test-run` checks the named reads (`breakout`'s `score = 0`,
+`lives = 3` after 30 idle frames), the `--var-every` trace, and both error
+exits. When the ROM directory has no `.syms` committed, the test generates
+one from the freshly built ELF with `riscv64-unknown-elf-nm`.
+
+---
+
 ## Remaining M28 deliverables
 
 Not built yet (future steps, then the rest of the roadmap):
@@ -108,7 +145,5 @@ Not built yet (future steps, then the rest of the roadmap):
   the script format above (the read side, `--input`, already exists).
 - **Full `arcade1` command set** — `build` (RISC-V guest → `.arc1`), `test`
   (run + assert hashes), `capture` (dump frames), built on `run`.
-- **Named game variables** — inspect guest globals by symbol name (via the
-  `.syms` `nm` dumps) instead of raw addresses.
 - **Cheat sheet** — a short reference for humans and agents.
 - **Two example games** built with the SDK.
