@@ -830,6 +830,11 @@ This is a major milestone.
   stops changing (crt0's `j .` park), or until a 1,000,000-instruction safety
   cap. Game speed is therefore locked to the host's 60 fps, deterministically;
   a guest that never presents is bounded by the cap, never by wall-clock.
+  **Frame boundaries** — the exact end-of-frame rules (which of the three
+  ends a frame first, where the next frame resumes, and what the timer,
+  `STATUS` and the host see in each case) are specified in `SPEC.md` §8
+  "Frame boundaries" and pinned by `make test-frame-rules`. That note is the
+  normative description; this bullet is the M15 summary of it.
 - **Demo mode is unchanged.** While no firmware is attached, `run_frame`
   behaves exactly as M02–M06 defined it (test pattern, moving square, pad
   overlay, input-driven state); with firmware attached, the host demo does not

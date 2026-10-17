@@ -28,7 +28,7 @@ test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
-test-persist: | $(TESTDIR)
+test-persist test-frame-rules: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -85,7 +85,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
-        test-golden golden-update check
+        test-golden golden-update check test-frame-rules
 
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
@@ -94,7 +94,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray test-sandbox test-systems test-persist test-golden
+        test-ray test-sandbox test-systems test-persist test-frame-rules \
+        test-golden
 
 all: $(TARGET)
 
@@ -450,6 +451,19 @@ test-persist: $(GUEST_BUILD)/systems.arc1
 	               "0x"dc, "0x"td}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_persist $(GUEST_BUILD)/systems.arc1 $$SYMS
+
+# Build and run the SPEC section 8 "Frame boundaries" harness (BEFORE_M25
+# task B): three hand-assembled guests pinning exactly what the reference does
+# at the end of a frame — PRESENT ends it immediately (a marker after it runs
+# only next frame), a parked guest re-ends on its first step, and a 2-instr
+# loop runs exactly 1,000,000 steps with the next frame continuing the count.
+# Hand-assembled: needs NO RISC-V toolchain and no guest image.
+test-frame-rules: | $(TESTDIR)
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_frame_rules \
+	    tests/test_frame_rules.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	$(TESTDIR)/test_frame_rules
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

@@ -194,7 +194,11 @@ make test-golden   # Task A: re-run the 4 game tests against the COMMITTED
                    # no RISC-V compiler
 make golden-update # manual: regenerate tests/golden/*.txt (deliberate act)
 make roms-update   # manual: re-copy the 4 .arc1 images + nm dumps to tests/roms/
-make check         # Task A: every test target + test-golden
+make check         # Task A: every test target + test-golden + test-frame-rules
+make test-frame-rules # Task B: SPEC §8 frame boundaries, hand-assembled
+                      #     guests (no RISC-V toolchain): PRESENT ends the
+                      #     frame, parked guests re-end instantly, the cap is
+                      #     exactly 1e6 steps
 ```
 
 All builds use `-Wall -Wextra` and must stay warning-free.
@@ -240,6 +244,23 @@ every test target + `test-golden`. The four final state hashes are unchanged
 from before the work and match the reference host (see BEFORE_M25.md task A
 report). Refreshing `tests/roms/` or `tests/golden/` is manual and deliberate:
 a golden change is a behaviour change (docs.md §30 "Golden regression policy").
+
+## Frame boundaries (BEFORE_M25 task B)
+
+`SPEC.md` §8 gained "Frame boundaries": a frame ends at the first of (1) the
+step that executes PRESENT, (2) the first step that leaves PC unchanged (a
+parked guest then ends every later frame on its first step), or (3) 1,000,000
+steps. Each case's timer tick, `STATUS` and host-visible output is pinned in a
+table; `instret`/step counts are stated as diagnostic, not conformance.
+`make test-frame-rules` (`tests/test_frame_rules.c`, hand-assembled guests,
+no RISC-V toolchain) proves each rule against the reference.
+
+**DECISION NEEDED (owner):** §8 said the 1M cap is "not part of the game
+contract" while §10 rule 6 listed it *in* the contract. Both options are now
+written out in §8 (A: truncation is contract; B: reaching the cap is a program
+error, behaviour then implementation-defined) with B recommended; §10 rule 6
+points at it. No `src/` change was made — the code matches the facts as
+written.
 
 ## Known limitations
 

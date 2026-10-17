@@ -170,6 +170,13 @@ larger than the screen costs only its visible cells in bandwidth.
 
 **Power-on:** all parameters zeroed, `STATUS` = 0, nothing presented.
 
+**Display conformance.** The presented frame is the **framebuffer contents at
+the end of the frame** (§8 "Frame boundaries"). `PRESENT` does exactly two
+things: it increments `STATUS`, and it ends the current frame. How an
+implementation buffers, double-buffers, or scans out that framebuffer is **not
+specified**, as long as this is what the viewer sees. No text here should be
+read as mandating a particular buffering scheme.
+
 ## 6. Audio
 
 A single square-wave tone channel, register-driven; the machine renders the
@@ -215,6 +222,20 @@ for the current frame. The machine never touches host input devices directly.
   instructions per frame; this is a runaway-guest safety cap, not part of the
   game contract. A guest that parks in a self-loop is detected and the frame
   ends.
+  **CONTRADICTION — DECISION NEEDED (owner).** §8 calls this cap "not part of
+  the game contract", but §10 rule 6 lists it *in* the v0.1 contract. Both
+  readings are written out here; do not pick silently:
+  - **Option A — truncation at exactly 1,000,000 steps is contract.** Hardware
+    (M33) and every other implementation must replicate the truncation point,
+    which constrains any future optimisation (no reordering/fusing past the
+    cap) and makes a diagnostic a conformance requirement.
+  - **Option B — reaching the cap is a program error (RECOMMENDED).** A
+    conforming guest always ends its frame with `PRESENT` (or parks); hitting
+    the cap means the guest is broken. Behaviour afterwards is then
+    implementation-defined and conformance tests never reach it, so hardware
+    is free. No shipped test depends on the truncation point (the worst
+    measured shipped frame is ~14.3k instructions, ~1.4% of the cap).
+  **Recommendation: B.** See also §10 rule 6.
 - **Timer.** Exactly **1 tick per completed frame** (§4).
 - **Determinism (a hard requirement).** The machine is a pure function of
   (ROM, reset state, per-frame input sequence). There are **no** interrupts, no
@@ -222,6 +243,46 @@ for the current frame. The machine never touches host input devices directly.
   first-class test: the same ROM + the same input script must produce an
   identical per-frame hash sequence and an identical final framebuffer across
   runs and hosts. Any future change that breaks this is architecturally wrong.
+
+### Frame boundaries
+
+`arcade1_run_frame()` steps the guest one instruction at a time and ends the
+frame at the **first** of these three conditions:
+
+1. **`PRESENT` executed.** The `sw` that writes `CMD = PRESENT` completes — the
+   `STATUS` increment is visible immediately after that instruction — the frame
+   ends, and **no instruction after it runs this frame**.
+2. **`pc` unchanged.** A step leaves `pc` identical to what it was before that
+   step (a self-loop such as `j .`). The instruction that caused it *did* run.
+   The condition is re-tested from a fresh baseline every frame, so a guest
+   that parks this way ends **every** later frame on its first step too.
+3. **Step cap.** 1,000,000 steps have executed in this frame ("Instruction
+   cap", above).
+
+**Where the next frame starts.** `arcade1_run_frame()` never resets the PC; it
+resumes from wherever the CPU stopped. Precisely: after a `PRESENT`-ended frame
+the store has already advanced `pc`, so the next frame starts at the
+instruction **after** the `PRESENT`; after a `pc`-unchanged end it starts at
+that same parking instruction (hence the immediate re-end); after the step cap
+it starts at the instruction after the last one executed.
+
+**What each case leaves behind:**
+
+| End of frame      | `STATUS` (PRESENT count) | Timer tick | Host output                          |
+|-------------------|--------------------------|------------|--------------------------------------|
+| `PRESENT`         | +1                       | +1         | framebuffer at end of frame = at `PRESENT` (nothing ran after it) |
+| `pc` unchanged    | unchanged                | +1         | framebuffer as last drawn            |
+| Step cap          | unchanged                | +1         | framebuffer as last drawn            |
+
+The timer ticks **exactly once per `arcade1_run_frame()` call** whatever ended
+the frame (§4), so it counts frames, not presents. `STATUS` counts `PRESENT`s
+only. The host sees the framebuffer contents **when `arcade1_run_frame()`
+returns**.
+
+`instret` and the step count are **diagnostic, not part of conformance**: a
+conforming implementation must reproduce the frame's visible output and
+observable register behaviour, not the exact instruction total that produced
+it.
 
 ## 9. Program model and image format (`.arc1`)
 
@@ -275,8 +336,14 @@ detail; conformance (M34) is measured against them:
    part of the contract.
 5. **No faulting.** Bad reads return 0, bad writes are ignored; the machine
    never traps.
-6. **The frame protocol is present-yield** with the 1,000,000-instruction
-   safety cap (§8).
+6. **The frame protocol is present-yield** (§8). Frame boundaries follow the
+   three rules in §8 "Frame boundaries"; the 1,000,000-instruction cap is a
+   safety net, not a contract requirement — **DECISION NEEDED (owner)**:
+   §8 used to call it "not part of the game contract" while earlier versions
+   of this rule listed it as one. §8 sets out both options and recommends
+   **B**: reaching the cap is a program error, behaviour after it is
+   implementation-defined, and conformance tests never reach it. Once the
+   owner picks, this rule and §8 must be updated together.
 7. **`.arc1` v1 is the image format** (§9); raw `.bin` remains accepted.
 8. **Excluded features stay excluded** for v0.1: interrupts, entropy/RNG,
    floating point, alpha blend, rotation, scaling, affine transforms,
