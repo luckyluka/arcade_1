@@ -8,13 +8,14 @@
  */
 
 #include "libretro.h"
+#include "machine.h"     /* ARCADE1_WIDTH / ARCADE1_HEIGHT (M25) */
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-#define W 320
-#define H 240
+#define W ARCADE1_WIDTH
+#define H ARCADE1_HEIGHT
 #define SQ_SIZE  32
 #define SQ_SPEED 2
 
@@ -121,8 +122,8 @@ int main(void)
     assert(got_rgb565 && "must negotiate RGB565");
 
     int minx, maxx, miny, maxy;
-    const int cx0 = (W - SQ_SIZE) / 2;   /* 144 */
-    const int cy0 = (H - SQ_SIZE) / 2;   /* 104 */
+    const int cx0 = (W - SQ_SIZE) / 2;   /* (480-32)/2 = 224 */
+    const int cy0 = (H - SQ_SIZE) / 2;   /* (270-32)/2 = 119 */
 
     /* --- No input: square sits centred ---------------------------------- */
     run_frames(0, 1);

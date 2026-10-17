@@ -18,10 +18,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* --- Machine geometry (temporary placeholder values) -------------------- */
+/* --- Machine geometry (M25: pinned game resolution) ---------------------
+ * 480x270 is 16:9 and scales exactly 4x to 1080p and 8x to 4K. Every other
+ * size in the machine, Libretro adapter and tests derives from these two
+ * macros. The shipped games and demos still draw in the top-left 320x240
+ * region (their guest code is unchanged); the rest of the screen shows
+ * whatever their CLEAR colour leaves. */
 
-#define ARCADE1_WIDTH        320
-#define ARCADE1_HEIGHT       240
+#define ARCADE1_WIDTH        480
+#define ARCADE1_HEIGHT       270
 #define ARCADE1_FPS          60.0
 #define ARCADE1_SAMPLE_RATE  48000.0
 

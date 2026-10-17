@@ -10,13 +10,13 @@
  *
  *   (a) one full-screen CLEAR
  *   (b) 100 full-screen CLEARs
- *   (c) a full-screen TILEMAP: 20x15 cells of 16x16 tiles = 300 cells, every
+ *   (c) a full-screen TILEMAP: 30x16 cells of 16x16 tiles = 480 cells, every
  *       cell non-empty with its own index and its own tint. NOTE the machine
  *       only has 4 KiB RAM for tile data, so only 128 distinct 32-byte tiles
  *       are addressable; the rest necessarily read as transparent. The
  *       FETCH-side work (cells_visited, bytes_fetched) is the true full-screen
  *       worst case; pixels_written is memory-capped and is reported as such.
- *       A second variant reuses one all-set tile across all 300 cells to show
+ *       A second variant reuses one all-set tile across all 480 cells to show
  *       the true pixel-write worst case for the same fetch cost.
  *   (d) 128 overlapping 32x32 all-set sprites
  *   (e) the most commands a guest can issue inside the 1,000,000-step cap
@@ -37,8 +37,8 @@
 #include <string.h>
 
 /* Screen geometry: the arithmetic below is written against these. */
-#define SCR_W  ARCADE1_WIDTH        /* 320 */
-#define SCR_H  ARCADE1_HEIGHT       /* 240 */
+#define SCR_W  ARCADE1_WIDTH        /* 480 */
+#define SCR_H  ARCADE1_HEIGHT       /* 270 */
 #define SCREEN_PIXELS ((uint32_t)ARCADE1_FB_PIXELS)
 
 #define MMIO(off) (ARCADE1_MMIO_BASE + (off))
@@ -170,19 +170,19 @@ static void case_many_clears(void)
            s->bytes_fetched);
 }
 
-/* --- Case (c): full-screen TILEMAP, 20x15 cells of 16x16 tiles ----------- */
+/* --- Case (c): full-screen TILEMAP, 30x16 cells of 16x16 tiles ----------- */
 
 #define TILE_W   16u
 #define TILE_H   16u
-#define MAP_COLS ((SCR_W) / (TILE_W))   /* 20 */
-#define MAP_ROWS ((SCR_H) / (TILE_H))   /* 15 */
-#define MAP_CELLS (MAP_COLS * MAP_ROWS)  /* 300 */
+#define MAP_COLS ((SCR_W) / (TILE_W))   /* 30 */
+#define MAP_ROWS ((SCR_H) / (TILE_H))   /* 16 */
+#define MAP_CELLS (MAP_COLS * MAP_ROWS)  /* 480 */
 #define TILE_BYTES ((TILE_H) * ((TILE_W) / 8u))   /* 32 */
 #define CELL_ADDR 0x0400u              /* cell array lives in the ROM image */
 #define TILE_ADDR 0x1000u              /* tile set lives in RAM (all 0xFF)  */
 
 /* Build the ROM image: [guest code][cell array]. Each cell gets its own
- * tile index (1..300) and its own tint; `reuse_one_tile` instead points
+ * tile index (1..480) and its own tint; `reuse_one_tile` instead points
  * every cell at the single all-set tile 1 (the true pixel-write worst case
  * for the same fetch cost). */
 static size_t build_tilemap_image(uint8_t *img, int reuse_one_tile)
@@ -223,7 +223,7 @@ static void case_tilemap(int reuse_one_tile)
     uint8_t img[4 * 1024];
     const size_t n = build_tilemap_image(img, reuse_one_tile);
     const arcade1_video_stats_t *s;
-    /* How many of the 300 distinct tiles land inside the 4 KiB of RAM. */
+    /* How many of the 480 distinct tiles land inside the 4 KiB of RAM. */
     const uint32_t addrable_tiles =
         (ARCADE1_RAM_SIZE) / TILE_BYTES;             /* 4096 / 32 = 128 */
     const uint32_t full_tiles =
@@ -250,7 +250,7 @@ static void case_tilemap(int reuse_one_tile)
     s = arcade1_video_frame_totals(&m.video);
 
     /* Arithmetic (independent of the data, so exact for both variants):
-     * every one of the 300 cells is on screen (no windowing), each costs a
+     * every one of the 480 cells is on screen (no windowing), each costs a
      * 4-byte cell fetch plus one bitmap byte per pixel examined. */
     assert(s->cmds_tilemap == 1u && "exactly one TILEMAP");
     assert(s->cells_visited == MAP_CELLS &&
@@ -416,7 +416,7 @@ int main(void)
     printf("--- synthetic video worst cases (one frame each) ---\n");
     case_one_clear();
     case_many_clears();
-    case_tilemap(0);      /* 300 distinct tiles: fetch-side worst case     */
+    case_tilemap(0);      /* 480 distinct tiles: fetch-side worst case     */
     case_tilemap(1);      /* one reused all-set tile: pixel-write worst    */
     case_sprites();
     case_max_commands();

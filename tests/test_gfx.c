@@ -107,7 +107,9 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
     /* --- Exact pixel accounting (drawing + overlap + clipping) ------------- *
      * gfx_demo draws: clear(blue); rect red 40x10 at (20,30);
      * rect green 40x10 at (50,35) overlapping 50 px of the red;
-     * rect white 30x20 at (310,230) -> only 10x10 visible;
+     * rect white 30x20 at (310,230) -> fully visible at 480x270 (the frozen
+     *   demo position no longer reaches the screen edge, so FILL right/bottom
+     *   clipping is not exercised here — only the negative rect still clips);
      * rect black 12x8 at (-10,-5) -> only 2x3 visible. */
     const uint16_t *fb = arcade1_framebuffer(m);
     unsigned nblue = 0, nred = 0, ngreen = 0, nwhite = 0, nblack = 0;
@@ -123,9 +125,10 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
     }
     assert(nred == 350u && "red: 400 px minus the 50 px the green rect covers");
     assert(ngreen == 400u && "green: full 40x10, drawn last over the red");
-    assert(nwhite == 100u && "white: off-screen part must be clipped (10x10)");
+    assert(nwhite == 30u * 20u && "white: fully on-screen at 480x270 (30x20)");
     assert(nblack == 6u && "black: negative-coordinate part clipped (2x3)");
-    assert(nblue == 75944u && "background: everything else, pattern wiped");
+    assert(nblue == (unsigned)ARCADE1_FB_PIXELS - 350u - 400u - 30u * 20u - 6u &&
+           "background: everything else, pattern wiped");
 
     /* --- Spot checks around every rectangle edge --------------------------- */
     assert(fb[PIX(0, 0)] == COLOR_BLACK && "visible part of negative rect");
@@ -138,7 +141,7 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
     assert(fb[PIX(89, 44)] == COLOR_GREEN && "green rect bottom-right");
     assert(fb[PIX(90, 44)] == COLOR_BLUE && "green rect must be clipped");
     assert(fb[PIX(309, 230)] == COLOR_BLUE && "just left of the white rect");
-    assert(fb[PIX(319, 239)] == COLOR_WHITE && "visible white corner");
+    assert(fb[PIX(319, 239)] == COLOR_WHITE && "inside the white rect");
 
     /* Everything above went through the muxed window to a real device. */
     assert(m->bus.stray_accesses == 0 &&

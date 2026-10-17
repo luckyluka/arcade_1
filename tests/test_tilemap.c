@@ -259,11 +259,16 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu,
     assert(fb[PIX(6, 2)] == COLOR_C && "negative origin: diagonal bit");
     assert(fb[PIX(7, 2)] == COLOR_BG && "negative origin: diag gap");
 
-    /* Overhang map at (300,220): the grid runs off the right and bottom.
-     * cell (2,1)=diag/cyan lands at (316,228); its leftmost bit is on-screen
-     * but its col-3 bit in row 0 is clear. cell (0,2)=diag/blue lands at
-     * (300,236) with rows 4+ clipped by y<240. cell (2,2)=cross/white lands
-     * at (316,236), so its centre reaches the very last pixel (319,239). */
+    /* Overhang map at (300,220). On the 480x270 screen this frozen demo
+     * position now falls fully on screen (extent x[300,348) y[220,252)), so
+     * nothing is clipped — right/bottom TILEMAP clipping is no longer
+     * exercised here (only negative origin still clips, at the left/top).
+     * The assertions below therefore probe tile-relative interior pixels,
+     * which are identical on any screen that contains them:
+     * cell (2,1)=diag/cyan lands at (316,228): its col-0 bit is set (cyan)
+     * but its col-3 bit in row 0 is clear (background). cell (0,2)=diag/blue
+     * lands at (300,236) (blue). cell (2,2)=cross/white lands at (316,236),
+     * so its centre pixel (319,239) is white. */
     assert(fb[PIX(316, 228)] == COLOR_C && "overhang: diagonal on-screen px");
     assert(fb[PIX(319, 228)] == COLOR_BG && "overhang: diagonal gap near edge");
     assert(fb[PIX(300, 236)] == COLOR_B && "overhang: bottom-clipped tile top");

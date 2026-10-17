@@ -117,7 +117,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->geometry.base_height  = ARCADE1_HEIGHT;
     info->geometry.max_width    = ARCADE1_WIDTH;
     info->geometry.max_height   = ARCADE1_HEIGHT;
-    info->geometry.aspect_ratio = 4.0f / 3.0f;
+    info->geometry.aspect_ratio = (float)ARCADE1_WIDTH / (float)ARCADE1_HEIGHT;
 
     info->timing.fps            = ARCADE1_FPS;
     info->timing.sample_rate    = ARCADE1_SAMPLE_RATE;

@@ -8,6 +8,7 @@
  */
 
 #include "libretro.h"
+#include "machine.h"     /* ARCADE1_WIDTH / ARCADE1_HEIGHT (M25) */
 
 #include <assert.h>
 #include <errno.h>
@@ -15,8 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define W 320
-#define H 240
+#define W ARCADE1_WIDTH
+#define H ARCADE1_HEIGHT
 
 /* Captured most-recent frame from the core. */
 static uint16_t cap[W * H];
@@ -119,7 +120,7 @@ int main(void)
 
     /* --- Frame 0: check bands ------------------------------------------- */
     retro_run();
-    assert(cap_w == W && cap_h == H && "frame geometry must be 320x240");
+    assert(cap_w == W && cap_h == H && "frame geometry must match the screen");
     assert(cap_pitch == W * 2 && "pitch must be width * 2 bytes");
 
     /* Top band, y=10: left pixel is bar 0 (white), right pixel is bar 7 (black). */

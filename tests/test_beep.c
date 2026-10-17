@@ -10,13 +10,14 @@
  */
 
 #include "libretro.h"
+#include "machine.h"     /* ARCADE1_WIDTH / ARCADE1_HEIGHT (M25) */
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-#define W 320
-#define H 240
+#define W ARCADE1_WIDTH
+#define H ARCADE1_HEIGHT
 #define RATE 48000
 #define FPS  60
 #define FRAMES_PER_RUN (RATE / FPS)          /* 800 */

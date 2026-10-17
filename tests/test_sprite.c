@@ -120,10 +120,15 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
     }
 
     /* --- Exact pixel accounting ------------------------------------------- *
-     * red 32 (all set bits on-screen), green 16 (visible part of the
-     * negative-origin sprite), white 8 (visible part of the right/bottom
-     * overhang), yellow 32 (RAM copy), blue = the rest. Fully off-screen,
-     * zero-size and illegal-source sprites must contribute nothing. */
+     * red 64 (two fully on-screen ROM sprites: (20,30) and — now the screen
+     *   is 480 wide — the frozen demo's (400,100), which used to sit fully
+     *   off the right edge but is now visible), green 16 (visible part of the
+     *   negative-origin sprite), white 32 (the (315,237) sprite, now fully
+     *   on-screen instead of clipping to a corner), yellow 32 (RAM copy),
+     *   blue = the rest. The negative-origin, fully-above, zero-size and
+     *   illegal-source sprites still draw nothing. NOTE sprite right/bottom
+     *   clipping is no longer exercised at 480x270 — the demo's coordinates
+     *   are frozen and no longer reach the screen edge. */
     const uint16_t *fb = arcade1_framebuffer(m);
     unsigned nblue = 0, nred = 0, ngreen = 0, nwhite = 0, nyellow = 0;
 
@@ -136,11 +141,11 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
         else if (p == COLOR_YELLOW) nyellow++;
         else assert(0 && "unexpected pixel: sprite drawing is wrong");
     }
-    assert(nred == 32u && "red: every set bit of the on-screen ROM sprite");
+    assert(nred == 64u && "red: two on-screen ROM sprites (20,30) + (400,100)");
     assert(ngreen == 16u && "green: visible set bits of the negative sprite");
-    assert(nwhite == 8u && "white: visible set bits of the right/bottom overhang");
+    assert(nwhite == 32u && "white: the (315,237) sprite is fully on-screen now");
     assert(nyellow == 32u && "yellow: the RAM copy must match the ROM original");
-    assert(nblue == (unsigned)ARCADE1_FB_PIXELS - 32u - 16u - 8u - 32u &&
+    assert(nblue == (unsigned)ARCADE1_FB_PIXELS - 64u - 16u - 32u - 32u &&
            "background: transparency keeps blue under clear bits");
 
     /* --- Spot checks: MSB-first bit order, transparency, RAM identity ------ */
@@ -168,8 +173,9 @@ static void scenario(arcade1_machine_t *m, arcade1_cpu_t *cpu)
     assert(fb[PIX(5, 3)] == COLOR_BLUE && "image (9,5) is a clear bit");
     assert(fb[PIX(0, 4)] == COLOR_BLUE && "sprite ends at screen y=3");
 
-    /* The white sprite at (315,237) shows image cols 0..4 at x 315..319 and
-     * rows 0..2 at y 237..239. */
+    /* The white sprite at (315,237) is now fully on-screen (image cols 0..9
+     * at x 315..324, rows 0..5 at y 237..242); these probe image (0,0),(4,0),
+     * a clear bit, and (4,2). */
     assert(fb[PIX(315, 237)] == COLOR_WHITE && "overhang: image (0,0)");
     assert(fb[PIX(319, 237)] == COLOR_WHITE && "overhang: image (4,0)");
     assert(fb[PIX(316, 237)] == COLOR_BLUE && "overhang: clear bit stays blue");

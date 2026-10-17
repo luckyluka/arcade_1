@@ -9,13 +9,14 @@
  */
 
 #include "libretro.h"
+#include "machine.h"     /* ARCADE1_WIDTH / ARCADE1_HEIGHT (M25) */
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-#define W 320
-#define H 240
+#define W ARCADE1_WIDTH
+#define H ARCADE1_HEIGHT
 
 /* Simulated held-state for the 8 buttons, indexed in pad[] order:
  * UP, DOWN, LEFT, RIGHT, A, B, START, SELECT. */
@@ -96,12 +97,17 @@ static unsigned r5(uint16_t p) { return ((p >> 11) & 0x1Fu) * 255 / 31; }
 static unsigned g6(uint16_t p) { return ((p >>  5) & 0x3Fu) * 255 / 63; }
 static unsigned b5(uint16_t p) { return ( p        & 0x1Fu) * 255 / 31; }
 
-/* Mirror of the core's overlay layout: box=24, gap=8, centred, y0=176.
- * The lit inner square's centre pixel for button i is (48 + i*32, 188). */
+/* Mirror of the core's overlay layout (machine.c draw_pad_overlay): box=24,
+ * gap=8, the whole row centred horizontally, y0 = 2*(H/3)+16. The lit inner
+ * square's centre for button i is (x0 + i*(box+gap) + box/2, y0 + box/2). */
 static uint16_t box_center(int i)
 {
-    int x = 48 + i * 32;
-    int y = 188;
+    const int box = 24, gap = 8;
+    const int total = 8 * box + 7 * gap;
+    const int x0 = (W - total) / 2;
+    const int y0 = 2 * (H / 3) + 16;
+    int x = x0 + i * (box + gap) + box / 2;
+    int y = y0 + box / 2;
     return cap[y * (cap_pitch / 2) + x];
 }
 
