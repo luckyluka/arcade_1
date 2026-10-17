@@ -308,6 +308,10 @@ void arcade1_set_input(arcade1_machine_t *m, const arcade1_input_t *in)
 
 void arcade1_run_frame(arcade1_machine_t *m)
 {
+    /* Task C (DEVICE_BUDGET.md): per-frame video work counters. Reset at the
+     * frame start, snapshotted at the frame end, so frame_totals always holds
+     * the frame that just finished. Measurement only — no behaviour change. */
+    arcade1_video_stats_begin_frame(&m->video);
     if (m->firmware) {
         /* Guest owns the frame (M15): it reads INPUT_PAD, updates its state,
          * draws through the video device and presents with gfx_present. The
@@ -341,6 +345,9 @@ void arcade1_run_frame(arcade1_machine_t *m)
      * timer is enabled (M12). Never wall-clock: the count is a pure function
      * of frames executed, so it is identical across hosts. */
     arcade1_timer_tick(&m->timer);
+
+    /* Task C: freeze this frame's video work for readers (DEVICE_BUDGET.md). */
+    arcade1_video_stats_end_frame(&m->video);
 }
 
 const uint16_t *arcade1_framebuffer(const arcade1_machine_t *m)

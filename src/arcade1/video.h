@@ -60,6 +60,40 @@
 #define ARCADE1_VIDEO_CMD_SPRITE    0x5u  /* blit 1-bpp image at ADDR at (X,Y) */
 #define ARCADE1_VIDEO_CMD_TILEMAP   0x6u  /* draw the COLSxROWS tile grid     */
 
+/* --- Host-side work counters (DEVICE_BUDGET.md, BEFORE_M25 task C) --------- *
+ *
+ * MEASUREMENT ONLY. These count what the device actually did during the
+ * current frame, so a per-frame work budget can be sized from data rather
+ * than guessed. They are deliberately NOT guest-visible (no MMIO register
+ * exposes them), NOT part of any state hash (state_hash covers CPU+RAM;
+ * fb_hash covers the framebuffer), and they never affect behaviour — the
+ * fields only ever increment.
+ *
+ *   commands, by type   how many of each command the guest issued
+ *   pixels_written      framebuffer writes AFTER clipping; a transparent
+ *                       1-bpp bit writes nothing and is not counted
+ *   bytes_fetched       guest-memory reads the device performed: TILEMAP
+ *                       cell bytes + 1-bpp bitmap bytes. The reference
+ *                       blitter reads one byte per pixel EXAMINED, so this
+ *                       is a fetch count, not a distinct-byte count (a
+ *                       caching implementation would read fewer; see
+ *                       DEVICE_BUDGET.md).
+ *   cells_visited       TILEMAP cells after windowing (a windowed-out cell
+ *                       is never visited and costs nothing)
+ */
+typedef struct arcade1_video_stats {
+    uint32_t cmds_clear;      /* CLEAR commands executed                  */
+    uint32_t cmds_set_pixel;  /* SET_PIXEL commands executed              */
+    uint32_t cmds_fill;       /* FILL commands executed                   */
+    uint32_t cmds_sprite;     /* SPRITE commands executed                 */
+    uint32_t cmds_tilemap;    /* TILEMAP commands executed                */
+    uint32_t cmds_present;    /* PRESENT commands executed                */
+    uint32_t commands;        /* total commands executed (all types)      */
+    uint32_t pixels_written;  /* framebuffer writes after clipping        */
+    uint32_t bytes_fetched;   /* cell + bitmap byte reads from guest mem  */
+    uint32_t cells_visited;   /* TILEMAP cells after windowing            */
+} arcade1_video_stats_t;
+
 /* --- Device state --------------------------------------------------------- */
 
 typedef struct arcade1_video {
@@ -77,6 +111,8 @@ typedef struct arcade1_video {
     uint32_t cols, rows;     /* grid size in cells (TILEMAP, M20)         */
     uint32_t cam_x, cam_y;   /* camera offset (SPRITE/TILEMAP origin, M21)*/
     uint32_t presents;       /* PRESENT commands executed (STATUS)        */
+    arcade1_video_stats_t stats;        /* work done so far this frame    */
+    arcade1_video_stats_t frame_totals; /* snapshot at end of last frame  */
 } arcade1_video_t;
 
 /* Registers/power-on: parameters zeroed, nothing presented. Keeps the
@@ -88,5 +124,20 @@ void arcade1_video_reset(arcade1_video_t *v);
  * writes. Commands execute synchronously at the write. */
 uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset);
 void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value);
+
+/* --- Host-side work counters (DEVICE_BUDGET.md, BEFORE_M25 task C) --------- *
+ *
+ * Measurement only; never guest-visible and never affects behaviour.
+ * The machine calls _begin_frame at the start of every arcade1_run_frame and
+ * _end_frame just before it returns, so `frame_totals` always holds the work
+ * done by the frame that just finished, and `stats` accumulates the current
+ * one from zero. */
+void arcade1_video_stats_begin_frame(arcade1_video_t *v);
+void arcade1_video_stats_end_frame(arcade1_video_t *v);
+
+/* Read-only views for tests/budgets. `stats` is live (this frame, growing);
+ * `frame_totals` is the completed last frame. */
+const arcade1_video_stats_t *arcade1_video_stats(const arcade1_video_t *v);
+const arcade1_video_stats_t *arcade1_video_frame_totals(const arcade1_video_t *v);
 
 #endif /* ARCADE1_VIDEO_H */

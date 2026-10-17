@@ -11,6 +11,8 @@
 
 #include "machine.h"   /* for the screen geometry only (ARCADE1_WIDTH/HEIGHT) */
 
+#include <string.h>    /* memset: the per-frame stats reset (task C counters) */
+
 /* --- Lifecycle ------------------------------------------------------------ */
 
 void arcade1_video_reset(arcade1_video_t *v)
@@ -28,9 +30,36 @@ void arcade1_video_reset(arcade1_video_t *v)
     v->cam_x     = 0u;
     v->cam_y     = 0u;
     v->presents = 0u;
+    arcade1_video_stats_begin_frame(v);   /* counters start clean too */
+    v->frame_totals = v->stats;           /* and read as zero until a frame */
     /* v->framebuffer / v->rom / v->ram are deliberately kept: they are
      * assigned once at machine init and survive resets (like the bus's MMIO
      * attachment). */
+}
+
+/* --- Host-side work counters (DEVICE_BUDGET.md, BEFORE_M25 task C) -------- *
+ * Measurement only: these fields only ever increment, are never exposed over
+ * MMIO, and are not part of any state hash, so they cannot affect behaviour.
+ * See video.h for what each metric means. */
+
+void arcade1_video_stats_begin_frame(arcade1_video_t *v)
+{
+    memset(&v->stats, 0, sizeof v->stats);
+}
+
+void arcade1_video_stats_end_frame(arcade1_video_t *v)
+{
+    v->frame_totals = v->stats;
+}
+
+const arcade1_video_stats_t *arcade1_video_stats(const arcade1_video_t *v)
+{
+    return &v->stats;
+}
+
+const arcade1_video_stats_t *arcade1_video_frame_totals(const arcade1_video_t *v)
+{
+    return &v->frame_totals;
 }
 
 /* --- Commands (run synchronously at the VIDEO_CMD write) ------------------ */
@@ -39,28 +68,37 @@ static void video_clear(arcade1_video_t *v)
 {
     const uint16_t c = (uint16_t)v->color;
 
+    v->stats.cmds_clear++;
+    v->stats.commands++;
     if (v->framebuffer == 0)
         return;
     for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++)
         v->framebuffer[i] = c;
+    v->stats.pixels_written += (uint32_t)ARCADE1_FB_PIXELS;
 }
 
 static void video_set_pixel(arcade1_video_t *v)
 {
     const uint16_t c = (uint16_t)v->color;
 
+    v->stats.cmds_set_pixel++;
+    v->stats.commands++;
     if (v->framebuffer == 0)
         return;
     /* Out-of-range coordinates are stored in the register (and readable back)
      * but the plot is clipped: nothing is written outside the screen. */
-    if (v->x < (uint32_t)ARCADE1_WIDTH && v->y < (uint32_t)ARCADE1_HEIGHT)
+    if (v->x < (uint32_t)ARCADE1_WIDTH && v->y < (uint32_t)ARCADE1_HEIGHT) {
         v->framebuffer[v->y * (uint32_t)ARCADE1_WIDTH + v->x] = c;
+        v->stats.pixels_written++;      /* clipped away: no pixel written */
+    }
 }
 
 static void video_present(arcade1_video_t *v)
 {
     /* Single buffer for now: PRESENT only records that the guest presented a
      * frame. Flipping/buffering is explicitly not decided at M13. */
+    v->stats.cmds_present++;
+    v->stats.commands++;
     v->presents++;
 }
 
@@ -100,6 +138,8 @@ static void video_fill(arcade1_video_t *v)
 {
     int64_t x0, x1, y0, y1, px, py;
 
+    v->stats.cmds_fill++;
+    v->stats.commands++;
     if (v->framebuffer == 0)
         return;
 
@@ -109,6 +149,9 @@ static void video_fill(arcade1_video_t *v)
         for (px = x0; px < x1; px++)
             v->framebuffer[py * (int64_t)ARCADE1_WIDTH + px] =
                 (uint16_t)v->color;
+    /* Every pixel of the clipped window is written (a fill has no
+     * transparency), so the on-screen area is exactly the work done. */
+    v->stats.pixels_written += (uint32_t)((x1 - x0) * (y1 - y0));
 }
 
 /* Fetch one byte of a 1-bpp image. The device only ever reads guest ROM
@@ -152,9 +195,15 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
                 row * ((w + 7u) / 8u) + col / 8u;
             const uint8_t bits = video_fetch_byte(v, byte_addr);
 
+            /* The reference reads one byte per pixel EXAMINED (no caching),
+             * so that is the fetch work this blit really cost. */
+            v->stats.bytes_fetched++;
+
             /* Set bits are drawn in color; clear bits are transparent. */
-            if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u)
+            if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u) {
                 v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = color;
+                v->stats.pixels_written++;   /* transparent: writes nothing */
+            }
         }
     }
 }
@@ -164,6 +213,8 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
  * camera moves. Primitives (CLEAR/SET_PIXEL/FILL) stay screen-space. */
 static void video_sprite(arcade1_video_t *v)
 {
+    v->stats.cmds_sprite++;
+    v->stats.commands++;
     video_blit_1bpp(v, v->addr,
                     (int32_t)v->x - (int32_t)v->cam_x,
                     (int32_t)v->y - (int32_t)v->cam_y,
@@ -193,6 +244,8 @@ static void video_tilemap(arcade1_video_t *v)
     int64_t ox, oy, w, h;
     int64_t col_start, col_end, row_start, row_end;
 
+    v->stats.cmds_tilemap++;
+    v->stats.commands++;
     if (v->framebuffer == 0)
         return;
     /* A zero size or an empty grid draws nothing (also avoids /0 below). */
@@ -229,6 +282,11 @@ static void video_tilemap(arcade1_video_t *v)
     if (row_end < 0) row_end = 0;
     if (row_end > (int64_t)v->rows) row_end = (int64_t)v->rows;
 
+    /* Windowed cell count: what the guest asked for, minus the cells the
+     * camera pushed off screen (those are never visited, never fetched). */
+    v->stats.cells_visited +=
+        (uint32_t)((col_end - col_start) * (row_end - row_start));
+
     for (row = (uint32_t)row_start; row < (uint32_t)row_end; row++) {
         for (col = (uint32_t)col_start; col < (uint32_t)col_end; col++) {
             const uint64_t cell_addr = (uint64_t)v->map_addr +
@@ -240,6 +298,8 @@ static void video_tilemap(arcade1_video_t *v)
                 ((uint32_t)video_fetch_byte(v, cell_addr + 2u) << 16) |
                 ((uint32_t)video_fetch_byte(v, cell_addr + 3u) << 24);
             const uint32_t index = cell & 0xFFFFu;
+
+            v->stats.bytes_fetched += 4u;   /* the 32-bit cell, byte by byte */
 
             if (index == 0u)
                 continue;   /* empty cell: background shows through */
