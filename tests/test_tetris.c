@@ -45,6 +45,7 @@
 #include "rom.h"        /* M17: .arc1 image parsing */
 
 #include "state_hash.h"
+#include "video_budget.h"   /* task C: per-frame video work avg/max */
 
 #include <assert.h>
 #include <stdio.h>
@@ -124,6 +125,9 @@ static bool     verify_hashes;
 static uint64_t total_inst, max_inst;
 static unsigned frames_this_pass;
 
+/* Task C: measured per-frame video work (avg + max) over the scripted run. */
+static video_budget_t vbudget;
+
 /* run_until() targets. */
 static int32_t want_locked, want_y, want_x;
 
@@ -153,6 +157,7 @@ static void run_frame(void)
     if (delta > max_inst)
         max_inst = delta;
     frames_this_pass++;
+    video_budget_sample(&vbudget, &m, delta);   /* task C */
 
     h = state_hash(&m.cpu, &m.bus);
     printf("frame %4u hash=0x%016llX fb=0x%016llX\n", frame_count,
@@ -282,6 +287,7 @@ static void boot_machine(void)
     frame_count = 0;
     total_inst = max_inst = 0;
     frames_this_pass = 0;
+    memset(&vbudget, 0, sizeof vbudget);   /* task C: fresh per pass */
 }
 
 /* The frame's audio must be a clean +/-8000 square wave with both
@@ -553,6 +559,7 @@ static void run_script(bool verify)
     printf("cpu load: %llu inst/frame avg, %llu max (%u frames)\n",
            (unsigned long long)(total_inst / frames_this_pass),
            (unsigned long long)max_inst, frames_this_pass);
+    video_budget_report("tetris", &vbudget);   /* task C */
 }
 
 /* --- Entry point ----------------------------------------------------------- */

@@ -37,6 +37,7 @@
 #include "machine.h"    /* brings in memory/timer/video/audio/exec */
 #include "rom.h"        /* M17: .arc1 image parsing */
 #include "state_hash.h"
+#include "video_budget.h"   /* task C: per-frame video work avg/max */
 
 #include <assert.h>
 #include <stdio.h>
@@ -124,6 +125,9 @@ static uint64_t hist1[512];
 static unsigned nhist1, frame_count;
 static bool     verify_hashes;
 static uint64_t total_inst, max_inst;
+
+/* Task C: measured per-frame video work (avg + max) over the scripted run. */
+static video_budget_t vbudget;
 static unsigned frames_this_pass;
 
 static uint32_t reg(uint32_t off)
@@ -219,6 +223,7 @@ static void boot_machine(void)
     frame_count = 0;
     total_inst = max_inst = 0;
     frames_this_pass = 0;
+    memset(&vbudget, 0, sizeof vbudget);   /* task C: fresh per pass */
 }
 
 /* One run of scroll_demo: NFRAMES frames, each checked against the model. */
@@ -243,6 +248,7 @@ static void scenario(bool verify)
             if (delta > max_inst)
                 max_inst = delta;
             frames_this_pass++;
+            video_budget_sample(&vbudget, &m, delta);   /* task C */
         }
 
         /* --- The camera this frame, computed independently from the index. */
@@ -302,6 +308,7 @@ static void scenario(bool verify)
     printf("cpu load: %llu inst/frame avg, %llu max (%u frames)\n",
            (unsigned long long)(total_inst / frames_this_pass),
            (unsigned long long)max_inst, frames_this_pass);
+    video_budget_report("scroll", &vbudget);   /* task C */
 }
 
 int main(int argc, char **argv)
