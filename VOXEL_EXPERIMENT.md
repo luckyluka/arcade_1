@@ -4,9 +4,9 @@
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
 > says so. **P0 (graphics micro-benchmarks), P1 (deterministic terrain
-> generator), P2 (raycast renderer) and P3 (interaction) are complete** —
-> their measured numbers are in §0.1–§0.4 and already folded into
-> §2/§3/§8/§9.
+> generator), P2 (raycast renderer), P3 (interaction) and P4 (game
+> systems) are complete** — their measured numbers are in §0.1–§0.5 and
+> already folded into §2/§3/§8/§9.
 
 The experiment asks one question:
 
@@ -211,6 +211,53 @@ measure each cost component in isolation and then the whole frame:
    cross-ISA edit-model digest matched — the P1 determinism guarantee
    extends through interactive edits, not just pristine terrain.
 
+### 0.5 P4 results (measured, `make test-systems`, two identical 270-frame passes)
+
+`programs/systems.c` layers the full game-systems set on P3's interactive
+raycast, all in software: inventory (a dig yields 1 dirt, a place consumes
+1 and is REJECTED on an empty inventory), crafting (DOWN: 3 dirt → 1
+stone), two patrolling slime entities (16.16 fixed-point motion, 1-bpp
+8x8 sprites), day/night (dusk/night darken the view with ONE full-screen
+TILEMAP of dither tiles — the section-5 no-blend overlay mechanism), and
+a HUD (inventory squares + time indicator). The scripted scenario: walk
+30 cells → dig, place, dig×3, craft, rejected place → idle through
+nightfall.
+
+| Measurement | Value | Note |
+|-------------|------:|------|
+| idle view + full systems layer | **431,559 inst (43.2% cap)** | +3,743 over P3 idle (427,816) — entities + overlay + HUD + inventory ≈ free |
+| dig / place / craft frames | 431,931 / 432,449 / 432,194 | ≈ idle + 400 |
+| ROM | 3,018 B | +734 B over P3 for the whole systems layer |
+| edit-model truth | digest `0x2AA3A3F1` = replayed exactly | 5 accepted edits, recorded per-action targets, model table + stepwise ±32 + FNV matched, entry count matched |
+| day/night timing | tod read 0/1/2 at frames 15/45/75 | pinned `(timer/30)%3` |
+| entity motion | e1x == 4 at frame 10, bands held | pins patrol speed (1/4 cell/frame) + bounce bounds |
+| entity visibility | magenta + orange present in final fb | pixel scan, 8x8 sprites on-screen |
+| determinism | hash `0x26E54043DD80BE92` | 270 frames ×2, identical |
+
+**What this pins down:**
+
+1. **Render-derived edit targets are live state.** P3 recorded two
+   watched silhouette cells and edited them; P4's scripted run proved
+   those targets SHIFT as edits move the silhouette — five accepted edits
+   landed on only two distinct cells, and the final watched pair had
+   collapsed to the same cell. The fix that generalizes: every action
+   records the exact target it used (guest arrays replayed by the
+   harness), instead of assuming targets are constants. Anything
+   raycast-derived that feeds game logic must be versioned per frame.
+2. **The day/night overlay costs 64 B of ROM and ~50 guest instructions**
+   per night frame (one TILEMAP command, tint per cell). A full-screen
+   1-bpp SPRITE would need 9.6 KB — the tilemap device is the overlay
+   mechanism, and P0's 13.4-inst full-screen tilemap number carries over
+   unchanged with per-cell tint on top.
+3. **The systems layer is guest-cheap**: +3,743 inst/frame idle for two
+   entity projections + sprites, HUD rects, inventory/craft state and the
+   tod math — under 1% of the cap on top of the 43% raycast. Device
+   offload keeps paying: nothing here needs hardware.
+4. **The rejected-place path is a first-class case**: act_ok=0 records
+   the attempt without touching the table; the model replays only
+   accepted edits, and delta_count matched — inventory gating cannot
+   corrupt world state.
+
 ---
 
 ## 1. Proposed voxel sandbox game design (the smallest interesting one)
@@ -343,6 +390,7 @@ graphics feature.
 | Isometric/tilemap sandbox (fallback) | 1k–3k | ≤2× | 0.3% |
 | Raycast 80×60, 11 z-steps/column | **406,563 (measured, P2)** | 28× | **40.7%** |
 | Raycast + 16-entry linear delta scan | **427,816 (measured, P3)** | 30× | **42.8%** |
+| Raycast + full systems layer (entities, day/night, HUD, inventory) | **431,559 (measured, P4)** | 30× | **43.2%** |
 | Raycast + 128-entry linear delta scan | ~577k (est., linear in table size from P3) | 40× | ~58% |
 | Raycast 160×120 (160 columns) | ~770k–810k (est., ×~2: cost ∝ columns not rows, §0.3) | 54–57× | ~77–81% |
 | Blocky DDA 80×60 (surface faces only) | 40k–100k | 3–7× | 4–10% |
@@ -513,7 +561,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 | **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | **DONE** — `make test-terrain`; hash of 64x64 pinned (digest `0x626115CD2B9A0257`), identical across ISAs/hosts; load 44,674 inst/frame per row (§0.2) |
 | **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | **DONE** — `make test-ray`; 406,563 inst/frame (40.7% cap), height eval 431 inst (P1 handoff), render property-checked + dumped (§0.3); estimate corrected 4–6× |
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | **DONE** — `make test-sandbox`; walk 30 cells + 4 places + 1 dig scripted, edit-model digest `0x00C134B1` cross-checked, +21,253 inst for the 16-entry scan (§0.4); visibility-by-construction finding |
-| **P4** Game systems | inventory, crafting, entities, day/night dither, UI | scripted scenario assertions (state read via `nm`) |
+| **P4** Game systems | inventory, crafting, entities, day/night dither, UI | **DONE** — `make test-systems`; scripted scenario (dig/place/craft/rejected-place) with inventory truth, replayed edit-model digest `0x2AA3A3F1`, tod timing, entity motion/visibility (§0.5); shifting-targets finding |
 | **P5** Persistence | snapshot save/load + input replay | load-equals-replay: same frames, same hash sequence |
 | **P6** Verdict | write findings into this file: measured vs estimated, ROM/RAM actuals, go/no-go on raycast vs fallback | answers §9 with data |
 

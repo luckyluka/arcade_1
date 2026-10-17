@@ -8,10 +8,11 @@ post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
 in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phases P0
 (graphics micro-benchmarks), P1 (deterministic terrain generator), P2
-(raycast renderer) and P3 (walk/dig/place interaction) are complete:
-measured costs live in `VOXEL_EXPERIMENT.md` §0.1–§0.4, runnable via
-`make test-bench`, `make test-terrain`, `make test-ray` and
-`make test-sandbox`.
+(raycast renderer), P3 (walk/dig/place interaction) and P4 (game systems:
+inventory/crafting/entities/day-night/HUD) are complete: measured costs
+live in `VOXEL_EXPERIMENT.md` §0.1–§0.5, runnable via `make test-bench`,
+`make test-terrain`, `make test-ray`, `make test-sandbox` and
+`make test-systems`.
 
 ## Status summary
 
@@ -104,6 +105,10 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     sandbox.c           voxel-experiment P3 research guest: P2's raycast +
                         delta-overlay edits (walk/dig/place from the pad),
                         measured by test_sandbox.c
+    systems.c           voxel-experiment P4 research guest: P3 + game systems
+                        (inventory, crafting, slime entities, day/night
+                        dithered tilemap overlay, HUD), measured by
+                        test_systems.c
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -171,6 +176,9 @@ make test-ray     # voxel-experiment P2 first-person raycast renderer:
 make test-sandbox # voxel-experiment P3 interaction (walk/dig/place over the
                   #     delta overlay): edit-model truth, edit visibility,
                   #     scan cost, determinism (section 0.4)
+make test-systems # voxel-experiment P4 game systems (inventory, crafting,
+                  #     slime entities, day/night dither overlay, HUD):
+                  #     scripted scenario + replayed edit-model, section 0.5
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay

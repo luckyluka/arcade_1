@@ -27,7 +27,7 @@ TESTDIR := build
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
-test-tetris test-bench test-terrain test-ray test-sandbox: | $(TESTDIR)
+test-tetris test-bench test-terrain test-ray test-sandbox test-systems: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -44,7 +44,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -59,7 +59,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray test-sandbox
+        test-ray test-sandbox test-systems
 
 all: $(TARGET)
 
@@ -368,6 +368,32 @@ test-sandbox: $(GUEST_BUILD)/sandbox.arc1
 	               "0x"x1, "0x"z1, "0x"x2, "0x"z2}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_sandbox $(GUEST_BUILD)/sandbox.arc1 $$SYMS
+
+# Voxel-experiment P4 (research, see VOXEL_EXPERIMENT.md): game systems —
+# inventory (dig yields, place consumes), crafting (3 dirt -> 1 stone),
+# patrolling sprite entities, day/night dithered TILEMAP overlay, HUD.
+# Boots systems.c and runs a scripted scenario (dig, place, dig x3, craft,
+# REJECTED place on empty inventory), checking counters, inventory truth,
+# the replayed edit-model digest, tod timing, entity motion/visibility,
+# collision, and reset-and-compare determinism.
+test-systems: $(GUEST_BUILD)/systems.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_systems \
+	    tests/test_systems.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/systems.elf | \
+	    awk '$$3=="camx"{cx=$$1} $$3=="digs"{dg=$$1} $$3=="places"{pl=$$1} \
+	         $$3=="crafts"{cr=$$1} $$3=="inv_dirt"{di=$$1} \
+	         $$3=="inv_stone"{st=$$1} $$3=="delta_count"{dc=$$1} \
+	         $$3=="mode"{md=$$1} $$3=="py"{py=$$1} $$3=="tdigest"{td=$$1} \
+	         $$3=="tod"{td2=$$1} $$3=="e1x"{a1=$$1} $$3=="e2x"{a2=$$1} \
+	         $$3=="act_tx"{q1=$$1} $$3=="act_tz"{q2=$$1} \
+	         $$3=="act_ok"{q3=$$1} $$3=="act_n"{q4=$$1} \
+	         END{print "0x"cx, "0x"dg, "0x"pl, "0x"cr, "0x"di, "0x"st, \
+	               "0x"dc, "0x"md, "0x"py, "0x"td, "0x"td2, "0x"a1, "0x"a2, \
+	               "0x"q1, "0x"q2, "0x"q3, "0x"q4}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_systems $(GUEST_BUILD)/systems.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
