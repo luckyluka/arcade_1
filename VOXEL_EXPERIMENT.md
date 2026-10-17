@@ -4,8 +4,9 @@
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
 > says so. **P0 (graphics micro-benchmarks), P1 (deterministic terrain
-> generator) and P2 (raycast renderer) are complete** — their measured
-> numbers are in §0.1/§0.2/§0.3 and already folded into §2/§3/§8/§9.
+> generator), P2 (raycast renderer) and P3 (interaction) are complete** —
+> their measured numbers are in §0.1–§0.4 and already folded into
+> §2/§3/§8/§9.
 
 The experiment asks one question:
 
@@ -166,6 +167,50 @@ measure each cost component in isolation and then the whole frame:
    harness's palette/variation property checks caught it; a hash pin alone
    would have enshrined the broken render. Property checks earn their keep.
 
+### 0.4 P3 results (measured, `make test-sandbox`, two identical 150-frame passes)
+
+`programs/sandbox.c` wires P2's raycast to the delta overlay (the §1
+"world stores nothing + edits" mechanism) and drives it from a scripted pad
+(walk 30 cells → 4 places + 1 dig on watched cells → idle):
+
+| Measurement | Value | Note |
+|-------------|------:|------|
+| idle view + 16-entry linear delta scan | **427,816 inst (42.8% cap)** | +21,253 over P2's 406,563 — the scan's price |
+| walk / dig / place frames | 424,372 / 429,694 / 429,103 | interaction adds ≈nothing over the idle view |
+| ROM | 1,708 B | +420 B over P2 for the whole interaction layer |
+| edit-model truth | digest `0x00C134B1` = independent re-simulation | harness replays the 5-edit sequence (±32, clamping, script order) against its own `ray_height` model; pins x, z and final h of both edited cells |
+| determinism | hash `0x360883B3C544A0CA` | 150 frames ×2, identical |
+| render | both placed cells visible as silhouette-breaking towers | per-edit visibility asserted via fb digests |
+
+**What this pins down:**
+
+1. **The linear delta scan is cheap enough at the design's size**: a
+   16-entry table costs +21,253 inst/frame (≈5.2%). Scaling linearly, the
+   §1/§3.1 "~128 deltas" figure would cost ≈+170k → ≈577k total (58% of
+   cap) — feasible, but that is where a hashed overlay (est. ~25 inst
+   lookup regardless of size) becomes worth its code. The demo never needs
+   it: recorded, not implemented.
+2. **Edit visibility is a first-class rendering property, and fixed
+   targets can't guarantee it.** The first version aimed at fixed cells
+   (camx+1, z=4): geometrically below the screen at eye height (flat
+   ground at z=4 projects to y≈76 vs the bottom at 60), then (z=8)
+   behind the silhouette because the camera happened to stand on a bump
+   whose surrounds fell away — five real, digest-verified edits, all
+   invisible, and the harness caught it. The fix that generalizes: **edit
+   the render's own nearest-visible-ground cells** (recorded during the
+   raycast), so an edit lands on the silhouette by construction. All 5
+   edits then verified visible. A future real game can reuse this trick
+   for "what is the dig target under my crosshair".
+3. **Digs and places are symmetric in cost, asymmetric in visibility**: a
+   dig shortens/repaints a silhouette run (visible if the cell was on it);
+   a place extends one (visible if it beats the current silhouette). Both
+   are one table write + one `update_digest` — negligible frame cost
+   either way.
+4. **The collision/ground truth held bit-exactly**: the camera-height
+   `py` matched the independent host model at the final camera, and the
+   cross-ISA edit-model digest matched — the P1 determinism guarantee
+   extends through interactive edits, not just pristine terrain.
+
 ---
 
 ## 1. Proposed voxel sandbox game design (the smallest interesting one)
@@ -297,6 +342,8 @@ graphics feature.
 |----------|----------------------:|---------------------------:|-------------------:|
 | Isometric/tilemap sandbox (fallback) | 1k–3k | ≤2× | 0.3% |
 | Raycast 80×60, 11 z-steps/column | **406,563 (measured, P2)** | 28× | **40.7%** |
+| Raycast + 16-entry linear delta scan | **427,816 (measured, P3)** | 30× | **42.8%** |
+| Raycast + 128-entry linear delta scan | ~577k (est., linear in table size from P3) | 40× | ~58% |
 | Raycast 160×120 (160 columns) | ~770k–810k (est., ×~2: cost ∝ columns not rows, §0.3) | 54–57× | ~77–81% |
 | Blocky DDA 80×60 (surface faces only) | 40k–100k | 3–7× | 4–10% |
 | Guest full-screen per-pixel SET_PIXEL (avoid) | ~614k (**measured** 8 inst/px × 76,800) | 43× | 61% |
@@ -465,7 +512,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 | **P0** Micro-benchmarks | guest measuring exact inst/frame for SET_PIXEL-per-pixel, FILL, SPRITE, TILEMAP at fixed workloads | **DONE** — `make test-bench`; numbers pinned in §0.1, estimates in §2/§3 revised |
 | **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | **DONE** — `make test-terrain`; hash of 64x64 pinned (digest `0x626115CD2B9A0257`), identical across ISAs/hosts; load 44,674 inst/frame per row (§0.2) |
 | **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | **DONE** — `make test-ray`; 406,563 inst/frame (40.7% cap), height eval 431 inst (P1 handoff), render property-checked + dumped (§0.3); estimate corrected 4–6× |
-| **P3** Interaction | walk/collision/dig/place → delta table re-render | scripted dig/build playthrough, determinism 2-pass |
+| **P3** Interaction | walk/collision/dig/place → delta table re-render | **DONE** — `make test-sandbox`; walk 30 cells + 4 places + 1 dig scripted, edit-model digest `0x00C134B1` cross-checked, +21,253 inst for the 16-entry scan (§0.4); visibility-by-construction finding |
 | **P4** Game systems | inventory, crafting, entities, day/night dither, UI | scripted scenario assertions (state read via `nm`) |
 | **P5** Persistence | snapshot save/load + input replay | load-equals-replay: same frames, same hash sequence |
 | **P6** Verdict | write findings into this file: measured vs estimated, ROM/RAM actuals, go/no-go on raycast vs fallback | answers §9 with data |

@@ -27,7 +27,7 @@ TESTDIR := build
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
-test-tetris test-bench test-terrain test-ray: | $(TESTDIR)
+test-tetris test-bench test-terrain test-ray test-sandbox: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -44,7 +44,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -59,7 +59,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray
+        test-ray test-sandbox
 
 all: $(TARGET)
 
@@ -345,6 +345,29 @@ test-ray: $(GUEST_BUILD)/raycast_demo.arc1
 	         END{print "0x"ph, "0x"sk}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_ray $(GUEST_BUILD)/raycast_demo.arc1 $$SYMS
+
+# Voxel-experiment P3 (research, see VOXEL_EXPERIMENT.md): interaction —
+# walk / dig / place over the delta overlay. Boots sandbox.c as firmware and
+# drives a scripted pad (walk 30 cells, dig 3, place 2), checking gameplay
+# truth (camx/digs/places/delta_count), collision truth vs an independent
+# host model of ray_height, that edits are VISIBLE in the render (fb digest
+# changes at fixed camera), a golden-pinned delta-table digest (pins the
+# exact 5 edits), the linear-scan cost on top of P2's raycast, and
+# reset-and-compare determinism.
+test-sandbox: $(GUEST_BUILD)/sandbox.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_sandbox \
+	    tests/test_sandbox.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/sandbox.elf | \
+	    awk '$$3=="camx"{cx=$$1} $$3=="digs"{dg=$$1} $$3=="places"{pl=$$1} \
+	         $$3=="delta_count"{dc=$$1} $$3=="mode"{md=$$1} $$3=="py"{py=$$1} \
+	         $$3=="tdigest"{td=$$1} $$3=="tgt1_x"{x1=$$1} $$3=="tgt1_z"{z1=$$1} \
+	         $$3=="tgt2_x"{x2=$$1} $$3=="tgt2_z"{z2=$$1} \
+	         END{print "0x"cx, "0x"dg, "0x"pl, "0x"dc, "0x"md, "0x"py, "0x"td, \
+	               "0x"x1, "0x"z1, "0x"x2, "0x"z2}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_sandbox $(GUEST_BUILD)/sandbox.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,

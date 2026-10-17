@@ -7,10 +7,11 @@ the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
 post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
 in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phases P0
-(graphics micro-benchmarks), P1 (deterministic terrain generator) and P2
-(raycast renderer) are complete: measured costs live in
-`VOXEL_EXPERIMENT.md` §0.1/§0.2/§0.3, runnable via `make test-bench`,
-`make test-terrain` and `make test-ray`.
+(graphics micro-benchmarks), P1 (deterministic terrain generator), P2
+(raycast renderer) and P3 (walk/dig/place interaction) are complete:
+measured costs live in `VOXEL_EXPERIMENT.md` §0.1–§0.4, runnable via
+`make test-bench`, `make test-terrain`, `make test-ray` and
+`make test-sandbox`.
 
 ## Status summary
 
@@ -100,6 +101,9 @@ programs/               guest code compiled by RISC-V GCC (M10+)
     raycast_demo.c      voxel-experiment P2 research guest: 80-column
                         first-person heightmap raycast (procedural heights,
                         FILL runs, camera pan), measured by test_ray.c
+    sandbox.c           voxel-experiment P3 research guest: P2's raycast +
+                        delta-overlay edits (walk/dig/place from the pad),
+                        measured by test_sandbox.c
     breakout.c          M15 guest: the first real game (Breakout)
     tetris.c            M18 guest: the second game (Tetris — grid, font,
                         timer-driven gravity, fixed-seed piece stream); since
@@ -164,6 +168,9 @@ make test-terrain # voxel-experiment P1 deterministic terrain generator:
 make test-ray     # voxel-experiment P2 first-person raycast renderer:
                   #     height-eval + full-frame cost vs the 1M cap, render
                   #     property checks, PPM dump, determinism (section 0.3)
+make test-sandbox # voxel-experiment P3 interaction (walk/dig/place over the
+                  #     delta overlay): edit-model truth, edit visibility,
+                  #     scan cost, determinism (section 0.4)
 make test-breakout # M15 game as firmware (since M17 via its .arc1 image)
 make test-tetris   # M18 game as firmware: pinned piece stream, exact
                    # playfields, line clear + compaction, 2-pass replay
