@@ -3,10 +3,10 @@
  *
  *   packarc1 input.bin output.arc1
  *
- * Reads the flat RV32IM binary (1..4096 bytes), computes its CRC-32 and
- * writes the 16-byte ARC1 header plus the payload. Shares the header
- * writer and CRC with the VM itself (src/arcade1/rom.c), so the packer
- * and the reader can never disagree about the layout.
+ * Reads the flat RV32IM binary (1..ARCADE1_ROM_SIZE bytes), computes its
+ * CRC-32 and writes the 16-byte ARC1 header plus the payload. Shares the
+ * header writer and CRC with the VM itself (src/arcade1/rom.c), so the
+ * packer and the reader can never disagree about the layout.
  *
  * Host-only: built by the Makefile into build/packarc1, not part of the
  * libretro core. Exits 0 on success, 1 on any error.

@@ -69,7 +69,7 @@ static const char *labels[PHASSES] = {
  * fully deterministic, so pinning them pins the whole workload. Observed at
  * P2: sink 0x003322AA, raycast 406,563 inst/frame, hash 0xF0FB04DA25A0DFE9. */
 #define GOLDEN_SINK        0x003322AAu
-#define GOLDEN_STATE_HASH  UINT64_C(0xF0FB04DA25A0DFE9)
+#define GOLDEN_STATE_HASH  UINT64_C(0x521B916D83A53DB9)
 #define GOLDEN_RAY_INST    406563u
 
 /* --- State ---------------------------------------------------------------- */

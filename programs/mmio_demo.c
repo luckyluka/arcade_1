@@ -9,10 +9,12 @@
  * is only possible if the guest both *read* REG_IN and *wrote* REG_OUT through
  * the bus's MMIO region.
  *
- * MMIO registers are 32-bit (lw/sw); see src/arcade1/memory.h for the map.
+ * MMIO registers are 32-bit (lw/sw); see programs/arcade1_map.h for the map.
  */
 
-#define MMIO_BASE 0x4000u
+#include "arcade1_map.h"
+
+#define MMIO_BASE ARCADE1_MMIO_BASE
 #define REG_IN    (*(volatile unsigned int *)(MMIO_BASE + 0))  /* host -> guest */
 #define REG_OUT   (*(volatile unsigned int *)(MMIO_BASE + 4))  /* guest -> host */
 

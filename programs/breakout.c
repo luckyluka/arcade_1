@@ -30,7 +30,7 @@
 
 /* --- MMIO registers (fixed map, see docs.md table) ----------------------- */
 
-#define MMIO_BASE      0x4000u
+#define MMIO_BASE      ARCADE1_MMIO_BASE
 #define REG_TIMER_COUNT (MMIO_BASE + 0x00u)  /* M12: ticks once per frame   */
 #define REG_INPUT_PAD   (MMIO_BASE + 0x200u) /* M15: read-only pad          */
 #define REG_AUDIO_FREQ  (MMIO_BASE + 0x300u) /* M15: tone in Hz             */

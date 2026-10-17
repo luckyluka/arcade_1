@@ -25,7 +25,7 @@
 
 #include <stdint.h>
 
-/* --- Registers (byte offsets within the 0x4000 MMIO window) --------------- */
+/* --- Registers (byte offsets within the MMIO window) ---------------------- */
 
 #define ARCADE1_VIDEO_REG_BASE   0x100u  /* first video offset; mux split     */
 #define ARCADE1_VIDEO_REG_X      0x100u  /* R/W : draw X coordinate           */

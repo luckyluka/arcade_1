@@ -26,7 +26,7 @@
  *   gfx_tilemap(20, 30, cells_rom, ...)       on-screen map
  *   gfx_tilemap(-10, -6, cells_rom, ...)      negative origin
  *   gfx_tilemap(300, 220, cells_rom, ...)     right/bottom overhang
- *   gfx_tilemap(250, 100, 0x4000, ...)        illegal source -> nothing
+ *   gfx_tilemap(250, 100, ARCADE1_MMIO_BASE, ...)  illegal source -> nothing
  *   gfx_tilemap(20, 100, cells_ram, ...)      RAM copy of the same map
  *   gfx_tilemap(..., 0, ...) x3               guards -> nothing
  *   gfx_present()                             one present, counted by the device
@@ -107,7 +107,7 @@ int main(void)
 
     /* Cells pointer outside ROM/RAM (the MMIO window): every cell fetches
      * as 0 = empty, so nothing is drawn and no device is disturbed. */
-    gfx_tilemap(250, 100, (const void *)0x4000u, tiles, MAP_COLS, MAP_ROWS,
+    gfx_tilemap(250, 100, (const void *)ARCADE1_MMIO_BASE, tiles, MAP_COLS, MAP_ROWS,
                 TILE_W, TILE_H);
 
     /* Same map from RAM must render identically to the ROM original (the

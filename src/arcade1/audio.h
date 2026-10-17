@@ -22,7 +22,7 @@
 
 #include <stdint.h>
 
-/* --- Registers (byte offsets within the 0x4000 MMIO window) --------------- */
+/* --- Registers (byte offsets within the MMIO window) ---------------------- */
 
 #define ARCADE1_AUDIO_REG_BASE 0x300u  /* first audio offset; mux split       */
 #define ARCADE1_AUDIO_REG_FREQ 0x300u  /* R/W : tone frequency in Hz          */

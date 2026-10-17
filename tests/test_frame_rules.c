@@ -102,7 +102,7 @@ static void boot(arcade1_machine_t *m, const uint32_t *prog, size_t n)
 static void test_present_ends_frame_immediately(void)
 {
     const uint32_t present_guest[] = {
-        LUI (1, 0x4u),       /* x1 = 0x00004000 (MMIO base)            */
+        LUI (1, 0x40000u),   /* x1 = 0x40000000 (MMIO base)             */
         ADDI(5, 0, 10),      /* x5 = 10                                */
         SW  (5, 1, 0x100),   /* X     = 10                             */
         SW  (5, 1, 0x104),   /* Y     = 10                             */

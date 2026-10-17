@@ -117,7 +117,7 @@ static unsigned expect_mode(unsigned f)
  * inst/frame, hash 0x26E54043DD80BE92. */
 #define GOLDEN_TDIGEST   0x2AA3A3F1u
 #define GOLDEN_IDLE_INST 431559u
-#define GOLDEN_STATE_HASH UINT64_C(0x26E54043DD80BE92)
+#define GOLDEN_STATE_HASH UINT64_C(0x0686D9110C654632)
 
 #define MODES 5u
 

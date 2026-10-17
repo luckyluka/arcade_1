@@ -11,11 +11,11 @@
  *   (a) one full-screen CLEAR
  *   (b) 100 full-screen CLEARs
  *   (c) a full-screen TILEMAP: 30x16 cells of 16x16 tiles = 480 cells, every
- *       cell non-empty with its own index and its own tint. NOTE the machine
- *       only has 4 KiB RAM for tile data, so only 128 distinct 32-byte tiles
- *       are addressable; the rest necessarily read as transparent. The
- *       FETCH-side work (cells_visited, bytes_fetched) is the true full-screen
- *       worst case; pixels_written is memory-capped and is reported as such.
+ *       cell non-empty with its own index and its own tint. All 480 distinct
+ *       32-byte tiles fit in the 64 KiB RAM (2048 addressable), so every cell
+ *       draws and pixels_written tracks the full-screen worst case. The
+ *       FETCH-side work (cells_visited, bytes_fetched) is likewise the true
+ *       full-screen worst case.
  *       A second variant reuses one all-set tile across all 480 cells to show
  *       the true pixel-write worst case for the same fetch cost.
  *   (d) 128 overlapping 32x32 all-set sprites
@@ -74,7 +74,7 @@ static uint32_t enc_j(uint32_t rd, int32_t imm)
 #define JAL(rd, imm)       enc_j((rd), (imm))
 
 #define CMD_OFF 0x10Cu            /* VIDEO_CMD register offset */
-#define X1_MMIO LUI(1, 0x4u)      /* x1 = 0x4000 (MMIO base)   */
+#define X1_MMIO LUI(1, 0x40000u)  /* x1 = 0x40000000 (MMIO base)   */
 
 /* Load a flat image as firmware (resets the CPU to the vector). */
 static void boot(arcade1_machine_t *m, const uint8_t *img, size_t n)
@@ -102,7 +102,7 @@ static void case_one_clear(void)
 {
     arcade1_machine_t m;
     const uint32_t prog[] = {
-        X1_MMIO,                 /* x1 = 0x4000                              */
+        X1_MMIO,                 /* x1 = 0x40000000                              */
         ADDI(2, 0, 1),           /* x2 = 1 (CLEAR)                           */
         ADDI(3, 0, 3),           /* x3 = 3 (PRESENT)                         */
         SW(2, 1, CMD_OFF),       /* CMD = CLEAR                              */
@@ -144,7 +144,7 @@ static void case_many_clears(void)
     uint8_t img[4 * 128];
     const arcade1_video_stats_t *s;
 
-    prog[n++] = X1_MMIO;                    /* x1 = 0x4000                 */
+    prog[n++] = X1_MMIO;                    /* x1 = 0x40000000                 */
     prog[n++] = ADDI(2, 0, 1);              /* x2 = 1 (CLEAR)              */
     prog[n++] = ADDI(3, 0, 3);              /* x3 = 3 (PRESENT)            */
     for (unsigned i = 0; i < N_CLEARS; i++)
@@ -179,7 +179,7 @@ static void case_many_clears(void)
 #define MAP_CELLS (MAP_COLS * MAP_ROWS)  /* 480 */
 #define TILE_BYTES ((TILE_H) * ((TILE_W) / 8u))   /* 32 */
 #define CELL_ADDR 0x0400u              /* cell array lives in the ROM image */
-#define TILE_ADDR 0x1000u              /* tile set lives in RAM (all 0xFF)  */
+#define TILE_ADDR 0x20000000u       /* tile set lives in RAM (all 0xFF)  */
 
 /* Build the ROM image: [guest code][cell array]. Each cell gets its own
  * tile index (1..480) and its own tint; `reuse_one_tile` instead points
@@ -188,7 +188,7 @@ static void case_many_clears(void)
 static size_t build_tilemap_image(uint8_t *img, int reuse_one_tile)
 {
     const uint32_t prog[] = {
-        X1_MMIO,                 /* x1 = 0x4000                              */
+        X1_MMIO,                 /* x1 = 0x40000000                              */
         ADDI(2, 0, 6),           /* x2 = 6 (TILEMAP)                         */
         ADDI(3, 0, 3),           /* x3 = 3 (PRESENT)                         */
         SW(2, 1, CMD_OFF),       /* CMD = TILEMAP                            */
@@ -223,9 +223,9 @@ static void case_tilemap(int reuse_one_tile)
     uint8_t img[4 * 1024];
     const size_t n = build_tilemap_image(img, reuse_one_tile);
     const arcade1_video_stats_t *s;
-    /* How many of the 480 distinct tiles land inside the 4 KiB of RAM. */
+    /* How many of the 480 distinct tiles land inside the 64 KiB of RAM. */
     const uint32_t addrable_tiles =
-        (ARCADE1_RAM_SIZE) / TILE_BYTES;             /* 4096 / 32 = 128 */
+        (ARCADE1_RAM_SIZE) / TILE_BYTES;             /* 65536 / 32 = 2048 */
     const uint32_t full_tiles =
         (MAP_CELLS < addrable_tiles) ? MAP_CELLS : addrable_tiles;
     /* How many tiles actually have set bits: with distinct indices only the
@@ -261,7 +261,7 @@ static void case_tilemap(int reuse_one_tile)
            "only tiles with data can have set bits");
 
     printf("  (c) TILEMAP %ux%u cells: cmd %u, cells %u, bytes %u, "
-           "px %u (%s; %u of %u tiles addressable in 4 KiB RAM)\n",
+           "px %u (%s; %u of %u tiles addressable in 64 KiB RAM)\n",
            MAP_COLS, MAP_ROWS, s->commands, s->cells_visited,
            s->bytes_fetched, s->pixels_written,
            reuse_one_tile ? "one reused all-set tile" : "distinct tiles",
@@ -285,7 +285,7 @@ static void case_tilemap(int reuse_one_tile)
 #define SPR_W   32u
 #define SPR_H   32u
 #define SPRITES 128u
-#define SPR_ADDR 0x1000u            /* the sprite image lives in RAM */
+#define SPR_ADDR 0x20000000u          /* the sprite image lives in RAM */
 
 static void case_sprites(void)
 {
@@ -295,7 +295,7 @@ static void case_sprites(void)
     uint8_t img[4 * 160];
     const arcade1_video_stats_t *s;
 
-    prog[n++] = X1_MMIO;                    /* x1 = 0x4000                 */
+    prog[n++] = X1_MMIO;                    /* x1 = 0x40000000                 */
     prog[n++] = ADDI(2, 0, 5);              /* x2 = 5 (SPRITE)             */
     prog[n++] = ADDI(3, 0, 3);              /* x3 = 3 (PRESENT)            */
     for (unsigned i = 0; i < SPRITES; i++)
@@ -339,14 +339,14 @@ static void case_sprites(void)
  * only way to shrink the loop overhead.
  *
  * K is bounded by ROM: the image is [LUI][ADDI][K stores][jal] = K+3 words
- * = 4*(K+3) bytes <= 4096, so K <= 1021. The two setup instructions run
+ * = 4*(K+3) bytes <= 262144, so K <= 65533. The two setup instructions run
  * before the loop, so they are charged against the cap too:
- *     steps for setup   = 2                       (LUI + ADDI)
- *     steps per loop    = K + 1 = 1022            (K stores + 1 jal)
+ *     steps for setup   = 2                        (LUI + ADDI)
+ *     steps per loop    = K + 1 = 65534            (K stores + 1 jal)
  *     steps for the loop = 1,000,000 - 2 = 999,998
- *     full iterations    = floor(999,998 / 1022) = 978  (978*1022 = 999,516)
- *     leftover steps     = 999,998 - 999,516 = 482 (all stores, all commands)
- *     commands           = 978 * 1021 + 482 = 999,020
+ *     full iterations    = floor(999,998 / 65534) = 15  (15*65534 = 983,010)
+ *     leftover steps     = 999,998 - 983,010 = 16,988 (all stores, all cmds)
+ *     commands           = 15 * 65533 + 16,988 = 999,983
  *
  * The guest never presents, so the frame ends at the cap (SPEC.md section 8,
  * option B's premise). Every register powers on at 0, so the LUI (MMIO base)
@@ -355,7 +355,7 @@ static void case_sprites(void)
 
 #define SETUP_WORDS 2u                       /* LUI + ADDI                  */
 #define JAL_WORDS   1u
-#define K_STORES ((ARCADE1_ROM_SIZE / 4u) - SETUP_WORDS - JAL_WORDS)  /*1021*/
+#define K_STORES ((ARCADE1_ROM_SIZE / 4u) - SETUP_WORDS - JAL_WORDS)  /*65533*/
 
 static void case_max_commands(void)
 {
@@ -375,7 +375,7 @@ static void case_max_commands(void)
     assert(4u * (K_STORES + SETUP_WORDS + JAL_WORDS) == ARCADE1_ROM_SIZE &&
            "the unrolled loop must fill ROM exactly");
 
-    prog[n++] = X1_MMIO;                    /* x1 = 0x4000                 */
+    prog[n++] = X1_MMIO;                    /* x1 = 0x40000000                 */
     prog[n++] = ADDI(2, 0, 2);              /* x2 = 2 (SET_PIXEL, cheapest) */
     for (unsigned i = 0; i < K_STORES; i++)
         prog[n++] = SW(2, 1, CMD_OFF);      /* CMD = SET_PIXEL             */

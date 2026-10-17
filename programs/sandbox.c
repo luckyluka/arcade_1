@@ -37,7 +37,7 @@
 
 #include "gfx.h"
 
-#define MMIO_BASE   0x4000u
+#define MMIO_BASE   ARCADE1_MMIO_BASE
 #define REG_TIMER   (*(volatile unsigned int *)(MMIO_BASE + 0x00u))
 #define REG_PAD     (*(volatile unsigned int *)(MMIO_BASE + 0x200u))
 

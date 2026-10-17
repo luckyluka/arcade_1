@@ -1,19 +1,21 @@
 /* ARCADE-1 guest linker script (milestone 10).
  *
- * Memory map (matches the placeholder map in src/arcade1/memory.h):
- *   ROM 0x0000..0x0FFF   code + read-only data + the stored image of .data
- *   RAM 0x1000..0x1FFF   .data/.bss + stack (grows down from the top)
+ * Memory map (v0.2; matches src/arcade1/memory.h and programs/arcade1_map.h):
+ *   ROM 0x00000000..0x0003FFFF  256 KiB  code + read-only data + the stored
+ *                                        image of .data
+ *   RAM 0x20000000..0x2000FFFF   64 KiB  .data/.bss + stack (grows down from
+ *                                        the top, 0x20010000)
  *
  * .text.init (crt0's _start) is forced to ROM base so it sits at 0x0000 —
  * where the CPU resets. .data is *stored* in ROM (LMA) but *lives* in RAM
  * (VMA); crt0 copies it at startup. That keeps the flat objcopy image
- * contiguous (no 4 KiB gap) so it fits the ROM.
+ * contiguous ([code][.data image], no ROM->RAM gap) so it fits the ROM.
  */
 
 MEMORY
 {
-    rom (rx)  : ORIGIN = 0x00000000, LENGTH = 4K
-    ram (rwx) : ORIGIN = 0x00001000, LENGTH = 4K
+    rom (rx)  : ORIGIN = 0x00000000, LENGTH = 256K
+    ram (rwx) : ORIGIN = 0x20000000, LENGTH = 64K
 }
 
 ENTRY(_start)

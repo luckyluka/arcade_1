@@ -51,7 +51,7 @@ static uint32_t enc_i(uint32_t opcode, uint32_t funct3, uint32_t rd,
 static void load_timer_reader(arcade1_bus_t *bus)
 {
     const uint32_t prog[] = {
-        enc_u(0x37, 1, 0x4u),      /* LUI x1, 0x4    -> x1 = 0x00004000 */
+        enc_u(0x37, 1, 0x40000u),   /* LUI x1, 0x40000 -> x1 = 0x40000000 */
         enc_i(0x03, 2, 2, 1, 0),   /* LW  x2, 0(x1)  -> x2 = TIMER_COUNT */
     };
     uint8_t img[sizeof prog];

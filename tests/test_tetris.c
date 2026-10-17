@@ -91,7 +91,7 @@ static const uint16_t pcol[7] = {
 };
 #define CELL(pid) (1u | ((uint32_t)pcol[(pid) - 1] << 16))
 
-#define MMIO_BASE 0x4000u
+#define MMIO_BASE ARCADE1_MMIO_BASE
 #define PIX(x, y) ((size_t)(y) * ARCADE1_WIDTH + (size_t)(x))
 
 /* Piece boxes, identical to tetris.c's shape[7][4] (row*4+col cells). */

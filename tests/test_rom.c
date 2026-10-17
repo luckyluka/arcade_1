@@ -49,9 +49,9 @@ static size_t build_image(uint8_t *out, const uint8_t *pl, size_t pl_size,
 
 int main(void)
 {
-    uint8_t buf[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
+    static uint8_t buf[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     arcade1_image_t img;
-    arcade1_bus_t bus;
+    static arcade1_bus_t bus;
     size_t n;
 
     /* === CRC-32 known vectors =========================================== */
@@ -92,7 +92,7 @@ int main(void)
     assert(arcade1_image_parse(NULL, n, &img) == ARCADE1_IMAGE_ERR_SHORT &&
            "NULL input is a short image");
     {
-        uint8_t bad[sizeof buf];
+        static uint8_t bad[sizeof buf];
         size_t bn;
 
         bn = build_image(bad, payload, sizeof payload, 0, 0,
@@ -117,7 +117,7 @@ int main(void)
         assert(arcade1_image_parse(bad, bn, &img) == ARCADE1_IMAGE_ERR_SIZE &&
                "declared size must equal file length - 16");
 
-        bn = build_image(bad, payload, sizeof payload, 4097, 0,
+        bn = build_image(bad, payload, sizeof payload, ARCADE1_ROM_SIZE + 1u, 0,
                          ARCADE1_IMAGE_VERSION);           /* > the ROM */
         assert(arcade1_image_parse(bad, bn, &img) == ARCADE1_IMAGE_ERR_SIZE &&
                "payload larger than the ROM is invalid");
@@ -129,14 +129,14 @@ int main(void)
                "a corrupted payload must fail the checksum");
     }
 
-    /* === A full-size (4 KiB) payload is legal =========================== */
+    /* === A full-size (ROM) payload is legal ============================= */
     {
         static uint8_t zeros[ARCADE1_ROM_SIZE];
         static uint8_t big[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
         size_t bn = build_image(big, zeros, ARCADE1_ROM_SIZE, 0, 0,
                                 ARCADE1_IMAGE_VERSION);
         assert(arcade1_image_parse(big, bn, &img) == ARCADE1_IMAGE_OK &&
-               "a full 4 KiB payload must be accepted");
+               "a full ROM-size payload must be accepted");
         assert(img.payload_size == ARCADE1_ROM_SIZE);
     }
 
@@ -148,7 +148,7 @@ int main(void)
     printf("milestone17: all assertions passed\n");
     printf("  verified: CRC-32 vectors, magic detection, header round-trip,\n");
     printf("            payload -> ROM load, short/magic/version/size/crc\n");
-    printf("            rejections, 4 KiB payload, error strings\n");
+    printf("            rejections, ROM-size payload, error strings\n");
 
     return 0;
 }

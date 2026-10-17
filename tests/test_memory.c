@@ -103,8 +103,8 @@ int main(void)
     /* Last bytes of ROM + start of RAM: straddles the two regions, rejected. */
     assert(arcade1_read32(&bus, ARCADE1_ROM_BASE + ARCADE1_ROM_SIZE - 2) == 0 &&
            "access straddling ROM/RAM must return 0");
-    /* One past the end of RAM: out of range (0x2000..0x3FFF is an unused
-     * gap; MMIO starts at 0x4000). */
+    /* One past the end of RAM: out of range (0x20010000..0x3FFFFFFF is an
+     * unused gap; MMIO starts at 0x40000000). */
     assert(arcade1_read32(&bus, ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE) == 0 &&
            "access just past RAM must return 0");
     /* Far out of range. */
@@ -304,6 +304,23 @@ int main(void)
     }
     assert(arcade1_read32(&bus, ARCADE1_ROM_BASE) == 0x5A5A5A5Au &&
            "ROM must be unchanged after the stray writes");
+
+    /* Case 5 (M26): the OLD map's RAM base (0x1000) and MMIO base (0x4000)
+     * now fall inside the 256 KiB ROM, so writing to either is a ROM write —
+     * ignored and counted as a stray. This proves neither address is writable
+     * RAM or an MMIO window any more (the map moved RAM/MMIO far apart). */
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write32(&bus, 0x1000u, 0xDEADBEEFu);   /* old RAM base  */
+        assert(bus.stray_accesses == s + 1 &&
+               "write to old RAM base 0x1000 must now be a stray (ROM)");
+    }
+    {
+        uint32_t s = bus.stray_accesses;
+        arcade1_write32(&bus, 0x4000u, 0xDEADBEEFu);   /* old MMIO base */
+        assert(bus.stray_accesses == s + 1 &&
+               "write to old MMIO base 0x4000 must now be a stray (ROM)");
+    }
 
     printf("milestone07: all assertions passed\n");
     printf("  map: ROM 0x%04X+%u, RAM 0x%04X+%u, MMIO 0x%04X+%u\n",

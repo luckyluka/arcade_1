@@ -292,7 +292,7 @@ int main(void)
     /* === Loads and stores =============================================== */
     {
         const uint32_t prog[] = {
-            enc_u(0x37, 2, 0x1),           /* pc0  LUI  x2, 0x1 -> 0x1000   */
+            enc_u(0x37, 2, 0x20000),       /* pc0  LUI  x2, 0x20000 -> RAM base */
             enc_u(0x37, 1, 0x8),           /* pc4  LUI  x1, 0x8 -> 0x8000   */
             enc_s(1, 2, 1, 0),             /* pc8  SH   x1, 0(x2)           */
             enc_i(0x03, 1, 3, 2, 0),       /* pc12 LH   x3, 0(x2)           */
@@ -312,7 +312,7 @@ int main(void)
         load(prog, 16);
         for (int i = 0; i < 16; i++) arcade1_cpu_step(&cpu, &bus);
 
-        assert(cpu.regs[2]  == 0x1000u          && "LUI RAM base");
+        assert(cpu.regs[2]  == 0x20000000u      && "LUI RAM base");
         assert(cpu.regs[1]  == 0x8000u          && "LUI 0x8000");
         assert(cpu.regs[3]  == 0xFFFF8000u      && "LH sign-extends 0x8000");
         assert(cpu.regs[4]  == 0x8000u          && "LHU zero-extends 0x8000");
@@ -325,10 +325,10 @@ int main(void)
         assert(cpu.pc == 64);
 
         /* Verify the stored bytes landed in RAM as expected. */
-        assert(arcade1_read16(&bus, 0x1000u) == 0x8000u && "SH to RAM");
-        assert(arcade1_read8(&bus, 0x1004u) == 0x7Fu    && "SB to RAM");
-        assert(arcade1_read8(&bus, 0x1005u) == 0xFFu    && "SB to RAM (high)");
-        assert(arcade1_read32(&bus, 0x1008u) == 0x123u  && "SW to RAM");
+        assert(arcade1_read16(&bus, 0x20000000u) == 0x8000u && "SH to RAM");
+        assert(arcade1_read8(&bus, 0x20000004u) == 0x7Fu    && "SB to RAM");
+        assert(arcade1_read8(&bus, 0x20000005u) == 0xFFu    && "SB to RAM (high)");
+        assert(arcade1_read32(&bus, 0x20000008u) == 0x123u  && "SW to RAM");
     }
 
     /* === Unknown / system words act as NOP (PC advances) ================ */

@@ -136,7 +136,7 @@ static void model_render(uint16_t *fb)
     model_map(fb, cells_rom,  20,   30);        /* on-screen               */
     model_map(fb, cells_rom, -10,  -6);         /* negative origin         */
     model_map(fb, cells_rom, 300, 220);         /* right/bottom overhang   */
-    /* illegal source (0x4000) draws nothing: skipped.                     */
+    /* illegal source (the MMIO window) draws nothing: skipped.             */
     model_map(fb, cells_rom,  20, 100);         /* RAM copy == ROM original*/
 }
 

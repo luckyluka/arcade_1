@@ -7,9 +7,9 @@
  *
  * ROM is loaded once (arcade1_load_rom) and is read-only at runtime; RAM is
  * read/write; MMIO (milestone 11) routes to a host-registered device handler,
- * which is how a guest program reaches a device register. The map is still a
- * placeholder and NOT the final ARCADE-1 map, and only the minimal MMIO
- * infrastructure exists so far — no full set of peripherals yet.
+ * which is how a guest program reaches a device register. The growth-friendly
+ * map (ROM 256 KiB, RAM 64 KiB, MMIO 4 KiB, each at a 512 MiB boundary) is
+ * pinned in SPEC.md section 6.
  *
  * No dependency on libretro or any host frontend.
  */
@@ -21,26 +21,31 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* --- Minimal memory map -------------------------------------------------- *
+/* --- Memory map (v0.2, pinned in SPEC.md section 6) ---------------------- *
  * ROM is loaded once (arcade1_load_rom) and is read-only at runtime; RAM is
  * read/write; MMIO routes to a device handler. Addresses are byte addresses;
- * accesses are little-endian. This map is a placeholder and is NOT the final
- * ARCADE-1 memory map.
+ * accesses are little-endian. Each region sits at a 512 MiB boundary so the
+ * map has room to grow (more ROM/RAM/MMIO) without moving anything.
  *
- *   ROM   0x0000..0x0FFF   4 KiB  program image (read-only)
- *   RAM   0x1000..0x1FFF   4 KiB  data + stack
- *   gap   0x2000..0x3FFF          unused (out of range)
- *   MMIO  0x4000..0x4FFF   4 KiB  device registers (routed to a handler)
+ *   ROM   0x00000000..0x0003FFFF   256 KiB  program image (read-only)
+ *   gap   0x00040000..0x1FFFFFFF            unused (out of range)
+ *   RAM   0x20000000..0x2000FFFF    64 KiB  data + stack (grows down from
+ *                                           0x20010000)
+ *   gap   0x20010000..0x3FFFFFFF            unused (out of range)
+ *   MMIO  0x40000000..0x40000FFF     4 KiB  device registers (routed to a
+ *                                           handler)
  *
- * The gap keeps MMIO a distinct region rather than a continuation of RAM, the
- * way a real map separates memory from memory-mapped I/O. */
+ * The gaps keep MMIO a distinct region rather than a continuation of RAM, the
+ * way a real map separates memory from memory-mapped I/O. This header is the
+ * machine's single source of truth; the guest mirror is programs/arcade1_map.h
+ * (keep the two in sync — see SPEC.md section 6). */
 
-#define ARCADE1_ROM_BASE  0x0000u
-#define ARCADE1_ROM_SIZE  0x1000u           /* 4 KiB */
-#define ARCADE1_RAM_BASE  0x1000u
-#define ARCADE1_RAM_SIZE  0x1000u           /* 4 KiB */
-#define ARCADE1_MMIO_BASE 0x4000u
-#define ARCADE1_MMIO_SIZE 0x1000u           /* 4 KiB device-register window */
+#define ARCADE1_ROM_BASE  0x00000000u
+#define ARCADE1_ROM_SIZE  0x00040000u       /* 256 KiB */
+#define ARCADE1_RAM_BASE  0x20000000u
+#define ARCADE1_RAM_SIZE  0x00010000u       /* 64 KiB */
+#define ARCADE1_MMIO_BASE 0x40000000u
+#define ARCADE1_MMIO_SIZE 0x00001000u       /* 4 KiB device-register window */
 
 /* --- MMIO handlers ------------------------------------------------------- *
  * The bus routes the MMIO region to a host-registered handler so devices can

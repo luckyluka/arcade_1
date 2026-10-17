@@ -94,7 +94,7 @@ static unsigned expect_mode(unsigned f)
  * tdigest 0x00C134B1, idle 427,816 inst/frame, hash 0x360883B3C544A0CA. */
 #define GOLDEN_TDIGEST   0x00C134B1u
 #define GOLDEN_IDLE_INST 427816u
-#define GOLDEN_STATE_HASH UINT64_C(0x360883B3C544A0CA)
+#define GOLDEN_STATE_HASH UINT64_C(0x355725A83145E16A)
 
 #define MODES 4u
 

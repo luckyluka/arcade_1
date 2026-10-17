@@ -8,7 +8,7 @@
  *   4       1     version (currently 1)
  *   5       1     reserved, must be 0
  *   6       2     reserved, must be 0
- *   8       4     payload_size    (little-endian u32, 1..4096)
+ *   8       4     payload_size    (little-endian u32, 1..ARCADE1_ROM_SIZE)
  *   12      4     payload_crc32   (little-endian u32, IEEE CRC-32)
  *   16      N     payload         (the flat RV32IM ROM image)
  *

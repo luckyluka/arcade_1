@@ -33,7 +33,7 @@
 
 #include "gfx.h"
 
-#define REG_TIMER (*(volatile unsigned int *)(0x4000u + 0x00u))
+#define REG_TIMER (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x00u))
 
 #define FRAMES_PER_PHASE 30u   /* keep in sync with tests/test_bench.c */
 #define PHASES           8u

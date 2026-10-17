@@ -179,7 +179,7 @@ static void audio_render(arcade1_machine_t *m)
 }
 
 /* --- MMIO dispatch (the window's single M11 handler) --------------------- *
- * The bus routes the whole 0x4000 window to one handler, so the machine muxes
+ * The bus routes the whole MMIO window to one handler, so the machine muxes
  * it: 0x000..0x0FF is the timer, 0x100..0x1FF the video device, 0x200..0x2FF
  * the input device (read-only pad), 0x300..0x3FF the audio device. Offsets
  * that no device claims read 0 / ignore writes — still not stray accesses,

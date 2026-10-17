@@ -155,10 +155,10 @@ static void video_fill(arcade1_video_t *v)
 }
 
 /* Fetch one byte of a 1-bpp image. The device only ever reads guest ROM
- * (0x0000..0x0FFF) and RAM (0x1000..0x1FFF); anything else — in particular
- * the MMIO window — reads as 0 bits, so a sprite/tile can never have side
- * effects on other devices and these fetches are not CPU accesses (the
- * stray-access counter stays untouched). */
+ * (0x00000000..0x0003FFFF) and RAM (0x20000000..0x2000FFFF); anything else —
+ * in particular the MMIO window — reads as 0 bits, so a sprite/tile can never
+ * have side effects on other devices and these fetches are not CPU accesses
+ * (the stray-access counter stays untouched). */
 static uint8_t video_fetch_byte(const arcade1_video_t *v, uint64_t addr)
 {
     if (addr < (uint32_t)ARCADE1_ROM_SIZE)

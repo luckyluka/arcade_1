@@ -92,8 +92,8 @@ static unsigned frame_pad(unsigned f)
 /* Pinned golden values (observational run first, then pinned). The final
  * state hash equals P4's (same guest + same script — cross-check), and the
  * loaded continuation's RAM digest is pinned below. Observed at P5. */
-#define GOLDEN_FINAL_STATE UINT64_C(0x26E54043DD80BE92)
-#define GOLDEN_CONT_HASH   UINT64_C(0xE67E8DF2E722A598)
+#define GOLDEN_FINAL_STATE UINT64_C(0x0686D9110C654632)
+#define GOLDEN_CONT_HASH   UINT64_C(0x195A24BC13043C38)
 
 /* --- State ----------------------------------------------------------------- */
 

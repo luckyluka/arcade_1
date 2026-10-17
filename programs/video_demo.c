@@ -17,7 +17,9 @@
  * table in docs.md (see src/arcade1/video.h).
  */
 
-#define MMIO_BASE   0x4000u
+#include "arcade1_map.h"
+
+#define MMIO_BASE   ARCADE1_MMIO_BASE
 #define VIDEO_BASE  (MMIO_BASE + 0x100u)
 
 #define REG_X      (*(volatile unsigned int *)(VIDEO_BASE + 0x00))

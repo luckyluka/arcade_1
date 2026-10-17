@@ -24,7 +24,7 @@
  *   gfx_sprite(-20, -10, ...)               fully above the screen: none
  *   gfx_sprite(100, 100, ..., 0, 6, ...)    zero width: none
  *   gfx_sprite(100, 100, ..., 10, 0, ...)   zero height: none
- *   gfx_sprite(200, 150, 0x4000, ...)       illegal source: none
+ *   gfx_sprite(200, 150, ARCADE1_MMIO_BASE, ...)  illegal source: none
  *   gfx_sprite(150, 100, img_ram, ...)      RAM copy -> 32 yellow pixels
  *   gfx_present()                           one present, counted by the device
  */
@@ -75,7 +75,7 @@ int main(void)
 
     /* Source outside ROM/RAM (the MMIO window): nothing drawn, and the
      * device must not disturb the timer or anything else. */
-    gfx_sprite(200, 150, (const void *)0x4000u, 10, 6, COLOR_RED);
+    gfx_sprite(200, 150, (const void *)ARCADE1_MMIO_BASE, 10, 6, COLOR_RED);
 
     /* Same image from RAM must render identically to the ROM original. */
     for (i = 0; i < 12; i++)

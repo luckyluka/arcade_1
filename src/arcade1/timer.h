@@ -24,7 +24,7 @@
 
 #include <stdint.h>
 
-/* --- Registers (byte offsets within the 0x4000 MMIO window) --------------- */
+/* --- Registers (byte offsets within the MMIO window) ---------------------- */
 
 #define ARCADE1_TIMER_REG_COUNT 0x00u  /* R   : tick count                */
 #define ARCADE1_TIMER_REG_CTRL  0x04u  /* R/W : bit0 = enable             */

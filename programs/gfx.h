@@ -11,8 +11,10 @@
 #ifndef ARCADE_GFX_H
 #define ARCADE_GFX_H
 
+#include "arcade1_map.h"   /* the shared guest memory map (MMIO base, etc.) */
+
 /* Video device registers (window base + M13 offsets). */
-#define GFX_MMIO_BASE 0x4000u
+#define GFX_MMIO_BASE ARCADE1_MMIO_BASE
 
 #define GFX_REG_X     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x100))
 #define GFX_REG_Y     (*(volatile unsigned int *)(GFX_MMIO_BASE + 0x104))

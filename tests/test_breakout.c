@@ -64,7 +64,7 @@
 #define ST_OVER  3
 #define ST_WIN   4
 
-#define MMIO_BASE 0x4000u
+#define MMIO_BASE ARCADE1_MMIO_BASE
 
 #define PIX(x, y) ((size_t)(y) * ARCADE1_WIDTH + (size_t)(x))
 
