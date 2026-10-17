@@ -65,7 +65,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
-GOLDEN_GAMES  := breakout tetris platformer scroll
+GOLDEN_GAMES  := breakout tetris platformer scroll color
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,$(1))
 # Symbol source for a game in $(ARC1_ROM_DIR): the committed `nm` dump if
@@ -638,7 +638,7 @@ golden-update: | $(TESTDIR)
 # golden update, and say in the commit message why (a golden change IS a
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
-GOLDEN_IMGS   := breakout tetris platformer scroll_demo
+GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)
