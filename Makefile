@@ -60,7 +60,7 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
         test-platformer test-breakout test-tetris test-bench test-terrain \
-        test-ray test-sandbox test-systems test-persist
+        test-ray test-sandbox test-systems test-persist roms-update
 
 all: $(TARGET)
 
@@ -468,6 +468,22 @@ test-tetris: $(GUEST_BUILD)/tetris.arc1
 	 $(TESTDIR)/test_tetris $(GUEST_BUILD)/tetris.arc1 \
 	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
 	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
+
+# --- Golden ROM snapshot (Task A step 3) ------------------------------------
+# tests/roms/ holds the exact .arc1 images the golden regression runs against
+# (tests/golden/, `make test-golden`). They are a DELIBERATE, MANUAL snapshot:
+# refresh them ONLY when a game's behaviour is meant to change, in the same
+# commit as the golden update, and say in the commit message why (a golden
+# change IS a behaviour change — see docs.md "Golden regression policy").
+# This target needs the RISC-V cross-compiler; test-golden does not.
+GOLDEN_GAMES  := breakout tetris platformer scroll_demo
+GOLDEN_ROMDIR := tests/roms
+
+roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_GAMES)))
+	mkdir -p $(GOLDEN_ROMDIR)
+	cp $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_GAMES))) \
+	   $(GOLDEN_ROMDIR)/
+	@echo "golden ROMs refreshed in $(GOLDEN_ROMDIR)/ (commit deliberately)"
 
 clean:
 	rm -f $(TARGET) $(A64_TARGET) $(A32_TARGET)
