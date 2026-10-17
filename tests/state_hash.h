@@ -23,6 +23,7 @@
 #define ARCADE1_TEST_STATE_HASH_H
 
 #include "exec.h"   /* arcade1_cpu_t; memory.h via exec.h -> arcade1_bus_t */
+#include "machine.h" /* arcade1_machine_t, arcade1_framebuffer() (fb_hash) */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -70,6 +71,21 @@ static inline uint64_t state_hash(const arcade1_cpu_t *cpu,
         h = sh_byte(h, bus->ram[i]);
     h = sh_u32(h, bus->stray_accesses);
 
+    return h;
+}
+
+/* Fingerprint of the visible output: FNV-1a 64-bit over the framebuffer,
+ * every RGB565 pixel as 2 bytes little-endian, row-major. Two machines that
+ * presented identical pictures hash equal regardless of CPU/RAM state. */
+static inline uint64_t fb_hash(const arcade1_machine_t *m)
+{
+    uint64_t h = SH_FNV_OFFSET;
+    const uint16_t *fb = arcade1_framebuffer(m);
+
+    for (size_t i = 0; i < (size_t)ARCADE1_FB_PIXELS; i++) {
+        h = sh_byte(h, (uint8_t)(fb[i] & 0xFFu));
+        h = sh_byte(h, (uint8_t)((fb[i] >> 8) & 0xFFu));
+    }
     return h;
 }
 
