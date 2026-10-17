@@ -49,7 +49,7 @@ via `make test-bench`, `make test-terrain`, `make test-ray`,
 | 25        | Machine v0.2a: 480×270 screen | COMPLETE |
 | 26        | Machine v0.2b: Memory (256 KiB ROM / 64 KiB RAM) | COMPLETE |
 | 27        | Machine v0.2c: Color Graphics (palette + SPRITE4/TILEMAP4) | COMPLETE |
-| 28        | AI SDK v0.1 (headless runner `arcade1 run`) | IN PROGRESS |
+| 28        | AI SDK v0.1 (headless runner `arcade1 run`) | COMPLETE |
 | 29+       | (see `MILESTONES_2.md`)    | NOT STARTED |
 
 Next up: **Milestone 28 — AI SDK v0.1**. The foundation (headless `arcade1 run` with

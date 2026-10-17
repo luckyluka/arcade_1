@@ -26,7 +26,7 @@ Buttons: up down left right a b start select
 `arcade1 run game.arc1 --syms game.syms --vars score,lives --var-every 60`
 
 ## Input
-Guest reads `INPUT_PAD` at `MMIO_BASE + 0x200`. Button bits: up=0x1, down=0x2, left=0x4, right=0x8, a=0x10, b=0x20, start=0x40, select=0x80 (verify against SPEC).
+Button bits: up=0x1, down=0x2, left=0x4, right=0x8, a=0x10, b=0x20, start=0x40, select=0x80 (defined in programs/arcade1.h).
 
 ## Exit codes
 0 success, 1 runtime error, 2 usage error.

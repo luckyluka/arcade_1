@@ -169,9 +169,4 @@ replayed here — the replay format is the script format.
 
 ## Remaining M28 deliverables
 
-Not built yet (future steps, then the rest of the roadmap):
-
-- **Full `arcade1` command set** — `build` (RISC-V guest → `.arc1`), `test`
-  (run + assert hashes), `capture` (dump frames), built on `run`.
-- **Cheat sheet** — a short reference for humans and agents.
-- **Two example games** built with the SDK.
+Prototype only (needs validation): build/test/capture/inspect commands, cheat sheet, example games. M29 not complete.
