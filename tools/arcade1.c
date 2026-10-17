@@ -517,8 +517,10 @@ static int cmd_run(int argc, char **argv)
 
     if (inspect) {
         printf("inspect: frame=%u pc=0x%08X instret=%llu\n",
-               m.frame_counter, m.cpu.pc, (unsigned long long)m.cpu.instret);    }
-    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",           frames,
+               m.frame_counter, m.cpu.pc, (unsigned long long)m.cpu.instret);
+        for (int r = 0; r < 32; r++)
+            printf("  x%-2d = 0x%08X\n", r, m.cpu.regs[r]);
+    }    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",           frames,
            (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
     return 0;
