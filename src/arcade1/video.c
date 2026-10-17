@@ -413,6 +413,93 @@ static void video_tilemap(arcade1_video_t *v)
     }
 }
 
+/* --- M27: TILEMAP4 --------------------------------------------------------- *
+ * Like TILEMAP but each tile is a 4-bit image of size W x H (tile size); tile
+ * N (>= 1) has its image at tile_addr + (N-1) * (W/2 * H) bytes (W is the even
+ * tile width, so W/2 bytes per row). Each 32-bit little-endian cell carries a
+ * per-cell palette bank and flips:
+ *     [15:0]  tile index (0 = empty, skipped)
+ *     [19:16] palette bank (PAL_BASE = bank*16)
+ *     [20]    flip X
+ *     [21]    flip Y
+ *     [31:22] reserved, ignored
+ * Windowing, camera and clipping rules are exactly TILEMAP's; PAL_BANK/FLAGS
+ * are ignored here (the cell supplies bank + flips). Invalid tile sizes (zero
+ * or an odd W) draw nothing via the shared 4-bit blit. */
+static void video_tilemap4(arcade1_video_t *v)
+{
+    uint32_t col, row;
+    uint64_t tile_bytes;
+    int64_t ox, oy, w, h;
+    int64_t col_start, col_end, row_start, row_end;
+
+    v->stats.cmds_tilemap4++;
+    v->stats.commands++;
+    if (v->framebuffer == 0)
+        return;
+    if (v->w == 0 || v->h == 0 || v->cols == 0 || v->rows == 0)
+        return;
+
+    tile_bytes = ((uint64_t)v->w / 2u) * (uint64_t)v->h;   /* even W: W/2 * H */
+
+    ox = (int32_t)v->x - (int32_t)v->cam_x;
+    oy = (int32_t)v->y - (int32_t)v->cam_y;
+    w  = (int64_t)v->w;
+    h  = (int64_t)v->h;
+
+    /* Visible column window (same arithmetic as TILEMAP). */
+    col_start = (ox < 0) ? ((-ox) / w) : 0;
+    if (col_start < 0) col_start = 0;
+    if (col_start > (int64_t)v->cols) col_start = (int64_t)v->cols;
+    {
+        const int64_t num = (int64_t)ARCADE1_WIDTH - ox;
+        col_end = (num <= 0) ? 0 : ((num + w - 1) / w);
+    }
+    if (col_end < 0) col_end = 0;
+    if (col_end > (int64_t)v->cols) col_end = (int64_t)v->cols;
+
+    row_start = (oy < 0) ? ((-oy) / h) : 0;
+    if (row_start < 0) row_start = 0;
+    if (row_start > (int64_t)v->rows) row_start = (int64_t)v->rows;
+    {
+        const int64_t num = (int64_t)ARCADE1_HEIGHT - oy;
+        row_end = (num <= 0) ? 0 : ((num + h - 1) / h);
+    }
+    if (row_end < 0) row_end = 0;
+    if (row_end > (int64_t)v->rows) row_end = (int64_t)v->rows;
+
+    v->stats.cells_visited +=
+        (uint32_t)((col_end - col_start) * (row_end - row_start));
+
+    for (row = (uint32_t)row_start; row < (uint32_t)row_end; row++) {
+        for (col = (uint32_t)col_start; col < (uint32_t)col_end; col++) {
+            const uint64_t cell_addr = (uint64_t)v->map_addr +
+                ((uint64_t)row * v->cols + col) * 4u;
+            const uint32_t cell =
+                (uint32_t)video_fetch_byte(v, cell_addr) |
+                ((uint32_t)video_fetch_byte(v, cell_addr + 1u) << 8) |
+                ((uint32_t)video_fetch_byte(v, cell_addr + 2u) << 16) |
+                ((uint32_t)video_fetch_byte(v, cell_addr + 3u) << 24);
+            const uint32_t index = cell & 0xFFFFu;
+
+            v->stats.bytes_fetched += 4u;   /* the 32-bit cell, byte by byte */
+
+            if (index == 0u)
+                continue;   /* empty cell: background shows through */
+
+            video_blit_4bpp(v,
+                            (uint64_t)v->tile_addr +
+                                (uint64_t)(index - 1u) * tile_bytes,
+                            ox + (int64_t)col * w,
+                            oy + (int64_t)row * h,
+                            v->w, v->h,
+                            (uint8_t)((cell >> 16) & 0x0Fu),  /* pal bank  */
+                            ((cell >> 20) & 1u) != 0u,        /* flip X    */
+                            ((cell >> 21) & 1u) != 0u);       /* flip Y    */
+        }
+    }
+}
+
 /* --- MMIO handlers (ctx is the arcade1_video_t*) -------------------------- */
 
 uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
@@ -505,6 +592,7 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         case ARCADE1_VIDEO_CMD_SPRITE:    video_sprite(v);    return;
         case ARCADE1_VIDEO_CMD_TILEMAP:   video_tilemap(v);   return;
         case ARCADE1_VIDEO_CMD_SPRITE4:   video_sprite4(v);   return;
+        case ARCADE1_VIDEO_CMD_TILEMAP4:  video_tilemap4(v);  return;
         default:                          return;             /* ignored */
         }
     default:
