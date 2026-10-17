@@ -60,7 +60,14 @@
 #define PH 14
 #define SPEED   2          /* px / frame while walking                       */
 #define GRAV    1          /* px / frame^2                                  */
-#define JUMP    6          /* launch speed; apex ~21px (just over one tile)  */
+#define JUMP    11         /* launch speed; rise = J*(J-1)/2 = 55px (~3.4    */
+                           /* tiles). The floating platforms sit at rows 11  */
+                           /* and 12 (top y=176 / 192) above the ground at   */
+                           /* row 14 (y=224): reaching the row-11 platforms  */
+                           /* needs >48px of rise, and 55px clears them with */
+                           /* a 7px margin so the player can LAND on top.    */
+                           /* (JUMP=6 only rose 15px — under one tile — so   */
+                           /* no platform or elevated coin was ever reachable.) */
 #define MAXFALL 5
 
 /* --- Palette (RGB565) ----------------------------------------------------- */
@@ -199,8 +206,13 @@ static void build_level(void)
         set_cell(c, 15, 1);
     }
 
-    /* Floating platforms (one-two tiles above the ground) — landing surfaces
-     * for jump collision, reachable with a JUMP=6 hop. */
+    /* Floating platforms (two-three tiles above the ground) — landing
+     * surfaces for jump collision. Rows 11 and 12 put their tops at y=176 and
+     * y=192, i.e. 48px and 32px above the ground surface (y=224). They must
+     * stay at row 12 or higher: row 13 would sit in the walking lane (a 14px
+     * player on the ground occupies y[210,224), overlapping row 13's
+     * [208,224)) and block the hold-right path to the goal. JUMP=11 (rise
+     * 55px) clears the higher row-11 platforms so the player can land on top. */
     for (c = 6;  c <= 9;  c++) set_cell(c, 11, 1);
     for (c = 15; c <= 18; c++) set_cell(c, 12, 1);
     for (c = 25; c <= 28; c++) set_cell(c, 11, 1);

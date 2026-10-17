@@ -363,16 +363,32 @@ overrun stretches or traps.
   entropy later would break reset-and-compare. A piece's 4x4 box may hang
   off-screen left; cells clamp individually at column 0 (the device clips
   draws).
-- Platformer (M22): present-yield loop; CPU load 841 inst/frame avg (6,324 max
-  over 295 frames) — lighter than Breakout because terrain/sprites/camera are
+- Platformer (M22): present-yield loop; CPU load 836 inst/frame avg (6,324 max
+  over 308 frames) — lighter than Breakout because terrain/sprites/camera are
   device-side. The 40x16 terrain `cells[]` is 2,560 B of RAM (the dominant
   memory cost, as with Tetris), built once at boot; the guest is 2,404 B of
   ROM. Physics is intentionally simple (integer velocities, axis-separated
-  AABB, gravity 1 / jump 6 / terminal 5) and the level is flat-ground with
+  AABB, gravity 1 / jump 11 / terminal 5) and the level is flat-ground with
   floating platforms so a scripted "hold right" reaches the goal — chosen to
   keep the harness deterministic rather than to be a good game. Parallax is
   guest-side (screen-space rects at half/quarter camera rate), not a device
   layer feature. No enemies, scrolling enemies, save, or title screen.
+  *Gameplay repair (M22 follow-up): the floating platforms (rows 11 and 12,
+  tops at y=176/192) and the coins above them were unreachable — with the old
+  `JUMP 6` the player rose only 15 px (under one tile) from the ground at
+  y=224, so neither the platforms nor the elevated coins could ever be
+  touched, defeating M22's purpose of exercising real platformer mechanics.
+  Repair: `JUMP` 6 -> 11 (rise = J(J-1)/2 = 55 px), the smallest change that
+  clears the row-11 platforms with a 7 px landing margin. Platform rows,
+  coins, collision, camera, sprites, audio and the frame protocol are
+  unchanged; the platforms must stay at row 12 or higher (row 13 would sit in
+  the walking lane and block the hold-right path to the goal). Verified on the
+  real guest: all three platforms reachable by jumping from the ground, the
+  elevated coins collectible by landing + walking, and hold-right still
+  reaches the goal with exactly the 3 ground coins. This changes only the
+  platformer guest (a game demo, not the ISA/device spec); its `.arc1`,
+  per-frame golden and state hash were regenerated, the other three games'
+  hashes are unchanged.*
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
