@@ -3,9 +3,9 @@
 > **Status:** research document. Not a milestone, not a roadmap change, not a
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
-> says so. **P0 (graphics micro-benchmarks) and P1 (deterministic terrain
-> generator) are complete** — their measured numbers are in §0.1/§0.2 and
-> already folded into §2/§3/§8/§9.
+> says so. **P0 (graphics micro-benchmarks), P1 (deterministic terrain
+> generator) and P2 (raycast renderer) are complete** — their measured
+> numbers are in §0.1/§0.2/§0.3 and already folded into §2/§3/§8/§9.
 
 The experiment asks one question:
 
@@ -116,6 +116,56 @@ Two consequences fall out immediately:
    resolution** — so the rendering approach must minimize guest pixels touched,
    preferring device primitives (FILL/SPRITE/TILEMAP) over SET_PIXEL.
 
+### 0.3 P2 results (measured, `make test-ray`, two identical 210-frame passes)
+
+`programs/raycast_demo.c` is the experiment's primary rendering candidate
+built for real: an 80-column first-person heightmap raycast, camera panning
+over an infinite procedural world with **zero world storage** (the P1 thesis
+survives first-person rendering — heights are evaluated per ray step, player
+deltas would be the only state). Four timer-driven phases let the harness
+measure each cost component in isolation and then the whole frame:
+
+| Measurement | Value | Note |
+|-------------|------:|------|
+| baseline frame | 14 inst | present only |
+| `height3` — full 3-octave P1-style height, **no digest** | **617.0 inst/eval** | P1's handoff answered: of P1's ≈698 inst/cell the digest was only ≈81 (≈12%) |
+| `ray_height` — 2-octave function the raycast calls | **431.4 inst/eval** | measured inside the real traversal loop, not a synthetic micro |
+| **full raycast frame** | **406,563 inst = 40.7% of the 1M cap** | ≤11 z-steps × 80 columns ≈ ≤880 evals + ≤880 FILL runs |
+| host time, raycast frame | 6.9–8.7 ms | indicative only (this host, C device), never asserted |
+| ROM | 1,288 B | fits the 4 KiB limit |
+| determinism | sink `0x003322AA`, hash `0xF0FB04DA25A0DFE9`, raycast inst/frame pinned exactly | 210 frames ×2, identical |
+
+**What this pins down:**
+
+1. **The §2/§3.2 raycast estimate (60k–90k at 80×60) was optimistic by
+   4–6×.** Per-step procedural evaluation dominates: 431 inst × ~880 steps
+   ≈ 380k of the 407k frame. The estimate priced traversal overhead but
+   under-counted what "evaluate height procedurally at every step" costs.
+   This is the experiment's central measured correction.
+2. **It still fits — with a caveat.** 40.7% of the frame cap is a real,
+   shippable budget, but it is 28× Tetris's worst frame: game logic,
+   physics or UI on top eats the remaining ~59%, and the raycast cannot
+   grow much denser (z-step coarsening/fining scales cost ~linearly).
+3. **Guest cost ∝ columns × steps, not pixel count.** Projection and
+   FILL-run counts depend only on columns (each step issues one 4-px-wide
+   FILL regardless of run length); 160 columns ≈ **2×** (~770k–810k est.)
+   and 60 rows → 120 rows costs the guest nothing extra (taller FILLs are
+   device-side). The earlier "160×120 = 150k–250k" conflated pixels with
+   guest work; corrected in §3.2.
+4. **The cheap fix, if 40% ever proves too much — a RAM window cache**
+   (not implemented, estimate only): precomputing visible heights into a
+   small RAM tile turns each step's 431-inst eval into a ~10–15-inst
+   lookup, dropping the raycast to roughly **25k–60k inst** at the cost of
+   ~1–2.5 KB RAM plus cache-refill logic — the classic trade this
+   machine's RAM budget makes interesting.
+5. **Rendering-correctness lesson** (found the hard way): the first
+   version had no camera height (eye at h≈0), so any near terrain ≥9
+   cells tall projected off the top of the screen, filled its whole column
+   on step 1 and terminated the march — the frame "worked" (37.7k inst,
+   deterministic, hash-pinnable) but was a flat one-color wall. The
+   harness's palette/variation property checks caught it; a hash pin alone
+   would have enshrined the broken render. Property checks earn their keep.
+
 ---
 
 ## 1. Proposed voxel sandbox game design (the smallest interesting one)
@@ -186,7 +236,7 @@ guest instructions per frame (**estimates**; P0 measures the primitives).
 | # | Approach | How it works on ARCADE-1 | Est. inst/frame | Memory | Verdict |
 |---|----------|--------------------------|----------------:|--------|---------|
 | 1 | True low-res voxel rendering (blocky DDA raycast, Minecraft-style) | per column, integer DDA traverses blocks until hit; draw each visible face run as FILL spans with per-material tint | ~40k–100k at 80×60 (est., revised after P0: spans cost 10 inst each) | needs a **volume** store unless surface-only → §3 shows 256 KB for 64³ | feasible CPU-wise; **memory-bound** → stage experiment, surface subset only |
-| 2 | **Raycasting / heightmap voxel traversal (Comanche "voxel space")** | front-to-back column traversal over `(seed,x,z)` height function; each step paints the vertical gap with one 1-wide FILL (P0: cheaper than SET_PIXEL for runs ≥1.25 px); occlusion stops each column early | ~60k–90k at 80×60 (est., P0-grounded: 4,800 px × 8 inst = 38k if per-pixel, less with FILL runs, + traversal); ~150k–250k at 160×120 (est.) | **~0 world bytes** + deltas | **primary candidate**: best richness-per-byte by far |
+| 2 | **Raycasting / heightmap voxel traversal (Comanche "voxel space")** | front-to-back column traversal over `(seed,x,z)` height function; each step paints the vertical gap with one 4-px-wide FILL (P0: cheaper than SET_PIXEL for runs ≥1.25 px); occlusion stops each column early | **measured 406,563 inst/frame at 80×60 (40.7% of cap, P2)** — the 60k–90k estimate was 4–6× low (per-step height eval dominates, 431 inst/eval, §0.3); ~2× at 160 columns (est.) | **~0 world bytes** + deltas | **primary candidate**: best richness-per-byte by far; fits, but it is the frame budget |
 | 3 | Isometric voxel rendering | draw top/left/right face of each visible cube as 3 FILLs (or one 1-bpp SPRITE tinted); painter's order back-to-front | ~60k–100k for ~4k faces (est.); drops to ~1–3k if static ground stays a TILEMAP and only changed blocks FILL | cell grid 16–64 KB, or 2 KB at 32×32 | **fallback candidate** ("Cube Country"); existing-pipeline safe |
 | 4 | 2.5D voxel rendering | fixed camera pitch; depth as y-shear (mode-7-like row scaling not available → use per-column FILLs) | ~50k–120k (est.) | same as #3 | workable, no advantage over #2/#3 |
 | 5 | Layered sprite-based voxel rendering | 3–4 parallax layers of 1-bpp block silhouettes (already proven in M22 parallax) | ~1k–5k (near platformer) | tiny | cheapest, reads as "diorama" not voxel world |
@@ -198,9 +248,12 @@ guest instructions per frame (**estimates**; P0 measures the primitives).
 **Key structural insight:** every candidate above reduces to *few device
 primitives per frame* or *a bounded number of guest pixels per frame at low
 resolution*. The instruction cap is 1,000,000; the heaviest shipped frame ever
-was 14,309. Even the pessimistic raycast estimates (≈230k at 160×120) sit
-**under ~25% of the cap** — and a raycast that low-res (80×60 upscaled by the
-host/frontend) is visually acceptable for a pixel-art aesthetic.
+was 14,309. ~~Even the pessimistic raycast estimates (≈230k at 160×120) sit
+under ~25% of the cap~~ — **corrected after P2: the measured raycast is
+406,563 (40.7%) at 80×60, and 160 columns would be ~770k–810k (≈80%)**; the
+raycast fits, but it is the budget, not a rounding error, and it belongs at
+low resolution (80×60 upscaled by the host/frontend) with a pixel-art
+aesthetic.
 
 **Ranking (richness ÷ risk):** #2 heightmap raycast ≫ #3/#6 isometric tilemap
 > #1 blocky DDA (memory-hostile) > #4 ≈ #5 > #8 (premature).
@@ -243,8 +296,8 @@ graphics feature.
 | Workload | Est. guest inst/frame | vs worst shipped (14,309) | vs cap (1,000,000) |
 |----------|----------------------:|---------------------------:|-------------------:|
 | Isometric/tilemap sandbox (fallback) | 1k–3k | ≤2× | 0.3% |
-| Raycast 80×60, ~60 steps/column avg | 60k–90k | 4–6× | 6–9% |
-| Raycast 160×120 | 150k–250k | 10–18× | 15–25% |
+| Raycast 80×60, 11 z-steps/column | **406,563 (measured, P2)** | 28× | **40.7%** |
+| Raycast 160×120 (160 columns) | ~770k–810k (est., ×~2: cost ∝ columns not rows, §0.3) | 54–57× | ~77–81% |
 | Blocky DDA 80×60 (surface faces only) | 40k–100k | 3–7× | 4–10% |
 | Guest full-screen per-pixel SET_PIXEL (avoid) | ~614k (**measured** 8 inst/px × 76,800) | 43× | 61% |
 | Guest full-screen TILEMAP command (**measured**) | **13.4** | — | 0.001% |
@@ -411,7 +464,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 |-------|-------------|----------------------|
 | **P0** Micro-benchmarks | guest measuring exact inst/frame for SET_PIXEL-per-pixel, FILL, SPRITE, TILEMAP at fixed workloads | **DONE** — `make test-bench`; numbers pinned in §0.1, estimates in §2/§3 revised |
 | **P1** Terrain generator | fixed-point hash/noise `(seed,x,z)→h,material` | **DONE** — `make test-terrain`; hash of 64x64 pinned (digest `0x626115CD2B9A0257`), identical across ISAs/hosts; load 44,674 inst/frame per row (§0.2) |
-| **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | framebuffer vs independent model **or** pinned frame hashes; inst/frame + wall-clock under budget; ROM size measured |
+| **P2** Raycast renderer | 80×60 first-person heightcast, static scene, camera pan | **DONE** — `make test-ray`; 406,563 inst/frame (40.7% cap), height eval 431 inst (P1 handoff), render property-checked + dumped (§0.3); estimate corrected 4–6× |
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | scripted dig/build playthrough, determinism 2-pass |
 | **P4** Game systems | inventory, crafting, entities, day/night dither, UI | scripted scenario assertions (state read via `nm`) |
 | **P5** Persistence | snapshot save/load + input replay | load-equals-replay: same frames, same hash sequence |

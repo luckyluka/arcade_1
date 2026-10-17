@@ -27,7 +27,7 @@ TESTDIR := build
 test test-input test-square test-beep test-machine test-memory test-cpu \
 test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
-test-tetris test-bench test-terrain: | $(TESTDIR)
+test-tetris test-bench test-terrain test-ray: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -44,7 +44,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -58,7 +58,8 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
-        test-platformer test-breakout test-tetris test-bench test-terrain
+        test-platformer test-breakout test-tetris test-bench test-terrain \
+        test-ray
 
 all: $(TARGET)
 
@@ -326,6 +327,24 @@ test-terrain: $(GUEST_BUILD)/terrain_gen.arc1
 	         END{print "0x"st, "0x"dl, "0x"dh, "0x"sa}'); \
 	 echo "syms: $$SYMS"; \
 	 $(TESTDIR)/test_terrain $(GUEST_BUILD)/terrain_gen.arc1 $$SYMS
+
+# Voxel-experiment P2 (research, see VOXEL_EXPERIMENT.md): first-person
+# heightmap raycast. Boots raycast_demo.c as firmware (4 timer-driven phases:
+# baseline, height-eval micro x2, full 80x60 raycast with camera pan) and
+# measures per-phase guest instruction cost — pinning the height-evaluation
+# number P1 handed off and the full raycast frame cost against the 1M frame
+# cap. Checks the render is real (palette/variation property checks), plus
+# reset-and-compare determinism and golden pins.
+test-ray: $(GUEST_BUILD)/raycast_demo.arc1
+	$(CC) $(CFLAGS) -o $(TESTDIR)/test_ray \
+	    tests/test_ray.c src/arcade1/machine.c src/arcade1/video.c \
+	    src/arcade1/timer.c src/arcade1/audio.c src/arcade1/memory.c \
+	    src/arcade1/exec.c src/arcade1/cpu.c src/arcade1/rom.c
+	@SYMS=$$($(RISCV_NM) $(GUEST_BUILD)/raycast_demo.elf | \
+	    awk '$$3=="phase"{ph=$$1} $$3=="sink"{sk=$$1} \
+	         END{print "0x"ph, "0x"sk}'); \
+	 echo "syms: $$SYMS"; \
+	 $(TESTDIR)/test_ray $(GUEST_BUILD)/raycast_demo.arc1 $$SYMS
 
 # Build and run the milestone-15 Breakout harness: boot breakout.c on the
 # machine's own CPU as firmware, drive it frame-by-frame with a scripted pad,
