@@ -49,9 +49,13 @@ via `make test-bench`, `make test-terrain`, `make test-ray`,
 | 25        | Machine v0.2a: 480×270 screen | COMPLETE |
 | 26        | Machine v0.2b: Memory (256 KiB ROM / 64 KiB RAM) | COMPLETE |
 | 27        | Machine v0.2c: Color Graphics (palette + SPRITE4/TILEMAP4) | COMPLETE |
-| 27+       | (see `MILESTONES_2.md`)    | NOT STARTED |
+| 28        | AI SDK v0.1 (headless runner `arcade1 run`) | IN PROGRESS |
+| 29+       | (see `MILESTONES_2.md`)    | NOT STARTED |
 
-Next up: **Milestone 28 — Machine v0.2d: Audio** (32-slot polyphonic mixer, following M25–M27). See `MILESTONES_2.md` for the exact scope.
+Next up: **Milestone 28 — AI SDK v0.1**. The foundation (headless `arcade1 run` with
+scripted input, per-frame hashes and PPM frame dumps) is landed; the rest of M28
+is record/replay capture, the full `arcade1 build/test/capture` command set,
+named game variables, a cheat sheet and two example games — see `SDK.md`.
 
 ## Architecture
 
@@ -415,6 +419,36 @@ Added paletted 4-bit graphics on top of the unchanged 1-bit commands:
   5th golden game** (`tests/roms/color_demo.arc1`, `tests/golden/color.txt`).
 * `programs/gfx.h` gained `gfx_pal_upload`/`gfx_pal_bank`/`gfx_flip`/`gfx_sprite4`/
   `gfx_tilemap4`.
+
+Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
+
+## AI SDK v0.1 — foundation (M28, step 1)
+
+First slice of the developer-facing SDK (`MILESTONES_2.md` M28; design principles
+in `AI_NATIVE_DEVELOPMENT.md`, contract in `SDK.md`). A single headless tool over
+`src/arcade1/` only — no Libretro/RetroArch/GPU/host-input — so it runs
+identically in a terminal, CI, or an AI agent's sandbox.
+
+* **`arcade1 run`** (`tools/arcade1.c`, built as `build/arcade1`): loads a game
+  image (`.arc1` validated, or raw `.bin`), runs a fixed number of frames with
+  optional scripted input, prints one `frame N hash=… fb=…` line per frame, and
+  dumps framebuffers as PPM (P6). Flags: `--frames --input --capture
+  --capture-dir --capture-every --quiet`; exit codes 0/1/2.
+* **Hashes are the golden fingerprints** — the tool includes `tests/state_hash.h`
+  (via `-Itests`), so its `hash`/`fb` values are bit-identical to the golden
+  regression's and directly diffable against `tests/golden/<game>.txt`.
+* **Input script format** — plain-text run-length lines
+  `<first> <last> <buttons…>` (later lines win, uncovered frames = no buttons,
+  `#` comments). This is the replay primitive; `--record` (log a live session to
+  this format) is a later step.
+* **New test `make test-run`** (`tests/test_run.sh`, in `make check`): asserts
+  determinism (two identical runs byte-identical), **golden faithfulness** (its
+  120 color_demo frame hashes match `tests/golden/color.txt`), PPM capture size
+  (388815 bytes = 15-byte header + 480×270×3), scripted input changes breakout's
+  state hash reproducibly, and the 0/1/2 exit codes.
+* **Not built yet** (rest of M28): record/replay `--record`, the full
+  `arcade1 build/test/capture` command set, named game variables, a cheat sheet
+  and two example games — see `SDK.md` "Remaining".
 
 Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
 

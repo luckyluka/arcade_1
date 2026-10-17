@@ -29,7 +29,7 @@ test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
 test-persist test-frame-rules test-video-worst test-video-palette \
-test-video-sprite4 test-video-tilemap4 test-color: | $(TESTDIR)
+test-video-sprite4 test-video-tilemap4 test-color test-run: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -87,7 +87,8 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
-        test-video-palette test-video-sprite4 test-video-tilemap4 test-color
+        test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
+        test-run
 
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
@@ -98,7 +99,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
         test-video-worst test-video-palette test-video-sprite4 \
-        test-video-tilemap4 test-color test-golden
+        test-video-tilemap4 test-color test-run test-golden
 
 all: $(TARGET)
 
@@ -216,6 +217,19 @@ $(GUEST_BUILD)/%.arc1: $(GUEST_BUILD)/%.bin $(TESTDIR)/packarc1
 
 $(TESTDIR)/packarc1: tools/packarc1.c src/arcade1/rom.c src/arcade1/rom.h | $(TESTDIR)
 	$(CC) $(CFLAGS) -o $@ tools/packarc1.c src/arcade1/rom.c
+
+# --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
+# A headless front end to the reference VM for humans and AI agents. Links ONLY
+# src/arcade1 (no Libretro, no RetroArch, no GPU), so it runs identically in CI
+# and in a sandbox. It includes tests/state_hash.h (via -Itests) so the hashes
+# it prints are bit-identical to the golden regression's.
+CLI_BIN    := $(TESTDIR)/arcade1
+CLI_SRC    := tools/arcade1.c src/arcade1/machine.c src/arcade1/memory.c \
+              src/arcade1/cpu.c src/arcade1/exec.c src/arcade1/timer.c \
+              src/arcade1/video.c src/arcade1/audio.c src/arcade1/rom.c
+
+$(CLI_BIN): $(CLI_SRC) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -Itests -o $@ $(CLI_SRC)
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and
@@ -576,6 +590,15 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 	 $(TESTDIR)/test_tetris $(ARC1_ROM_DIR)/tetris.arc1 \
 	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
 	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
+
+# --- AI SDK headless-runner test (milestone 28) ----------------------------
+# Builds the `arcade1 run` CLI and drives it end-to-end: determinism (two
+# identical runs byte-identical), golden faithfulness (its per-frame hashes
+# match tests/golden/color.txt), PPM frame capture, scripted-input injection
+# (a button script changes breakout's state hash, reproducibly) and exit codes.
+# Needs the RISC-V toolchain only to (re)build the guest images it runs.
+test-run: $(CLI_BIN) $(ARC1_ROM_DIR)/color_demo.arc1 $(ARC1_ROM_DIR)/breakout.arc1 | $(TESTDIR)
+	sh tests/test_run.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # --- Golden per-frame regression (Task A step 5) ----------------------------
 # tests/golden/<game>.txt holds every "frame N hash=... fb=..." line from a
