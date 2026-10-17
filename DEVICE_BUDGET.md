@@ -6,6 +6,15 @@ figure below is labelled **[M] MEASURED** (read from the machine's own
 counters) or **[E] ESTIMATED** (arithmetic on those measurements — no
 hardware has been built or simulated).
 
+> **Resolution note (M25).** Every pixel-based number here (`px`, `bytes`, the
+> per-game and worst-case tables, and the derived FPGA cycle budgets) was
+> measured at the **320×240** screen that was current during Task C.
+> **M25 changed the screen to 480×270**, so full-screen pixel work scales up by
+> 480·270 / 320·240 = **1.6875×**. The numbers below remain a valid record of
+> the measurements taken then; re-run `make test-video-worst` / the game tests
+> at 480×270 to refresh them before relying on them for the new resolution.
+> The cost-model **decision is deferred** (see the end of this file).
+
 How the measurements were taken:
 
 * The four game tests run their full scripted playthroughs and, each frame,
@@ -45,7 +54,8 @@ Reading across the worst column, the **heaviest shipped frame** is
 (scroll), `inst` 17,140 (scroll). Note no single frame is worst in every
 metric — the two extremes come from different games.
 
-The screen is 320x240 = **76,800 pixels [M]** (`ARCADE1_FB_PIXELS`). `px`
+At measurement time the screen was 320x240 = **76,800 pixels [M]**
+(`ARCADE1_FB_PIXELS`; 480×270 since M25 — see the resolution note above). `px`
 exceeds this because a frame may *rewrite* pixels: overlapping sprites,
 a `CLEAR` plus redraw, or a full-screen `TILEMAP` whose cells overlap the
 same pixels. `bytes` is zero for breakout — its measured fetch count is
@@ -280,9 +290,11 @@ make output depend on host speed and break the pinned-state-hash regression.
 
 ---
 
-## DECISION NEEDED (owner)
+## DEFERRED (owner postponed until the FPGA milestone)
 
-Pick one cost model to adopt as ARCADE-1's per-frame work budget (and, with
+**Owner decision postponed; current reference behaviour stays.** No model is
+chosen and nothing in `src/` was changed by this task. When the owner is ready,
+pick one cost model to adopt as ARCADE-1's per-frame work budget (and, with
 it, the hardware-port contract). This is a design decision, not a
 measurement — the data above constrains but does not choose it:
 

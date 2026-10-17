@@ -209,9 +209,12 @@ for the current frame. The machine never touches host input devices directly.
 
 ## 8. Timing, frame protocol and determinism
 
-- **Display:** 320×240, **60 fps**. (Placeholder resolution, per the roadmap's
-  "do not freeze the display resolution yet" — the machine is written against
-  logical coordinates and is independent of the physical resolution.)
+- **Display:** 480×270 (16:9; scales exactly 4× to 1080p and 8× to 4K), **60
+  fps**. (Pinned at M25 — see `ARCADE1_WIDTH`/`ARCADE1_HEIGHT`, from which
+  every other machine size derives. The three shipped games and the demos keep
+  their current guest code and still draw in the top-left 320×240 region; the
+  rest of the screen shows whatever their CLEAR colour leaves. Re-laying the
+  guests out is not part of M25.)
 - **Audio:** **48,000 Hz** stereo; **800 stereo frames** (1,600 samples) per
   60 fps video frame.
 - **Frame protocol (present-yield).** A guest `main()` is an **infinite loop**
@@ -222,9 +225,12 @@ for the current frame. The machine never touches host input devices directly.
   instructions per frame; this is a runaway-guest safety cap, not part of the
   game contract. A guest that parks in a self-loop is detected and the frame
   ends.
-  **CONTRADICTION — DECISION NEEDED (owner).** §8 calls this cap "not part of
-  the game contract", but §10 rule 6 lists it *in* the v0.1 contract. Both
-  readings are written out here; do not pick silently:
+  **DEFERRED: owner postponed until the FPGA milestone; current reference
+  behaviour stays.** §8 calls this cap "not part of the game contract", but
+  §10 rule 6 lists it *in* the v0.1 contract. Both readings are written out
+  here; do not pick silently. (The reference implementation currently truncates
+  at exactly 1,000,000 steps and the frame-rule tests pin that behaviour; the
+  A-vs-B choice is NOT made here.)
   - **Option A — truncation at exactly 1,000,000 steps is contract.** Hardware
     (M33) and every other implementation must replicate the truncation point,
     which constrains any future optimisation (no reordering/fusing past the
@@ -235,7 +241,8 @@ for the current frame. The machine never touches host input devices directly.
     implementation-defined and conformance tests never reach it, so hardware
     is free. No shipped test depends on the truncation point (the worst
     measured shipped frame is ~14.3k instructions, ~1.4% of the cap).
-  **Recommendation: B.** See also §10 rule 6.
+  See also §10 rule 6. (A earlier note recommended B; the owner has since
+  deferred the choice, so treat neither option as decided.)
 - **Timer.** Exactly **1 tick per completed frame** (§4).
 - **Determinism (a hard requirement).** The machine is a pure function of
   (ROM, reset state, per-frame input sequence). There are **no** interrupts, no
@@ -338,12 +345,12 @@ detail; conformance (M34) is measured against them:
    never traps.
 6. **The frame protocol is present-yield** (§8). Frame boundaries follow the
    three rules in §8 "Frame boundaries"; the 1,000,000-instruction cap is a
-   safety net, not a contract requirement — **DECISION NEEDED (owner)**:
-   §8 used to call it "not part of the game contract" while earlier versions
-   of this rule listed it as one. §8 sets out both options and recommends
-   **B**: reaching the cap is a program error, behaviour after it is
-   implementation-defined, and conformance tests never reach it. Once the
-   owner picks, this rule and §8 must be updated together.
+   safety net, not a contract requirement — **DEFERRED: owner postponed until
+   the FPGA milestone; current reference behaviour stays.** §8 used to call it
+   "not part of the game contract" while earlier versions of this rule listed
+   it as one; §8 sets out both options. The reference implementation truncates
+   at exactly 1,000,000 steps (pinned by the frame-rule tests). Once the owner
+   picks, this rule and §8 must be updated together.
 7. **`.arc1` v1 is the image format** (§9); raw `.bin` remains accepted.
 8. **Excluded features stay excluded** for v0.1: interrupts, entropy/RNG,
    floating point, alpha blend, rotation, scaling, affine transforms,

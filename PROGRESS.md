@@ -1,10 +1,11 @@
 # ARCADE-1 — Progress Log
 
-Living record of milestone status. The roadmap itself is in `docs.md`; this
-file tracks what is actually done, how to verify it, and known limitations.
-The M23 architecture review is a standalone document in `ARCHITECTURE.md`, and
-the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
-post-M24 research experiment (not a milestone, no roadmap change) — using a
+Living record of milestone status. The historical roadmap (M01–M24) is in
+`MILESTONES_1.md` (formerly `docs.md`) and the forward roadmap (M25+) is in
+`MILESTONES_2.md`; this file tracks what is actually done, how to verify it,
+and known limitations. The M23 architecture review is a standalone document in
+`ARCHITECTURE.md`, and the v0.1 machine specification it produced (M24) is in
+`SPEC.md`. A post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
 in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. **All six experiment
 phases are complete**: P0 (graphics micro-benchmarks), P1 (deterministic
@@ -45,9 +46,10 @@ via `make test-bench`, `make test-terrain`, `make test-ray`,
 | 22        | Platformer (integration)   | COMPLETE |
 | 23        | Architecture Review        | COMPLETE |
 | 24        | ARCADE-1 v0.1 Candidate    | COMPLETE |
-| 25+       | (see `FUTURE_MILESTONES.md`) | NOT STARTED |
+| 25        | Machine v0.2a: 480×270 screen | COMPLETE |
+| 26+       | (see `MILESTONES_2.md`)    | NOT STARTED |
 
-Next up: **Milestone 25 — SDK v0.1** (build the real developer-facing ARCADE-1 SDK). See `FUTURE_MILESTONES.md` for the exact scope.
+Next up: **Milestone 26 — Machine v0.2b: Memory** (ROM 256 KiB, RAM 64 KiB, growth-friendly memory map). See `MILESTONES_2.md` for the exact scope.
 
 ## Architecture
 
@@ -297,10 +299,48 @@ overrun-stretch policy (`N = ceil(cost/budget)` display frames). None is
 implemented. The owner must pick a model, the budget number, and whether
 overrun stretches or traps.
 
+## Machine v0.2a: 480×270 screen (M25)
+
+Changed the game resolution from 320×240 to **480×270** (16:9; exact 4× to
+1080p, 8× to 4K). `ARCADE1_WIDTH`/`ARCADE1_HEIGHT` in `src/arcade1/machine.h`
+are the single source of truth; the Libretro geometry (base/max size + 16:9
+aspect) and every test derive from them.
+
+* **Guests unchanged.** The three shipped games and the demos keep their
+  current guest code and still draw in the top-left 320×240 region; the rest
+  of the screen shows whatever their CLEAR colour leaves. The committed
+  golden ROMs in `tests/roms/` are byte-identical, and the four game state
+  hashes are **unchanged**: breakout `0x7816DD30A2B9D131`, tetris
+  `0x782EA2CDAA0C51A7`, platformer `0x65C56C87AE736277`, scroll
+  `0xB71FDB994B5D6576`.
+* **Golden files regenerated** (`tests/golden/*.txt`): only the per-frame
+  `fb=` (framebuffer) hashes changed — the framebuffer is bigger. The
+  per-frame state `hash=` values are identical (verified on frame 0 of
+  breakout: `hash=` unchanged, `fb=` changed).
+* **Tests updated** (expectations recomputed from the macros, none weakened):
+  the four libretro harnesses (`pattern`/`input`/`square`/`beep`) take W/H
+  from the macros; `input`'s overlay mirror re-centres from the macros; `gfx`
+  and `sprite` re-count pixels for the frozen demos whose on-screen rect /
+  off-screen sprite no longer clip at the new size; `video_worst`'s
+  arithmetic auto-scales (its full-screen TILEMAP is now 30×16 = 480 cells).
+* **Assumptions / limitation introduced:** the frozen demos' right/bottom
+  "overhang" and "fully off-screen" cases now fall fully on-screen at
+  480×270, so FILL/SPRITE/TILEMAP right/bottom clipping is no longer
+  exercised by those particular guests (negative-origin and fully-above cases
+  still clip, and the negative rect still clips FILL). Guests were
+  deliberately **not** re-laid-out (out of scope for M25).
+* SPEC.md §8/§10: resolution pinned to 480×270; the two open decisions
+  (1M-step-cap §8/§10 contradiction; per-frame work budget in
+  `DEVICE_BUDGET.md`) are marked **DEFERRED** (owner postponed until the FPGA
+  milestone; current reference behaviour stays). No option was picked.
+
+Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
+
 ## Known limitations
 
-- 320x240 @ 60 fps, 48 kHz audio — placeholder resolution/rate, NOT final
-  (per roadmap: do not freeze the display resolution yet).
+- Display is **480×270 @ 60 fps** (pinned at M25 — 16:9, exact 4× to 1080p),
+  48 kHz audio. The shipped games/demos still draw in the top-left 320×240
+  region (guests not re-laid-out at M25).
 - Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
   gap) is a placeholder, not the final ARCADE-1 map. MMIO routes to a
   host-registered handler that the machine muxes between its devices: timer
