@@ -6,14 +6,16 @@ The M23 architecture review is a standalone document in `ARCHITECTURE.md`, and
 the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
 post-M24 research experiment (not a milestone, no roadmap change) — using a
 Minecraft-like voxel sandbox as an architectural stress test — is written up
-in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. Experiment phases P0
-(graphics micro-benchmarks), P1 (deterministic terrain generator), P2
-(raycast renderer), P3 (walk/dig/place interaction), P4 (game systems:
-inventory/crafting/entities/day-night/HUD) and P5 (persistence:
-snapshot save/load + input replay) are complete: measured costs live in
-`VOXEL_EXPERIMENT.md` §0.1–§0.6, runnable via `make test-bench`,
-`make test-terrain`, `make test-ray`, `make test-sandbox`,
-`make test-systems` and `make test-persist`.
+in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25. **All six experiment
+phases are complete**: P0 (graphics micro-benchmarks), P1 (deterministic
+terrain generator), P2 (raycast renderer), P3 (walk/dig/place
+interaction), P4 (game systems: inventory/crafting/entities/day-night/
+HUD) and P5 (persistence: snapshot save/load + input replay), with P6's
+verdict — all §9 questions answered with data, ROM/RAM actuals, GO on
+the raycast vs the (unmeasured) isometric fallback — written up in
+`VOXEL_EXPERIMENT.md` §10. Measured costs live in §0.1–§0.6, runnable
+via `make test-bench`, `make test-terrain`, `make test-ray`,
+`make test-sandbox`, `make test-systems` and `make test-persist`.
 
 ## Status summary
 

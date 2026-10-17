@@ -3,10 +3,12 @@
 > **Status:** research document. Not a milestone, not a roadmap change, not a
 > commitment. `docs.md` and `FUTURE_MILESTONES.md` remain exactly as they are.
 > Every number that is *measured* says so, every number that is *estimated*
-> says so. **P0 (graphics micro-benchmarks), P1 (deterministic terrain
-> generator), P2 (raycast renderer), P3 (interaction), P4 (game systems)
-> and P5 (persistence) are complete** — their measured numbers are in
-> §0.1–§0.6 and already folded into §2/§3/§8/§9.
+> says so. **All six planned phases are complete: P0 (graphics
+> micro-benchmarks), P1 (deterministic terrain generator), P2 (raycast
+> renderer), P3 (interaction), P4 (game systems), P5 (persistence) and
+> P6 (verdict)** — measurements are in §0.1–§0.6, folded into
+> §2/§3/§8/§9, and the final answers to §9 are written up in
+> **§10 (Verdict)**.
 
 The experiment asks one question:
 
@@ -607,7 +609,7 @@ hashes). Effort is in "test-harness rounds", not calendar time.
 | **P3** Interaction | walk/collision/dig/place → delta table re-render | **DONE** — `make test-sandbox`; walk 30 cells + 4 places + 1 dig scripted, edit-model digest `0x00C134B1` cross-checked, +21,253 inst for the 16-entry scan (§0.4); visibility-by-construction finding |
 | **P4** Game systems | inventory, crafting, entities, day/night dither, UI | **DONE** — `make test-systems`; scripted scenario (dig/place/craft/rejected-place) with inventory truth, replayed edit-model digest `0x2AA3A3F1`, tod timing, entity motion/visibility (§0.5); shifting-targets finding |
 | **P5** Persistence | snapshot save/load + input replay | **DONE** — `make test-persist`; input-log replay bit-exact (270/270 state hashes), snapshot load-equals-replay bit-exact (147/147 RAM digests + final fb), save sizes measured (§0.6); §1/§3 save-size estimates corrected |
-| **P6** Verdict | write findings into this file: measured vs estimated, ROM/RAM actuals, go/no-go on raycast vs fallback | answers §9 with data |
+| **P6** Verdict | write findings into this file: measured vs estimated, ROM/RAM actuals, go/no-go on raycast vs fallback | **DONE** — **section 10** answers §9 with data: 10/10 questions answered, ROM/RAM actuals table, GO on raycast (fallback unmeasured), estimate ledger — no failure mode triggered |
 
 **Development loop for an AI-assisted developer (question 6):**
 
@@ -679,6 +681,143 @@ point. If RAM can't hold the delta table + engine → the first
 game-justified v0.2 item. None of these outcomes change v0.1 silently; all get
 written down here, then go through M27's evidence rule if they want to become
 architecture.
+
+---
+
+## 10. Verdict (P6 — the experiment's answers, all measured)
+
+Every number below comes from a green, pinned test run (P0–P5, sections
+0.1–0.6); anything estimated is labeled as such. P6 is synthesis, not new
+measurement.
+
+### 10.1 Answers to §9
+
+1. **Instruction budget — refuted the "~10%" hope, held the cap.** The
+   80×60 first-person raycast costs **406,563 inst/frame (40.7%)** and
+   with the full game-systems layer **431,559 (43.2%)** — four times the
+   10% question's premise, yet with 57% of the cap still free. The cap
+   was never approached: worst phase frames top out at ~433k. A raycast
+   game is ~30× heavier than anything shipped (Tetris' 14,309) — the
+   heaviest workload class on this machine by a wide margin, and still
+   comfortable.
+2. **Guest pixel cost — answered at P0 (§0.1):** SET_PIXEL **8.0
+   inst/op** (the 4–6 estimate was optimistic ~1.5×); a full screen via
+   TILEMAP costs **13.4 inst** vs ~614,400 guest SET_PIXELs — 45,000×.
+   Per-pixel full-screen painting alone would be 61% of the cap. Device
+   commands are mandatory, exactly as the architecture claims.
+3. **RAM sufficiency — fits, with honest room to spare.** The world
+   itself stores **0 B** (procedural, P1); the shipped scenario's save
+   is **56 B** (P5); the 128-delta design budget is **1,568 B** ✅
+   (measured 12 B/entry — corrected from 768 B). `systems.c`'s full
+   static footprint is **1,588 B of 4,096 B (38.8%)** — including the
+   1,200 B night-dither map and 192 B delta table — leaving 2,508 B of
+   stack. RAM growth (v0.2, 16 KiB) remains *comfort*, not necessity:
+   it buys the estimated 25k–60k-inst render window cache, bigger
+   tables and real art buffers. Nothing in P0–P5 forced v0.2.
+4. **ROM sufficiency — the engine fits; art is the unknown.** The
+   complete voxel stack — generator + raycast + delta overlay +
+   interaction + inventory/crafting/entities/day-night/HUD — is
+   **3,018 B (73.7% of 4 KiB)**, comparable to Tetris (3,176 B, the
+   largest program in the repo). Our experiment art is only 80 B
+   (16 B slime + 64 B dither tiles), so the honest open question is
+   whether a *real* game's art fits the remaining ~1 KiB — an art
+   budget item, not an engine problem.
+5. **Command model extends beyond 2D games — yes, zero new features.**
+   The raycast is FILL-runs + the M21 camera; day/night is one
+   TILEMAP with per-cell tint (64 B of tiles, ~50 inst/frame); entities
+   are SPRITEs; the HUD is screen-space FILLs. Two limits were found
+   and both are *software* limits, not device gaps: a silhouette
+   raycast cannot show digs from below it (P3 — solved by editing the
+   render's own visible cells), and entities are drawn without
+   per-entity occlusion (P4's documented simplification).
+6. **Determinism — structurally preserved, fully answered.** Every
+   phase is 2-pass identical: procedural terrain (P1), raycast (P2),
+   interactive edits (P3's replayed edit digest), systems (P4), and
+   both save mechanisms (P5: 270/270 state hashes on replay, 147/147
+   RAM digests + byte-identical framebuffer on load). P4's final state
+   hash equals P5's exactly — an independent cross-check. No FP, no
+   entropy, no I/O was ever introduced; the guarantee held through
+   every layer added.
+7. **Save story — viable with no storage device, both formats.**
+   Snapshot (reboot + restore RAM/timer/presents) and input replay
+   (1 B/frame) are each bit-exact (P5). What the **host/SDK must
+   provide**: guest-RAM read/write plus timer/present restore for
+   snapshots, and pad-log capture/replay — two concrete SDK items
+   (§10.1.8).
+8. **SDK requirements for the AI visual loop — the experiment IS the
+   list.** Everything P0–P6 used to iterate: (1) headless run-N-frames
+   with scripted pad input, (2) per-frame state hash + RAM digest,
+   (3) framebuffer dump to an eyeballable image, (4) `nm` readout of
+   guest globals (used in *every* phase as the game's API), (5) golden
+   pins printed before assert (workflow), (6) property checks +
+   independent host models where pins alone would enshrine bugs (P2's
+   broken render), (7) snapshot save/load + input-log record/replay
+   (P5). Items 1–6 are M25/M26's scope as planned; P5 adds item 7.
+9. **"Smallest machine" holds.** Zero hardware additions were proposed
+   across P0–P5 — every workload ran on the existing device set, and
+   the only gap found (seeing below a silhouette) is answerable in
+   software by marching in a different order, so it never reached the
+   "why can't software do this?" test. The single resource ask remains
+   the same as M23's: RAM growth for comfort (Q3).
+10. **Resolution pressure — lands on raycast columns, not on the
+    device.** The device is resolution-indifferent: guest cost per
+    command is constant (TILEMAP = 13.4 inst for the whole screen
+    regardless of area) and its internal cost is pixel-bound. The CPU,
+    however, scales with **columns × z-steps**: 80 columns = 43% of
+    cap; the estimated 160-column build is **~77–81%** (§0.3/§3.2,
+    ×2 est.) — that is where the cap gets pressured, before anything
+    device-side notices. Output resolution could rise at the *same*
+    column count for nearly free (taller FILL runs, same guest inst).
+    The measured 320×240/80-column point is a good one, and the first
+    v0.2-adjacent perf item is the estimated 25k–60k-inst RAM window
+    cache.
+
+### 10.2 ROM/RAM actuals (measured, `programs/build/*.bin`)
+
+| Program | ROM | Of 4 KiB | Class |
+|---------|----:|---------:|-------|
+| tetris (M18) | 3,176 B | 77.5% | shipped game, largest program |
+| **systems (P4/P5 guest)** | **3,018 B** | **73.7%** | full voxel stack |
+| platformer (M22) | 2,404 B | 58.7% | shipped game |
+| breakout (M15) | 1,842 B | 45.0% | shipped game |
+| sandbox (P3) | 1,776 B | 43.4% | raycast + interaction |
+| raycast_demo (P2) | 1,352 B | 33.0% | raycast core |
+| bench_gfx (P0) | 1,020 B | 24.9% | micro-benchmarks |
+| terrain_gen (P1) | 932 B | 22.8% | generator + digest |
+
+Guest RAM (`systems.c`, the heaviest): **1,588 B static** (`.data`+`.bss`,
+0x1000..0x1633) + **2,508 B stack** = the 4 KiB map exactly; the night
+map (1,200 B) is the largest single object and is itself a candidate for
+regeneration instead of storage if RAM gets tight.
+
+### 10.3 Go/no-go: raycast vs isometric fallback
+
+**GO on the raycast (the primary design).** It fits the measured
+budget (43% CPU with the full systems layer), renders correctly
+(verified visually and by property checks every phase), interacts
+reliably (render-derived targets, P3), and persists bit-exactly (P5).
+The isometric fallback — the pre-approved safety net — was **never
+triggered, and is therefore still unmeasured**: it remains an estimate
+carried from §2/§3, not a result. Conditions that would flip the
+decision are the ones P3/P4 identified: a game that must show edits
+*below* the visible silhouette (caves, overhangs) needs either the
+target trick (surface editing) or a different march order (more CPU) —
+and if columns must go to 160 before the window cache is built, the
+77–81% est. narrows the margin enough to re-run P2 at that width first.
+
+### 10.4 Failure modes: none triggered; estimate ledger
+
+The raycast stayed in budget, ROM fits with ~1 KiB art headroom, and RAM
+holds the delta design with 61% free — no v0.2 requirement was forced by
+the experiment. Estimates corrected by measurement (all folded into
+§2/§3): pixel 4–6 → **8.0** inst; raycast frame 60k–90k → **406,563**;
+height eval → **431.4** (2-octave, the shipped one); delta entry 6 B →
+**12 B** (budget 768 B → **1,568 B**); replay log ~2 B → **1 B/frame**;
+delta-scan was priced before it was run (**+21,253** for 16 entries).
+Estimates that remain open: the 160-column raycast (~77–81%), the RAM
+window cache (+25k–60k), hashed delta lookups (~25 inst), and the
+isometric fallback's cost profile. None of these may be quoted as
+measured until a phase runs them.
 
 ---
 
