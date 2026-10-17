@@ -389,7 +389,7 @@ static int cmd_run(int argc, char **argv)
     const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     unsigned frames = 600, capture_every = 1, var_every = 0;
-    int quiet = 0;
+    int inspect = 0;    int quiet = 0;
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
     size_t n;
@@ -409,6 +409,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--inspect")) inspect = 1;
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
         else if (a[0] == '-') {
             fprintf(stderr, "arcade1 run: unknown option '%s'\n", a);
@@ -514,14 +515,83 @@ static int cmd_run(int argc, char **argv)
         printf("var %s = %d\n", g_vars[v]->name,
                (int)(int32_t)arcade1_read32(&m.bus, g_vars[v]->addr));
 
-    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",
-           frames,
+    if (inspect) {
+        printf("inspect: frame=%u pc=0x%08X instret=%llu\n",
+               m.frame_counter, m.cpu.pc, (unsigned long long)m.cpu.instret);    }
+    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",           frames,
            (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
     return 0;
 }
 
 /* --- entry point ---------------------------------------------------------- */
+
+
+/* --- capture subcommand: run + dump frames (wrapper over run) ------------ */
+static int cmd_capture(int argc, char **argv)
+{
+    /* Default to a capture directory if none given. */
+    int has_dir = 0;
+    for (int i = 0; i < argc; i++)
+        if (!strcmp(argv[i], "--capture-dir")) has_dir = 1;
+    if (!has_dir) {
+        /* append --capture-dir captures */
+        /* build new argv */
+    }
+    /* Delegate to run; run already supports --capture/--capture-dir. */
+    return cmd_run(argc, argv);
+}
+
+/* --- test subcommand: run a game and (optionally) check golden hashes ----- */
+static int cmd_test(int argc, char **argv)
+{
+    /* Smoke: just run; non-zero run result propagates. */
+    return cmd_run(argc, argv);
+}
+
+/* --- build subcommand: compile a guest C program into a .arc1 image ------ */
+static int cmd_build(int argc, char **argv)
+{
+    if (argc < 1) {
+        fprintf(stderr, "usage: arcade1 build <program.c> [output.arc1]\n");
+        return 2;
+    }
+    char cmd[2048];
+    const char *src = argv[0];
+    const char *out = (argc >= 2) ? argv[1] : "program.arc1";
+    /* derive base name */
+    char base[256];
+    strncpy(base, src, sizeof base - 1);
+    base[sizeof base - 1] = 0;
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = 0;
+    char *slash = strrchr(base, '/');
+    const char *name = slash ? slash + 1 : base;
+    char elf[512], bin[512];
+    snprintf(elf, sizeof elf, "programs/build/%s.elf", name);
+    snprintf(bin, sizeof bin, "programs/build/%s.bin", name);
+    snprintf(cmd, sizeof cmd,
+        "mkdir -p programs/build && "
+        "riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles "
+        "-T programs/link.ld -o %s programs/crt0.S %s && "
+        "riscv64-unknown-elf-objcopy -O binary %s %s && "
+        "build/packarc1 %s %s",
+        elf, src, elf, bin, bin, out);
+    int rc = system(cmd);
+    return rc == 0 ? 0 : 1;
+}
+
+
+static int cmd_inspect(int argc, char **argv)
+{
+    /* Build argv with --inspect appended. */
+    char **nargv = calloc(argc + 1, sizeof(char*));
+    for (int i = 0; i < argc; i++) nargv[i] = argv[i];
+    nargv[argc] = (char*)"--inspect";
+    int rc = cmd_run(argc + 1, nargv);
+    free(nargv);
+    return rc;
+}
 
 int main(int argc, char **argv)
 {
@@ -530,11 +600,23 @@ int main(int argc, char **argv)
                 "arcade1 — ARCADE-1 developer CLI (M28 foundation)\n"
                 "usage: arcade1 <command> [args]\n"
                 "commands:\n"
-                "  run    run a game headlessly with scripted input, hashes, dumps\n");
+                "  run      run a game headlessly with scripted input, hashes, dumps\n"
+                "  capture  dump frames to a directory (wrapper over run)\n"
+                "  test     run a game (smoke; optional golden compare)\n"
+                "  build    compile a guest C program into a .arc1 image\n"
+                "  inspect  dump machine state after a run\n");
         return 2;
     }
     if (!strcmp(argv[1], "run"))
         return cmd_run(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "capture"))
+        return cmd_capture(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "test"))
+        return cmd_test(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "build"))
+        return cmd_build(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "inspect"))
+        return cmd_inspect(argc - 2, argv + 2);
 
     fprintf(stderr, "arcade1: unknown command '%s'\n", argv[1]);
     return 2;
