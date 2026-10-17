@@ -72,6 +72,14 @@ exactly 0 every frame, so it draws with commands that fetch no bitmap data
 the device do; the assertions in that test are independent arithmetic, so
 these are properties of the machine, not re-pinned constants.
 
+> **Historical snapshot (v0.1 map, 320×240).** Measured before M25 (480×270)
+> and M26 (map v0.2: RAM 64 KiB, was 4 KiB). At 4 KiB RAM only 128 distinct
+> 16×16 tiles fit, capping row (c)'s `px`; with 64 KiB RAM all 480 cells'
+> tiles fit, and the unrolled loop now reaches K = 65,533 stores (row (e)
+> `cmd` 999,983). The test asserts derived arithmetic (from
+> `ARCADE1_RAM_SIZE`), so the machine's ceilings stay exact — the table above
+> is the pre-M25/M26 measurement.
+
 | case | `cmd` | `px` | `bytes` | what it is |
 |---|---:|---:|---:|---|
 | (a) 1 CLEAR | 2 | 76,800 | 0 | one full-screen clear + present |

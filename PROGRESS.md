@@ -47,9 +47,10 @@ via `make test-bench`, `make test-terrain`, `make test-ray`,
 | 23        | Architecture Review        | COMPLETE |
 | 24        | ARCADE-1 v0.1 Candidate    | COMPLETE |
 | 25        | Machine v0.2a: 480×270 screen | COMPLETE |
-| 26+       | (see `MILESTONES_2.md`)    | NOT STARTED |
+| 26        | Machine v0.2b: Memory (256 KiB ROM / 64 KiB RAM) | COMPLETE |
+| 27+       | (see `MILESTONES_2.md`)    | NOT STARTED |
 
-Next up: **Milestone 26 — Machine v0.2b: Memory** (ROM 256 KiB, RAM 64 KiB, growth-friendly memory map). See `MILESTONES_2.md` for the exact scope.
+Next up: **Milestone 27 — Machine v0.2c: Color Graphics** (paletted 4-bit graphics: a 256-entry palette, `SPRITE4`/`TILEMAP4`). See `MILESTONES_2.md` for the exact scope.
 
 ## Architecture
 
@@ -336,13 +337,60 @@ aspect) and every test derive from them.
 
 Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
 
+## Machine v0.2b: Memory (M26)
+
+Enlarged ROM to **256 KiB** and RAM to **64 KiB** and moved to a
+growth-friendly map with each region on a 512 MiB boundary:
+
+| Region | Base         | Size    |
+|--------|--------------|---------|
+| ROM    | `0x00000000` | 256 KiB |
+| RAM    | `0x20000000` | 64 KiB  |
+| MMIO   | `0x40000000` | 4 KiB   |
+
+The reset vector stays at `0x00000000`; the stack top derives to `0x20010000`.
+The map is pinned in `SPEC.md` §2; the guest mirror is `programs/arcade1_map.h`
+(included by `gfx.h` and every direct-MMIO program). The v0.1 placeholder map
+(ROM 4 KiB at 0x0000, RAM 4 KiB at 0x1000, MMIO 4 KiB at 0x4000) is superseded.
+
+* **Bus rules unchanged** (no faults, out-of-range reads 0, writes only inside
+  RAM, ROM writes ignored, MMIO 32-bit only, stray counter). The `.arc1`
+  payload limit now tracks `ARCADE1_ROM_SIZE` (256 KiB); image version 1 and
+  the CRC rule are unchanged.
+* **Guests switched to the shared map header** (`arcade1_map.h`); `gfx.h` and
+  the direct-MMIO programs use `ARCADE1_MMIO_BASE` instead of hard-coding
+  `0x4000`. `link.ld` moves RAM to `0x20000000` (stack top derives to
+  `0x20010000`); `crt0.S` needs no change (it loads `_stack_top`).
+* **Guest behaviour preserved.** The four game framebuffers are byte-identical
+  (golden `fb=` unchanged); only the per-frame state `hash=` changed, because
+  the state hash covers RAM, which grew and moved. Final state hashes: breakout
+  `0x91B248CDCEC093C1`, tetris `0xF1936F22ACFBB807`, platformer
+  `0xE0EE4A90F16E5E67`, scroll `0x99242B25C526BE86`. The pinned state hashes in
+  `test_ray`/`test_sandbox`/`test_systems`/`test_persist` were updated for the
+  same reason (their frame digests are unchanged).
+* **`sprite_demo`/`tilemap_demo`'s "illegal source"** is the MMIO window (not
+  image data); that address moved with the map, so they still draw nothing —
+  output byte-identical.
+* **Tests updated** (expectations recomputed from the macros, none weakened):
+  fixed-address tests (exec RAM base, frame-rules/timer/worst LUI, tetris/
+  breakout MMIO base, video-worst tile/sprite RAM addresses) moved to the new
+  map; the worst-case TILEMAP now fits all 480 tiles in 64 KiB RAM (was 128 of
+  480), its assertions auto-derive from `ARCADE1_RAM_SIZE`; `test_memory` gains
+  a case proving the old `0x1000`/`0x4000` bases are now inside ROM (a write to
+  either is a stray).
+* `tests/roms/` regenerated (guest images + `.syms` at the new base). Golden
+  `fb=` values are byte-identical for all four games; only `hash=` changed.
+
+Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
+
 ## Known limitations
 
 - Display is **480×270 @ 60 fps** (pinned at M25 — 16:9, exact 4× to 1080p),
   48 kHz audio. The shipped games/demos still draw in the top-left 320×240
   region (guests not re-laid-out at M25).
-- Memory map (ROM 0x0000+4K, RAM 0x1000+4K, MMIO 0x4000+4K, with a 0x2000
-  gap) is a placeholder, not the final ARCADE-1 map. MMIO routes to a
+- Memory map (v0.2 since M26: ROM 256 KiB at 0x00000000, RAM 64 KiB at
+  0x20000000, MMIO 4 KiB at 0x40000000, with gaps between) is growth-friendly,
+  pinned in `SPEC.md` §2 and `programs/arcade1_map.h`. MMIO routes to a
   host-registered handler that the machine muxes between its devices: timer
   (M12) at 0x000..0x0FF, video (M13) at 0x100..0x1FF, input (M15) at
   0x200..0x2FF, audio (M15) at 0x300..0x3FF.
@@ -357,7 +405,7 @@ Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
   and by loading content in RetroArch), and (b) stepped by standalone harnesses
   (`make test-program`, `test-mmio`) that keep their own CPU. The machine's
   own CPU runs only while firmware is attached.
-- MMIO is minimal by design (M11): one 4 KiB window (0x4000) routed to a single
+- MMIO is minimal by design (M11): one 4 KiB window (0x40000000) routed to a single
   host-registered handler, 32-bit accesses only (sub-word lw/sw are no-ops).
   The machine's handler muxes the window: timer at 0x000..0x0FF, video at
   0x100..0x1FF, input at 0x200..0x2FF, audio at 0x300..0x3FF; unknown offsets
@@ -432,7 +480,7 @@ Verify: `make clean && make check` (all tests + `test-golden`), `make android`.
 - Guest programs build with `riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32
   -ffreestanding -nostdlib -msmall-data-limit=0` + `programs/link.ld` +
   `crt0.S`. No libc/SDK; `.data` is stored in ROM and copied to RAM, `.bss` is
-  zeroed, stack grows down from the top of RAM. Guest image must fit the 4 KiB
+  zeroed, stack grows down from the top of RAM. Guest image must fit the 256 KiB
   ROM (largest so far: tetris at 3176 bytes; its .arc1 file is that payload
   plus a 16-byte header). Since M16 the ISA is RV32IM,
   so guest C may use `*` and `/` directly (spec-exact semantics, no traps —

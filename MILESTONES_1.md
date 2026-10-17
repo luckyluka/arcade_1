@@ -7,6 +7,13 @@
 > game resolution to 480×270 (16:9)** — pinned in `SPEC.md` §8 and
 > `ARCADE1_WIDTH`/`ARCADE1_HEIGHT`, and documented in `MILESTONES_2.md`. See
 > also §28 "Resolution philosophy" below for the pre-M25 guidance.
+>
+> Memory-map references here (ROM 4 KiB at 0x0000, RAM 4 KiB at 0x1000, MMIO
+> 4 KiB at 0x4000 — the v0.1 "placeholder map") describe the map in force **at
+> those milestones**; they are kept as written. **M26 moved to the growth-friendly
+> map v0.2** (ROM 256 KiB at 0x00000000, RAM 64 KiB at 0x20000000, MMIO 4 KiB at
+> 0x40000000) — pinned in `SPEC.md` §2 and `programs/arcade1_map.h`, and
+> documented in `MILESTONES_2.md`.
 
 ## 0. Mission
 

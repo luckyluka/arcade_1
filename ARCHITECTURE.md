@@ -43,8 +43,8 @@ This is the single strongest piece of evidence for the whole architecture:
 moving FILL / SPRITE / TILEMAP from a guest per-pixel loop into the device cut
 CPU load by ~30–40×. The device-offload model is correct and must be preserved.
 
-**Memory footprint** (largest consumers, within the 4 KiB ROM + 4 KiB RAM
-placeholder map):
+**Memory footprint** (largest consumers, measured against the v0.1 placeholder
+map — ROM/RAM were since enlarged to 256 KiB / 64 KiB at M26):
 
 | Game       | ROM (payload B) | RAM (.bss B) | biggest RAM item |
 |------------|----------------:|-------------:|------------------|
@@ -193,6 +193,12 @@ VM's video device is already this shape (an FSM + one blit loop + a windowing
 counter); the FPGA should mirror it so the C VM stays a faithful model.
 
 ## 5. What should the final memory map look like?
+
+> **Adopted at M26 (v0.2):** ROM 256 KiB at 0x00000000, RAM 64 KiB at
+> 0x20000000, MMIO 4 KiB at 0x40000000 — regions on 512 MiB boundaries (see
+> `SPEC.md` §2). This exceeds the "RAM ≥ 16 KiB" recommendation below and
+> removes the tight 4 KiB footprint pressure. The analysis that follows is the
+> review that produced that recommendation.
 
 The placeholder map (ROM 4 K, RAM 4 K, gap, MMIO 4 K) *works* — every shipped
 game fits — but the footprint data (above) shows the pressure point clearly:

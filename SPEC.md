@@ -46,18 +46,22 @@ OS, syscall, or halt handling; a program "ends" by parking in a self-loop.
 Flat, byte-addressed, little-endian. Three regions:
 
 ```
-ROM    0x0000..0x0FFF   4 KiB   program image (read-only at runtime)
-RAM    0x1000..0x1FFF   4 KiB   .data/.bss + stack (grows down from 0x2000)
-gap    0x2000..0x3FFF           unused (out of range)
-MMIO   0x4000..0x4FFF   4 KiB   device registers (routed to the handler)
+ROM    0x00000000..0x0003FFFF   256 KiB   program image (read-only at runtime)
+gap    0x00040000..0x1FFFFFFF             unused (out of range)
+RAM    0x20000000..0x2000FFFF    64 KiB   .data/.bss + stack (grows down from
+                                          0x20010000)
+gap    0x20010000..0x3FFFFFFF             unused (out of range)
+MMIO   0x40000000..0x40000FFF      4 KiB   device registers (routed to the
+                                          handler)
 ```
 
-**v0.1 keeps the reference sizes (4 KiB ROM, 4 KiB RAM).** The M23 review
-*recommended* growing RAM (≥16 KiB) because the 32-bit tilemap cell format is
-the dominant RAM cost of any non-trivial game; that growth is a **v0.2 target**,
-deliberately **not** taken in v0.1 so that the first frozen contract matches the
-machine the three games were written and tested against. The map above is
-normative for v0.1.
+**v0.2 (M26) adopts the growth-friendly map above** — ROM 256 KiB, RAM 64 KiB,
+each region on a 512 MiB boundary so sizes can grow later without moving
+anything. The v0.1 placeholder (ROM 4 KiB at 0x0000, RAM 4 KiB at 0x1000,
+MMIO 4 KiB at 0x4000) is **superseded**; the M23 review had already
+recommended growing RAM (≥16 KiB) because the 32-bit tilemap cell format is
+the dominant RAM cost of any non-trivial game. The map above is normative
+for v0.2.
 
 **Access rules** (the single clear interface the CPU goes through for every
 access):
@@ -73,12 +77,13 @@ access):
 - **No access ever faults.** The bus is deterministic and side-effect-free
   beyond the cases above.
 
-The 0x2000..0x3FFF gap exists to keep MMIO a distinct region rather than a
-continuation of RAM; it carries no semantics.
+The gaps (0x00040000..0x1FFFFFFF and 0x20010000..0x3FFFFFFF) exist to keep
+MMIO a distinct region rather than a continuation of RAM; they carry no
+semantics.
 
 ## 3. MMIO window and device map
 
-One 4 KiB window at **0x4000**, serviced by a **single muxed handler** that
+One 4 KiB window at **0x40000000**, serviced by a **single muxed handler** that
 dispatches on the byte offset within the window:
 
 | Offset range | Device |
@@ -296,7 +301,7 @@ it.
 A program is a **flat RV32IM image** loaded into ROM and entered at the reset
 vector (0x0000). It runs bare-metal: no libc, no OS, no SDK at runtime. `.data`
 is stored in the image and copied to RAM at startup, `.bss` is zeroed, and the
-stack grows down from the top of RAM (0x2000). `crt0` provides `_start`, which
+stack grows down from the top of RAM (0x20010000). `crt0` provides `_start`, which
 calls `main()`.
 
 The **`.arc1` v1** container wraps the image (defined in `src/arcade1/rom.h`,
@@ -336,8 +341,8 @@ detail; conformance (M34) is measured against them:
 2. **Determinism is mandatory.** Same ROM + same input ⇒ identical output,
    byte for byte, every run and every host. No interrupt, entropy, wall-clock,
    or FP may be introduced.
-3. **The memory map is fixed** (§2): ROM at 0x0000, RAM at 0x1000, MMIO at
-   0x4000, at the sizes given.
+3. **The memory map is fixed** (§2): ROM at 0x00000000, RAM at 0x20000000, MMIO
+   at 0x40000000, at the sizes given.
 4. **The register map is fixed** (§3–§7, `docs.md` §15). Offsets, access
    rights, power-on values, and synchronous-at-the-`sw` command semantics are
    part of the contract.

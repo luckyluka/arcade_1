@@ -9,6 +9,13 @@
 > P6 (verdict)** — measurements are in §0.1–§0.6, folded into
 > §2/§3/§8/§9, and the final answers to §9 are written up in
 > **§10 (Verdict)**.
+>
+> **Memory constraints below are historical.** This research measured against
+> the v0.1 placeholder map (4 KiB ROM + 4 KiB RAM); **M26 enlarged the map to
+> 256 KiB ROM + 64 KiB RAM** (`SPEC.md` §2). The "fits 4 KiB RAM?" tables and
+> the memory-pressure figures describe the machine *as it was* during this
+> experiment and drove the M26 enlargement; with 64 KiB RAM the tightest
+> cell-grid / heightmap items below would now fit.
 
 The experiment asks one question:
 
