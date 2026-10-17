@@ -1429,7 +1429,11 @@ inside a 60 fps frame budget.
 The roadmap's M22 instruction — "After this milestone, stop and review the
 architecture... Only then define ARCADE-1 v0.1" — is discharged in the next two
 milestones: the **architecture review** (M23) lives in `ARCHITECTURE.md`, and the
-**v0.1 machine specification** it produces (M24) lives in `SPEC.md`.
+**v0.1 machine specification** it produces (M24) lives in `SPEC.md`. A separate,
+non-milestone research note — a voxel-sandbox **architectural stress test**
+(`VOXEL_EXPERIMENT.md`) — asks how far this machine could go toward a
+Minecraft-like game without becoming a 3D GPU; it changes no roadmap and no
+machine behaviour.
 
 ---
 

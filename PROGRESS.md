@@ -3,7 +3,10 @@
 Living record of milestone status. The roadmap itself is in `docs.md`; this
 file tracks what is actually done, how to verify it, and known limitations.
 The M23 architecture review is a standalone document in `ARCHITECTURE.md`, and
-the v0.1 machine specification it produced (M24) is in `SPEC.md`.
+the v0.1 machine specification it produced (M24) is in `SPEC.md`. A
+post-M24 research experiment (not a milestone, no roadmap change) — using a
+Minecraft-like voxel sandbox as an architectural stress test — is written up
+in `VOXEL_EXPERIMENT.md`; its SDK findings feed M25.
 
 ## Status summary
 
