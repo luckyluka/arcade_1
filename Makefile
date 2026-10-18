@@ -103,7 +103,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
         test-video-worst test-video-palette test-video-sprite4 \
         test-video-tilemap4 test-color test-run test-golden \
-        test-pong test-snake test-example-color
+        test-pong test-snake test-example-color test-cheatsheet
 
 all: $(TARGET)
 
@@ -614,6 +614,9 @@ test-snake: $(CLI_BIN) $(ARC1_ROM_DIR)/example_snake.arc1 | $(TESTDIR)
 
 test-example-color: $(CLI_BIN) $(ARC1_ROM_DIR)/example_color.arc1 | $(TESTDIR)
 	sh tests/test_example_color.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+test-cheatsheet:
+	sh tests/test_cheatsheet.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # --- Golden per-frame regression (Task A step 5) ----------------------------
 # tests/golden/<game>.txt holds every "frame N hash=... fb=..." line from a
