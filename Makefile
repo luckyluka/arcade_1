@@ -46,7 +46,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -65,9 +65,12 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
-GOLDEN_GAMES  := breakout tetris platformer scroll color
+GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color
 # Image/ELF base name for a golden game (test-target name -> guest name).
-golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,$(1))
+golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
+                $(if $(filter color,$(1)),color_demo,\
+                $(if $(filter pong snake,$(1)),example_$(1),\
+                $(if $(filter example-color,$(1)),example_color,$(1)))))
 # Symbol source for a game in $(ARC1_ROM_DIR): the committed `nm` dump if
 # one is present, else `nm` the freshly built ELF (historical behaviour).
 # Decided at make-expansion time so the result is a single command that can
@@ -99,7 +102,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-platformer test-breakout test-tetris test-bench test-terrain \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
         test-video-worst test-video-palette test-video-sprite4 \
-        test-video-tilemap4 test-color test-run test-golden
+        test-video-tilemap4 test-color test-run test-golden \
+        test-pong test-snake test-example-color
 
 all: $(TARGET)
 
@@ -600,6 +604,17 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 test-run: $(CLI_BIN) $(ARC1_ROM_DIR)/color_demo.arc1 $(ARC1_ROM_DIR)/breakout.arc1 | $(TESTDIR)
 	sh tests/test_run.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
+# The three example games: shell-script tests in the style of test_run.sh,
+# asserting through named variables (--syms/--vars) and captured frames.
+test-pong: $(CLI_BIN) $(ARC1_ROM_DIR)/example_pong.arc1 | $(TESTDIR)
+	sh tests/test_pong.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+test-snake: $(CLI_BIN) $(ARC1_ROM_DIR)/example_snake.arc1 | $(TESTDIR)
+	sh tests/test_snake.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+test-example-color: $(CLI_BIN) $(ARC1_ROM_DIR)/example_color.arc1 | $(TESTDIR)
+	sh tests/test_example_color.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
 # --- Golden per-frame regression (Task A step 5) ----------------------------
 # tests/golden/<game>.txt holds every "frame N hash=... fb=..." line from a
 # golden run of the game against the committed images in tests/roms/.
@@ -661,7 +676,7 @@ golden-update: | $(TESTDIR)
 # golden update, and say in the commit message why (a golden change IS a
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
-GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo
+GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)

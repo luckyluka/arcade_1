@@ -1,0 +1,17 @@
+20000000 d dx
+20000814 b dy
+2000081c B _ebss
+20000010 D _edata
+20000008 d fx
+2000000c d fy
+20000004 d length
+0000005c T main
+20000010 B _sbss
+20000818 b score
+20000000 D _sdata
+00000360 A _sidata
+20010000 B _stack_top
+00000000 T _start
+20000810 b state
+20000010 b sx
+20000410 b sy

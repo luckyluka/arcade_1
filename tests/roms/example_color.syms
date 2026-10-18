@@ -1,0 +1,14 @@
+20000000 b cam_x
+20000004 b cam_y
+20000c88 B _ebss
+20000000 D _edata
+0000005c T main
+20000008 b map
+00000328 t pal0
+20000000 B _sbss
+20000000 D _sdata
+000005c8 A _sidata
+00000548 t sprite
+20010000 B _stack_top
+00000000 T _start
+00000348 t tiles
