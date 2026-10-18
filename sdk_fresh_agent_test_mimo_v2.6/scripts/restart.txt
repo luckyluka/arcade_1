@@ -1,0 +1,8 @@
+# dodge until game over (state=1), then START restarts the game
+0 3 right
+4 186 left
+187 359 right
+360 484 left
+485 560 right
+650 655 start
+660 1000 none

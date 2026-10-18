@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""packarc1 — pack a flat guest .bin into an ARCADE-1 .arc1 image.
+
+M29 DOC GAP 3: `arcade1 build` shells out to `build/packarc1 <in.bin>
+<out.arc1>`, which was not shipped with the working set, and the header
+layout is not in any of the docs. The layout below was derived from the
+image parser inside the `arcade1` tool itself (arcade1_image_parse):
+magic "ARC1", u32 version=1, u32 payload size, u32 CRC-32 of payload,
+then the payload. Total file size must be exactly 16 + payload_size.
+"""
+import struct
+import sys
+import zlib
+
+ROM_MAX = 0x40000  # 256 KiB, matches ARCADE1_ROM_SIZE
+
+
+def main(argv):
+    if len(argv) != 3:
+        sys.stderr.write("usage: packarc1 <in.bin> <out.arc1>\n")
+        return 2
+    with open(argv[1], "rb") as f:
+        data = f.read()
+    if not (1 <= len(data) <= ROM_MAX):
+        sys.stderr.write("payload size invalid or mismatched\n")
+        return 1
+    header = b"ARC1" + struct.pack("<III", 1, len(data), zlib.crc32(data) & 0xFFFFFFFF)
+    with open(argv[2], "wb") as f:
+        f.write(header + data)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
