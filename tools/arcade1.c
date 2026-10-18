@@ -392,7 +392,8 @@ static int cmd_run(int argc, char **argv)
     const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     unsigned frames = 600, capture_every = 1, var_every = 0;
-    int inspect = 0;    int quiet = 0;
+    int inspect = 0;    int quiet = 0;    int strict = 0;
+    unsigned long long skipped = 0;   /* M29: out-of-window source reads */
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
     size_t n;
@@ -414,6 +415,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--inspect")) inspect = 1;
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
+        else if (!strcmp(a, "--strict"))                   strict = 1;
         else if (a[0] == '-') {
             fprintf(stderr, "arcade1 run: unknown option '%s'\n", a);
             return 2;
@@ -431,7 +433,9 @@ static int cmd_run(int argc, char **argv)
                 "                   [--capture FILE] [--capture-dir DIR]\n"
                 "                   [--capture-every K] [--record FILE]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
-                "                   [--quiet]\n"
+                "                   [--quiet] [--strict]\n"
+                "  --strict exits non-zero if any draw read a source address\n"
+                "  outside ROM/RAM (they silently draw nothing); see below.\n"
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
                 "  it requires --syms, and --var-every requires --vars.\n"
                 "  --record writes the applied buttons in the script format.\n");
@@ -488,6 +492,7 @@ static int cmd_run(int argc, char **argv)
         arcade1_set_input(&m, &in);
         record_frame(fr, &in);
         arcade1_run_frame(&m);
+        skipped += arcade1_video_frame_totals(&m.video)->skipped_ops;
         if (!quiet)
             printf("frame %4u hash=0x%016llX fb=0x%016llX\n", fr,
                    (unsigned long long)state_hash(&m.cpu, &m.bus),
@@ -526,6 +531,19 @@ static int cmd_run(int argc, char **argv)
     }    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",           frames,
            (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
+
+    /* M29 diagnostics: the device reads guest memory through the integer
+     * addresses the guest hands it; anything outside ROM/RAM reads back as
+     * zero, so those draws painted nothing and said nothing. One line, to
+     * stderr, so it never disturbs the machine-readable stdout. */
+    if (skipped != 0) {
+        fprintf(stderr,
+                "arcade1 run: warning: %llu draws read source addresses "
+                "outside ROM/RAM and drew nothing%s\n",
+                skipped, strict ? "" : " (--strict to fail on this)");
+        if (strict)
+            return 1;
+    }
     return 0;
 }
 

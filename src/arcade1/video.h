@@ -118,6 +118,12 @@ typedef struct arcade1_video_stats {
     uint32_t pixels_written;  /* framebuffer writes after clipping        */
     uint32_t bytes_fetched;   /* cell + bitmap byte reads from guest mem  */
     uint32_t cells_visited;   /* TILEMAP cells after windowing            */
+    uint32_t skipped_ops;     /* M29: draws whose source address fell
+                               * outside ROM/RAM (pixels/cells that read
+                               * zero and therefore drew nothing). Pure
+                               * diagnostics: it never changes what is
+                               * drawn, it only makes an invisible mistake
+                               * countable.                               */
 } arcade1_video_stats_t;
 
 /* --- Device state --------------------------------------------------------- */

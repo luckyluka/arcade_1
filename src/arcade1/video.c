@@ -13,6 +13,21 @@
 
 #include <string.h>    /* memset: the per-frame stats reset (task C counters) */
 
+/* --- M29: where the device may read -------------------------------------- *
+ * The device fetches image bytes from the integer addresses the guest hands
+ * it in ADDR / MAP_ADDR / TILE_ADDR. Only two ranges are guest memory: the
+ * ROM (0..ROM_SIZE) and RAM (RAM_BASE..+RAM_SIZE). Anything else reads back
+ * as zero, so a stray pointer or a mangled cast draws nothing at all — and
+ * does so silently. skipped_ops counts the draws that hit such an address
+ * so a host can notice (arcade1 run warns; --strict fails). Pure
+ * diagnostics: it never changes what is drawn, only what can be seen. */
+static int video_src_ok(uint64_t addr)
+{
+    return (addr < (uint64_t)ARCADE1_ROM_SIZE) ||
+           (addr >= (uint64_t)ARCADE1_RAM_BASE &&
+            addr < (uint64_t)ARCADE1_RAM_BASE + (uint64_t)ARCADE1_RAM_SIZE);
+}
+
 /* --- M27: power-on palette ------------------------------------------------ *
  * A fixed 16-colour default (an EGA-like set) occupies entries 0..15; entry 0
  * is black (the transparent/empty colour of a 4-bit image), and entries 16..255
@@ -219,6 +234,12 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
 
     video_clip(x, y, w, h, &x0, &x1, &y0, &y1);
 
+    /* M29 diagnostics: an out-of-window source fetches zeros, so every
+     * examined pixel of this blit is work that drew nothing. Counted after
+     * clipping, like bytes_fetched, and it never changes what is drawn. */
+    if (!video_src_ok(src_addr))
+        v->stats.skipped_ops += (uint32_t)((x1 - x0) * (y1 - y0));
+
     for (sy = y0; sy < y1; sy++) {
         const uint64_t row = (uint64_t)(sy - y);
         for (sx = x0; sx < x1; sx++) {
@@ -283,6 +304,11 @@ static void video_blit_4bpp(arcade1_video_t *v, uint64_t src_addr,
         return;                      /* width must be even: odd W draws nothing */
 
     video_clip(x, y, w, h, &x0, &x1, &y0, &y1);
+
+    /* M29 diagnostics: same as the 1-bpp path — out-of-window source, so
+     * every examined pixel here fetched zero and drew nothing. */
+    if (!video_src_ok(src_addr))
+        v->stats.skipped_ops += (uint32_t)((x1 - x0) * (y1 - y0));
 
     for (sy = y0; sy < y1; sy++) {
         uint64_t row = (uint64_t)(sy - y);
@@ -400,6 +426,12 @@ static void video_tilemap(arcade1_video_t *v)
 
             v->stats.bytes_fetched += 4u;   /* the 32-bit cell, byte by byte */
 
+            /* M29 diagnostics: an out-of-window cell table reads back as
+             * all zeros, so this cell drew nothing at all. Counted once
+             * per cell; drawing is untouched. */
+            if (!video_src_ok(cell_addr))
+                v->stats.skipped_ops++;
+
             if (index == 0u)
                 continue;   /* empty cell: background shows through */
 
@@ -483,6 +515,12 @@ static void video_tilemap4(arcade1_video_t *v)
             const uint32_t index = cell & 0xFFFFu;
 
             v->stats.bytes_fetched += 4u;   /* the 32-bit cell, byte by byte */
+
+            /* M29 diagnostics: an out-of-window cell table reads back as
+             * all zeros, so this cell drew nothing at all. Counted once
+             * per cell; drawing is untouched. */
+            if (!video_src_ok(cell_addr))
+                v->stats.skipped_ops++;
 
             if (index == 0u)
                 continue;   /* empty cell: background shows through */

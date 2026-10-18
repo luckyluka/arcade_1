@@ -105,7 +105,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-worst test-video-palette test-video-sprite4 \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
-        test-barrier test-build
+        test-barrier test-build test-oob
 
 all: $(TARGET)
 
@@ -678,6 +678,14 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 # and runs the result.
 test-build: $(CLI_BIN)
 	sh tests/test_build.sh $(CLI_BIN)
+
+# M29: draws whose source address falls outside ROM/RAM silently paint
+# nothing on the device. The host counts them (arcade1_video_stats_t's
+# skipped_ops), `arcade1 run` reports them on stderr, and --strict turns
+# them into a failing exit. This test builds one guest that draws from
+# 0x40000 and one that does not, and checks all three behaviours.
+test-oob: $(CLI_BIN)
+	sh tests/test_oob.sh $(CLI_BIN)
 
 # --- AI SDK headless-runner test (milestone 28) ----------------------------
 # Builds the `arcade1 run` CLI and drives it end-to-end: determinism (two
