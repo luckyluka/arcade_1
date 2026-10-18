@@ -105,7 +105,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-worst test-video-palette test-video-sprite4 \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
-        test-barrier
+        test-barrier test-build
 
 all: $(TARGET)
 
@@ -292,8 +292,25 @@ CLI_SRC    := tools/arcade1.c src/arcade1/machine.c src/arcade1/memory.c \
               src/arcade1/cpu.c src/arcade1/exec.c src/arcade1/timer.c \
               src/arcade1/video.c src/arcade1/audio.c src/arcade1/rom.c
 
-$(CLI_BIN): $(CLI_SRC) tests/state_hash.h | $(TESTDIR)
-	$(CC) $(CFLAGS) -Itests -o $@ $(CLI_SRC)
+# `arcade1 build` is self-contained: the guest SDK (crt0.S, link.ld and the
+# headers) is compiled into the CLI as string literals in the generated
+# $(SDK_DATA). programs/ stays the single source of truth — this rule
+# regenerates the copy whenever it changes — but the built binary needs no
+# checkout, no build/ tree and no packarc1 helper beside it.
+SDK_FILES  := crt0.S link.ld arcade1.h gfx.h arcade1_map.h
+SDK_DATA   := $(TESTDIR)/sdk_data.c
+
+$(SDK_DATA): $(addprefix programs/,$(SDK_FILES)) tools/gen_sdk_data.awk | $(TESTDIR)
+	@{ echo "/* GENERATED from programs/ by tools/gen_sdk_data.awk — do not edit. */"; \
+	   echo '#include "sdk_data.h"'; \
+	   for f in $(SDK_FILES); do \
+	     echo "const char sdk_$$(printf '%s' $$f | tr . _ )[] ="; \
+	     awk -f tools/gen_sdk_data.awk programs/$$f; \
+	     echo '    ;'; \
+	   done; } > $@.tmp && mv $@.tmp $@
+
+$(CLI_BIN): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -Itests -Itools -o $@ $(CLI_SRC) $(SDK_DATA)
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and
@@ -654,6 +671,13 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 	 $(TESTDIR)/test_tetris $(ARC1_ROM_DIR)/tetris.arc1 \
 	   0x$$SCORE 0x$$LINES 0x$$LEVEL 0x$$STATE 0x$$LOCKED 0x$$FIELD \
 	   0x$$CUR 0x$$NEXT 0x$$ROT 0x$$CURX 0x$$CURY 0x$$PRNG
+
+# M29: `arcade1 build` must be self-contained — it carries its own SDK
+# (tools/sdk_data.c) and needs no checkout, no programs/ dir and no
+# packarc1 helper beside it. This test builds a game in an empty directory
+# and runs the result.
+test-build: $(CLI_BIN)
+	sh tests/test_build.sh $(CLI_BIN)
 
 # --- AI SDK headless-runner test (milestone 28) ----------------------------
 # Builds the `arcade1 run` CLI and drives it end-to-end: determinism (two

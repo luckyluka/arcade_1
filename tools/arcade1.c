@@ -65,11 +65,14 @@
 #include "machine.h"
 #include "memory.h"
 #include "rom.h"
+#include "sdk_data.h"    /* the embedded guest SDK (via -Itools) */
 #include "state_hash.h"   /* the golden state/fb fingerprints (via -Itests) */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>       /* fork, execvp, unlink, rmdir, mkdtemp */
+#include <sys/wait.h>     /* waitpid */
 
 /* --- Input script --------------------------------------------------------- */
 
@@ -552,35 +555,191 @@ static int cmd_test(int argc, char **argv)
 }
 
 /* --- build subcommand: compile a guest C program into a .arc1 image ------ */
+/* --- build: guest C program -> .arc1 image --------------------------------
+ *
+ * Self-contained by design. The guest SDK (crt0.S, link.ld, arcade1.h,
+ * gfx.h, arcade1_map.h) is compiled into this binary as string literals
+ * (tools/sdk_data.c, generated from programs/ by the Makefile), so
+ * `arcade1 build` works in any directory with no checkout, no build/ tree
+ * and no packarc1 helper beside it. The toolchain runs in a private temp
+ * directory that is removed again on the way out; the only file left
+ * behind is the image you asked for.
+ *
+ * The one thing it cannot carry is riscv64-unknown-elf-gcc (and objcopy),
+ * which must be on PATH.
+ */
+
+/* Write a whole file from memory. 0 on success. */
+static int write_file(const char *path, const char *contents)
+{
+    FILE  *f = fopen(path, "wb");
+    size_t n = strlen(contents);
+
+    if (!f)
+        return -1;
+    if (fwrite(contents, 1, n, f) != n) {
+        fclose(f);
+        return -1;
+    }
+    return fclose(f) == 0 ? 0 : -1;
+}
+
+/* Run one command without a shell: no quoting pitfalls, and a missing
+ * tool shows up as exit 127 rather than as a shell error string. */
+static int run_cmd(char *const argv[])
+{
+    pid_t pid = fork();
+    int   status = 0;
+
+    if (pid < 0)
+        return -1;
+    if (pid == 0) {
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    if (waitpid(pid, &status, 0) < 0)
+        return -1;
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+}
+
+/* Pack a flat guest binary into an .arc1 image, in process. Uses the same
+ * header writer and CRC as the VM itself (src/arcade1/rom.c), so the CLI
+ * cannot produce an image the machine would reject. 0 on success. */
+static int pack_image(const char *bin_path, const char *out_path)
+{
+    static uint8_t image[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
+    FILE          *f;
+    size_t         n;
+    int            extra;
+
+    f = fopen(bin_path, "rb");
+    if (!f) {
+        fprintf(stderr, "arcade1: cannot read %s\n", bin_path);
+        return -1;
+    }
+    n = fread(image + ARCADE1_IMAGE_HEADER_SIZE, 1, ARCADE1_ROM_SIZE, f);
+    extra = fgetc(f) != EOF;          /* one byte past the ROM: too big */
+    fclose(f);
+    if (n == 0 || extra) {
+        fprintf(stderr, "arcade1: %s is not a flat ROM of 1..%u bytes\n",
+                bin_path, ARCADE1_ROM_SIZE);
+        return -1;
+    }
+    arcade1_image_header(image, (uint32_t)n,
+                         arcade1_crc32(image + ARCADE1_IMAGE_HEADER_SIZE, n));
+
+    f = fopen(out_path, "wb");
+    if (!f) {
+        fprintf(stderr, "arcade1: cannot write %s\n", out_path);
+        return -1;
+    }
+    if (fwrite(image, 1, ARCADE1_IMAGE_HEADER_SIZE + n, f) != ARCADE1_IMAGE_HEADER_SIZE + n) {
+        fclose(f);
+        return -1;
+    }
+    return fclose(f) == 0 ? 0 : -1;
+}
+
+/* Remove the temp directory and everything in it. Best effort: a leftover
+ * /tmp dir is untidy, never wrong. */
+static void cleanup_sdk_dir(const char *dir, char *const files[], size_t nfiles)
+{
+    char path[1024];
+
+    for (size_t i = 0; i < nfiles; i++) {
+        snprintf(path, sizeof path, "%s/%s", dir, files[i]);
+        unlink(path);
+    }
+    rmdir(dir);
+}
+
 static int cmd_build(int argc, char **argv)
 {
+    /* The SDK files, in the order sdk_data.h declares them. */
+    static char *const sdk_names[] = {
+        (char *)"crt0.S", (char *)"link.ld", (char *)"arcade1.h",
+        (char *)"gfx.h", (char *)"arcade1_map.h"
+    };
+    static char *const sdk_bodies[] = {
+        (char *)sdk_crt0_S, (char *)sdk_link_ld, (char *)sdk_arcade1_h,
+        (char *)sdk_gfx_h, (char *)sdk_arcade1_map_h
+    };
+    const size_t nsdk = sizeof sdk_names / sizeof sdk_names[0];
+
     if (argc < 1) {
         fprintf(stderr, "usage: arcade1 build <program.c> [output.arc1]\n");
         return 2;
     }
-    char cmd[2048];
     const char *src = argv[0];
     const char *out = (argc >= 2) ? argv[1] : "program.arc1";
-    /* derive base name */
-    char base[256];
-    strncpy(base, src, sizeof base - 1);
-    base[sizeof base - 1] = 0;
-    char *dot = strrchr(base, '.');
-    if (dot) *dot = 0;
-    char *slash = strrchr(base, '/');
-    const char *name = slash ? slash + 1 : base;
-    char elf[512], bin[512];
-    snprintf(elf, sizeof elf, "programs/build/%s.elf", name);
-    snprintf(bin, sizeof bin, "programs/build/%s.bin", name);
-    snprintf(cmd, sizeof cmd,
-        "mkdir -p programs/build && "
-        "riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -nostartfiles "
-        "-T programs/link.ld -o %s programs/crt0.S %s && "
-        "riscv64-unknown-elf-objcopy -O binary %s %s && "
-        "build/packarc1 %s %s",
-        elf, src, elf, bin, bin, out);
-    int rc = system(cmd);
-    return rc == 0 ? 0 : 1;
+
+    /* Scratch directory: $TMPDIR if set, else /tmp. */
+    char dir[1024];
+    const char *tmp = getenv("TMPDIR");
+    if (!tmp || !*tmp)
+        tmp = "/tmp";
+    snprintf(dir, sizeof dir, "%s/arcade1-sdk-XXXXXX", tmp);
+    if (!mkdtemp(dir)) {
+        fprintf(stderr, "arcade1: cannot create a temp directory under %s\n", tmp);
+        return 1;
+    }
+
+    char elf[1200], bin[1200], crt0[1200], ld[1200], incdir[1200];
+    snprintf(elf,    sizeof elf,    "%s/program.elf", dir);
+    snprintf(bin,    sizeof bin,    "%s/program.bin", dir);
+    snprintf(crt0,   sizeof crt0,   "%s/crt0.S", dir);
+    snprintf(ld,     sizeof ld,     "%s/link.ld", dir);
+    snprintf(incdir, sizeof incdir, "-I%s", dir);
+
+    for (size_t i = 0; i < nsdk; i++) {
+        char path[1200];
+        snprintf(path, sizeof path, "%s/%s", dir, sdk_names[i]);
+        if (write_file(path, sdk_bodies[i]) != 0) {
+            fprintf(stderr, "arcade1: cannot write %s\n", path);
+            cleanup_sdk_dir(dir, sdk_names, nsdk);
+            return 1;
+        }
+    }
+
+    /* Same flags `make program` uses for guests, plus -I so the guest's
+     * own #include "arcade1.h" resolves to the temp copy. */
+    char *const gcc_argv[] = {
+        (char *)"riscv64-unknown-elf-gcc",
+        (char *)"-march=rv32im", (char *)"-mabi=ilp32", (char *)"-Os",
+        (char *)"-ffreestanding", (char *)"-nostdlib", (char *)"-nostartfiles",
+        (char *)"-msmall-data-limit=0",
+        incdir, (char *)"-T", ld, (char *)"-o", elf, crt0, (char *)src, NULL
+    };
+    if (run_cmd(gcc_argv) != 0) {
+        fprintf(stderr, "arcade1: riscv64-unknown-elf-gcc failed "
+                        "(is a RISC-V toolchain on PATH?)\n");
+        cleanup_sdk_dir(dir, sdk_names, nsdk);
+        return 1;
+    }
+
+    char *const objcopy_argv[] = {
+        (char *)"riscv64-unknown-elf-objcopy",
+        (char *)"-O", (char *)"binary", elf, bin, NULL
+    };
+    if (run_cmd(objcopy_argv) != 0) {
+        fprintf(stderr, "arcade1: riscv64-unknown-elf-objcopy failed\n");
+        cleanup_sdk_dir(dir, sdk_names, nsdk);
+        return 1;
+    }
+
+    int rc = pack_image(bin, out) == 0 ? 0 : 1;
+
+    /* elf + bin on top of the SDK files. */
+    char *tmpfiles[7];
+    for (size_t i = 0; i < nsdk; i++)
+        tmpfiles[i] = sdk_names[i];
+    tmpfiles[nsdk]     = (char *)"program.elf";
+    tmpfiles[nsdk + 1] = (char *)"program.bin";
+    cleanup_sdk_dir(dir, tmpfiles, nsdk + 2);
+
+    if (rc == 0)
+        printf("arcade1: built %s\n", out);
+    return rc;
 }
 
 
