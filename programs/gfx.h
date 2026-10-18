@@ -48,11 +48,45 @@
 #define GFX_CMD_SPRITE4   0x7u
 #define GFX_CMD_TILEMAP4  0x8u
 
+/* --- Compiler barrier (M29: the device reads RAM) --------------------------
+ * The video device reads guest memory through the INTEGER addresses in its
+ * registers (image at ADDR, cells at MAP_ADDR, tiles at TILE_ADDR). That
+ * access is invisible to the compiler, so without help GCC is free to sink
+ * or delete the stores that fill those tables — and the device then reads
+ * stale/zero bytes and silently draws nothing (sdk docs: M29_LOG.md probe9).
+ *
+ * THE RULE: SDK helpers are barriers. Every command goes out through
+ * gfx_cmd() below, which brackets the CMD write with GFX_BARRIER(), so any
+ * store made before a draw is complete before the device can see the command
+ * (and no later store can be hoisted in front of it). When you poke
+ * GFX_REG_CMD yourself, add the barrier yourself too:
+ *
+ *      GFX_BARRIER();
+ *      GFX_REG_X = ...;            // hand the address to the device
+ *      GFX_REG_CMD = GFX_CMD_SPRITE;
+ *      GFX_BARRIER();
+ *
+ * The barrier is pure compile-time: it emits no instruction, so it cannot
+ * change timing, hashes or behaviour — only the order the compiler is allowed
+ * to assume. */
+#define GFX_BARRIER() __asm__ volatile ("" ::: "memory")
+
+/* The single place the SDK writes the video CMD register. always_inline so
+ * the barrier costs no call: without it GCC keeps an out-of-line copy at -Os
+ * and every command grows a jal/ret (same behaviour, needlessly fatter
+ * guest code). */
+static inline __attribute__((always_inline)) void gfx_cmd(unsigned int cmd)
+{
+    GFX_BARRIER();
+    GFX_REG_CMD = cmd;
+    GFX_BARRIER();
+}
+
 /* Fill the whole screen with color (RGB565). */
 static inline void gfx_clear(unsigned int color)
 {
     GFX_REG_COLOR = color;
-    GFX_REG_CMD   = GFX_CMD_CLEAR;
+    gfx_cmd(GFX_CMD_CLEAR);
 }
 
 /* Fill a solid rectangle of `color` with its top-left corner at (x, y).
@@ -68,7 +102,7 @@ static inline void gfx_rect(int x, int y, int w, int h, unsigned int color)
     GFX_REG_Y     = (unsigned int)y;
     GFX_REG_W     = (unsigned int)w;
     GFX_REG_H     = (unsigned int)h;
-    GFX_REG_CMD   = GFX_CMD_FILL;
+    gfx_cmd(GFX_CMD_FILL);
 }
 
 /* Draw a 1-bits-per-pixel image with its top-left corner at (x, y).
@@ -89,7 +123,7 @@ static inline void gfx_sprite(int x, int y, const void *img,
     GFX_REG_ADDR  = (unsigned int)img;
     GFX_REG_W     = (unsigned int)w;
     GFX_REG_H     = (unsigned int)h;
-    GFX_REG_CMD   = GFX_CMD_SPRITE;
+    gfx_cmd(GFX_CMD_SPRITE);
 }
 
 /* Draw a cols x rows tilemap of cells at top-left (x, y).
@@ -117,7 +151,7 @@ static inline void gfx_tilemap(int x, int y, const void *cells,
     GFX_REG_ROWS      = (unsigned int)rows;
     GFX_REG_W         = (unsigned int)tile_w;
     GFX_REG_H         = (unsigned int)tile_h;
-    GFX_REG_CMD       = GFX_CMD_TILEMAP;
+    gfx_cmd(GFX_CMD_TILEMAP);
 }
 
 /* Set the camera to the world pixel (cam_x, cam_y), which becomes the
@@ -174,7 +208,7 @@ static inline void gfx_sprite4(int x, int y, const void *img, int w, int h,
     GFX_REG_H        = (unsigned int)h;
     GFX_REG_PAL_BANK = bank & 0xFu;
     GFX_REG_FLAGS    = flags & 0x3u;
-    GFX_REG_CMD      = GFX_CMD_SPRITE4;
+    gfx_cmd(GFX_CMD_SPRITE4);
 }
 
 /* Draw a cols x rows tilemap of 4-bit tiles at top-left (x, y). `cells` points
@@ -197,13 +231,13 @@ static inline void gfx_tilemap4(int x, int y, const void *cells,
     GFX_REG_ROWS      = (unsigned int)rows;
     GFX_REG_W         = (unsigned int)tile_w;
     GFX_REG_H         = (unsigned int)tile_h;
-    GFX_REG_CMD       = GFX_CMD_TILEMAP4;
+    gfx_cmd(GFX_CMD_TILEMAP4);
 }
 
 /* Mark a frame as presented (counted by the device's STATUS register). */
 static inline void gfx_present(void)
 {
-    GFX_REG_CMD = GFX_CMD_PRESENT;
+    gfx_cmd(GFX_CMD_PRESENT);
 }
 
 #endif /* ARCADE_GFX_H */

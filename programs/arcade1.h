@@ -15,7 +15,9 @@ static inline unsigned arcade1_pad(void){ return *(volatile unsigned int*)REG_IN
 
 static inline void arcade1_clear(unsigned c){ gfx_clear(c); }
 static inline void arcade1_rect(int x,int y,int w,int h,unsigned c){ gfx_rect(x,y,w,h,c); }
-static inline void arcade1_present(void){ GFX_REG_CMD=GFX_CMD_PRESENT; }
+/* Every command — including PRESENT — goes out through gfx_cmd() (gfx.h),
+ * the single barriered writer of GFX_REG_CMD; see "Compiler barrier" there. */
+static inline void arcade1_present(void){ gfx_present(); }
 
 static inline void arcade1_pal(int i,unsigned rgb){ GFX_REG_PAL_INDEX=i; GFX_REG_PAL_DATA=rgb; }
 static inline void arcade1_cam(int x,int y){ GFX_REG_CAM_X=x; GFX_REG_CAM_Y=y; }

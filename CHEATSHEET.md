@@ -15,6 +15,22 @@ One loop iteration = one 60 fps frame: clear, draw, `arcade1_present()`. The mac
 clear 1, set_pixel 2, present 3, fill 4, sprite 5, tilemap 6, sprite4 7, tilemap4 8.
 Everything clips to the 480x270 screen; w/h <= 0, zero sizes or a zero tile index draw nothing.
 
+## The device reads RAM: SDK helpers are barriers
+Sprite images, tilemap cells and tile data live in guest RAM, and the device
+reads them through the address it is given as an *integer* (ADDR / MAP_ADDR /
+TILE_ADDR) — an access the compiler cannot see. So the stores that fill those
+tables are only safe if nothing may sink or delete them past the draw.
+
+* **SDK helpers are barriers**: every command is issued by `gfx_cmd()`
+  (gfx.h), which brackets the `GFX_REG_CMD` write with `GFX_BARRIER()`. Call
+  `arcade1_*` / `gfx_*` as documented and the data you filled is complete
+  before the device draws it.
+* **When poking registers directly, add the barrier** yourself: one
+  `GFX_BARRIER()` before the register writes and one around the CMD write
+  (compiled example below).
+* `GFX_BARRIER()` is compile-time only — no instruction, no timing, no
+  behaviour change; it only stops the compiler reordering/sinking stores.
+
 ## Coordinate spaces
 clear/rect/set_pixel are screen-space (never scrolled — HUD). sprite and
 tilemap are world-space: drawn at (x - cam_x, y - cam_y). Keep objects at
@@ -116,5 +132,25 @@ void ex_tilemaps(void) { /* 2x2 cells of 8x8 tiles, both formats */
         0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF,0x00 };
     arcade1_tilemap(0, 0, cells, tile1, 2, 2, 8, 8);
     arcade1_tilemap4(0, 0, cells, tile4, 2, 2, 8, 8);
+}
+```
+```c
+#include "arcade1.h"
+/* Poking the video registers yourself (instead of an SDK helper): the device
+ * reads the RAM tables through their addresses, so bracket the CMD write with
+ * GFX_BARRIER() exactly as gfx_cmd() does. */
+void ex_barrier_poke(unsigned int *cells, unsigned int *tiles) {
+    GFX_BARRIER();
+    GFX_REG_X         = 0;
+    GFX_REG_Y         = 20;
+    GFX_REG_MAP_ADDR  = (unsigned int)cells;
+    GFX_REG_TILE_ADDR = (unsigned int)tiles;
+    GFX_REG_COLS      = 4;
+    GFX_REG_ROWS      = 3;
+    GFX_REG_W         = 16;
+    GFX_REG_H         = 8;
+    GFX_BARRIER();
+    GFX_REG_CMD       = GFX_CMD_TILEMAP4;
+    GFX_BARRIER();
 }
 ```

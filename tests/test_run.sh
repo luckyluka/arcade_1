@@ -51,14 +51,31 @@ note "determinism ok — two runs byte-identical"
 # --- 2) golden faithfulness ------------------------------------------------
 # The runner's per-frame hash lines must match tests/golden/color.txt's first
 # pass (frames 0..119) exactly — proving `arcade1 run` reproduces the reference
-# VM's golden hashes.
-grep '^frame ' "$OUT/r1.txt" > "$OUT/frames.txt"
+# VM's golden hashes. That comparison runs against the COMMITTED image: the
+# golden text documents tests/roms/color_demo.arc1, and a state hash folds in
+# the guest's instruction counter, so a freshly rebuilt guest (whose codegen
+# moved when programs/gfx.h gained the M29 draw barrier) is only required to
+# draw the same picture — checked on the fb= column right after.
+GOLDROM="$(dirname "$GOLD")/roms"
+[ -f "$GOLDROM/color_demo.arc1" ] || GOLDROM="$ROM"
+"$CLI" run "$GOLDROM/color_demo.arc1" --frames 120 > "$OUT/goldrun.txt"
+grep '^frame ' "$OUT/goldrun.txt" > "$OUT/frames.txt"
 head -120 "$GOLD/color.txt" > "$OUT/want.txt"
 if ! diff -u "$OUT/want.txt" "$OUT/frames.txt" > "$OUT/d.txt"; then
     head -10 "$OUT/d.txt" >&2
     fail "runner per-frame hashes differ from tests/golden/color.txt"
 fi
 note "golden faithfulness ok — $(wc -l < "$OUT/frames.txt") frame hashes match tests/golden/color.txt"
+
+# The freshly built image must draw exactly the golden picture (same pixels
+# every frame), even though its instruction counts differ.
+grep '^frame ' "$OUT/r1.txt" | awk '{print $4}' > "$OUT/fb_fresh.txt"
+grep '^frame ' "$OUT/goldrun.txt" | awk '{print $4}' > "$OUT/fb_gold.txt"
+if ! diff "$OUT/fb_fresh.txt" "$OUT/fb_gold.txt" > "$OUT/d.txt"; then
+    head -5 "$OUT/d.txt" >&2
+    fail "freshly built color_demo draws a different picture than the golden ROM"
+fi
+note "freshly built color_demo draws the golden picture (fb hash per frame)"
 
 # --- 3) frame capture ------------------------------------------------------
 # PPM P6 header for the pinned 480x270 frame (machine.h, M25): "P6\n480 270\n255\n"
