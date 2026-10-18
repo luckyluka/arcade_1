@@ -29,7 +29,8 @@ test-exec test-program test-mmio test-timer test-video test-gfx test-rom \
 test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
 test-persist test-frame-rules test-video-worst test-video-palette \
-test-video-sprite4 test-video-tilemap4 test-color test-run: | $(TESTDIR)
+test-video-sprite4 test-video-tilemap4 test-color test-run \
+test-barrier: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -103,7 +104,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-ray test-sandbox test-systems test-persist test-frame-rules \
         test-video-worst test-video-palette test-video-sprite4 \
         test-video-tilemap4 test-color test-run test-golden \
-        test-pong test-snake test-example-color test-cheatsheet
+        test-pong test-snake test-example-color test-cheatsheet \
+        test-barrier
 
 all: $(TARGET)
 
@@ -218,6 +220,47 @@ $(GUEST_BUILD)/%.bin: $(GUEST_BUILD)/%.elf
 # (src/arcade1/rom.c), so writer and reader cannot disagree.
 $(GUEST_BUILD)/%.arc1: $(GUEST_BUILD)/%.bin $(TESTDIR)/packarc1
 	$(TESTDIR)/packarc1 $< $@
+
+# --- M29 regression probes (tests/guests/*.c) --------------------------------
+# Same pipeline and same flags as a real guest (GUEST_CFLAGS, -Os), because
+# the miscompile they pin down only shows up in optimized code: a table the
+# device reads through a register address gets deleted as dead. probe_tm4 is
+# built once per geometry so the test covers the loop shapes GCC deletes as
+# well as the ones it keeps. Run by `make test-barrier`.
+PROBE_DIR      := tests/guests
+PROBE_TM4_GEOS := 4x3 5x1 1x8 6x3 10x3
+PROBE_BINS     := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,\
+                    $(addprefix probe_tm4_,$(PROBE_TM4_GEOS)) \
+                    probe_sprite4 probe_tilemap1))
+
+# probe_tm4_4x3.bin <- tests/guests/probe_tm4.c built with -DCOLS=4 -DROWS=3
+# (the stem is <cols>x<rows>; the shorter-stem rule wins over probe_%.bin).
+$(GUEST_BUILD)/probe_tm4_%.bin: $(PROBE_DIR)/probe_tm4.c programs/gfx.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $(GUEST_BUILD)/probe_tm4_$*.elf programs/crt0.S $< \
+	    -DCOLS=$(word 1,$(subst x, ,$*)) -DROWS=$(word 2,$(subst x, ,$*))
+	$(RISCV_OBJCOPY) -O binary $(GUEST_BUILD)/probe_tm4_$*.elf $@
+
+$(GUEST_BUILD)/probe_%.bin: $(PROBE_DIR)/probe_%.c programs/gfx.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $(GUEST_BUILD)/probe_$*.elf programs/crt0.S $<
+	$(RISCV_OBJCOPY) -O binary $(GUEST_BUILD)/probe_$*.elf $@
+
+# One test binary drives every probe image: boot each, run a few frames, and
+# count the painted pixels (tests/test_barrier.c).
+test-barrier: $(TESTDIR)/test_barrier $(PROBE_BINS) | $(TESTDIR)
+	$(TESTDIR)/test_barrier $(GUEST_BUILD)
+
+$(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
+        src/arcade1/video.c src/arcade1/timer.c src/arcade1/audio.c \
+        src/arcade1/memory.c src/arcade1/exec.c src/arcade1/cpu.c \
+        src/arcade1/rom.c | $(TESTDIR)
+	$(CC) $(CFLAGS) -o $@ tests/test_barrier.c src/arcade1/machine.c \
+	    src/arcade1/video.c src/arcade1/timer.c src/arcade1/audio.c \
+	    src/arcade1/memory.c src/arcade1/exec.c src/arcade1/cpu.c \
+	    src/arcade1/rom.c
 
 # --- Experimental guests ------------------------------------------------------
 # programs/experimental/ holds works in progress: NOT built by default (not in
