@@ -83,7 +83,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
 # reads symbols (e.g. counter's address) from them.
 .SECONDARY: $(GUEST_ELFS)
 
-.PHONY: all clean program android android-arm64 android-arm \
+.PHONY: all clean program experimental android android-arm64 android-arm \
         test test-input test-square test-beep test-machine \
         test-memory test-cpu test-exec test-program test-mmio test-timer \
         test-video test-gfx test-rom test-sprite test-tilemap test-scroll \
@@ -217,6 +217,23 @@ $(GUEST_BUILD)/%.bin: $(GUEST_BUILD)/%.elf
 # The packer shares the header writer and CRC with the VM itself
 # (src/arcade1/rom.c), so writer and reader cannot disagree.
 $(GUEST_BUILD)/%.arc1: $(GUEST_BUILD)/%.bin $(TESTDIR)/packarc1
+	$(TESTDIR)/packarc1 $< $@
+
+# --- Experimental guests ------------------------------------------------------
+# programs/experimental/ holds works in progress: NOT built by default (not in
+# GUEST_PROGS) and NOT covered by make check. Build on demand with
+# `make experimental`. Promote into GUEST_PROGS + a test when it lasts.
+experimental: $(GUEST_BUILD)/asteroid_run.arc1
+	@echo "experimental: built $< (NOT covered by make check)"
+
+$(GUEST_BUILD)/asteroid_run.elf: programs/experimental/asteroid_run.c programs/arcade1.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld -o $@ programs/crt0.S $<
+
+$(GUEST_BUILD)/asteroid_run.bin: $(GUEST_BUILD)/asteroid_run.elf
+	$(RISCV_OBJCOPY) -O binary $< $@
+
+$(GUEST_BUILD)/asteroid_run.arc1: $(GUEST_BUILD)/asteroid_run.bin $(TESTDIR)/packarc1
 	$(TESTDIR)/packarc1 $< $@
 
 $(TESTDIR)/packarc1: tools/packarc1.c src/arcade1/rom.c src/arcade1/rom.h | $(TESTDIR)

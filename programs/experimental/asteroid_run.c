@@ -1,4 +1,4 @@
-#include "gfx.h"
+#include "arcade1.h"
 
 /*
  * ARCADE-1 example game: ASTEROID RUN
@@ -12,23 +12,13 @@
  *
  * No assets, libc, floating point, or timing API required.
  * Everything is deterministic from the initial state.
+ *
+ * Lives in programs/experimental/: NOT built by default and NOT covered
+ * by make check. Build it manually with `make experimental`.
  */
 
 #define SCREEN_W 480
 #define SCREEN_H 270
-
-#define REG_INPUT_PAD (GFX_MMIO_BASE + 0x200u)
-
-#define BTN_UP     0x01u
-#define BTN_DOWN   0x02u
-#define BTN_LEFT   0x04u
-#define BTN_RIGHT  0x08u
-#define BTN_A      0x10u
-#define BTN_B      0x20u
-#define BTN_START  0x40u
-#define BTN_SELECT 0x80u
-
-#define R(a) (*(volatile unsigned int *)(a))
 
 /* RGB565 colors */
 #define BLACK       0x0000
@@ -535,7 +525,7 @@ int main(void)
     reset_game();
 
     while (1) {
-        unsigned int pad = R(REG_INPUT_PAD);
+        unsigned int pad = arcade1_pad();
 
         /*
          * Restart on START after game over.
