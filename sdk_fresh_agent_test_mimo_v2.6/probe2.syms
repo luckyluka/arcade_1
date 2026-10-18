@@ -1,9 +1,0 @@
-20000004 B _ebss
-20000000 D _edata
-0000005c T main
-20000000 B probe
-20000000 B _sbss
-20000000 D _sdata
-00000084 A _sidata
-20010000 B _stack_top
-00000000 T _start
