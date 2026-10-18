@@ -17,15 +17,17 @@
  *   - palette  : 6 banks x 16 RGB565 entries, uploaded once at power-on.
  *   - plain rects : the HUD text (a 3x5 font) — screen space, never scrolled.
  *
- * Build:  ./arcade1 build game.c game.arc1
- * Test:   ./arcade1 run game.arc1 --frames N --input script.txt \
+ * Build:  arcade1 build game.c game.arc1
+ * Test:   arcade1 run game.arc1 --frames N --input script.txt \
  *             --syms game.syms --vars score,lives,state --capture frame.ppm
  *
- * NOTE (see M29_LOG.md "DOC GAP 4"): the docs write "#include \"arcade1.h\"",
- * but `arcade1 build` passes no -I to gcc, so the include must name the
- * shipped header directory.
+ * M29_LOG.md "DOC GAP 4": at test time `arcade1 build` passed no -I, so
+ * this file had to include "include/arcade1.h" by directory. The CLI now
+ * carries the SDK and passes -I (M29 fix), so the plain include below is
+ * what the docs always said — and this is the game `make check` runs as
+ * the sixth golden (programs/m29game.c, tests/roms, tests/golden).
  */
-#include "include/arcade1.h"
+#include "arcade1.h"
 
 /* ------------------------------------------------------------------ */
 /* RGB565 helper                                                       */
@@ -428,10 +430,15 @@ static void draw(void)
         arcade1_sprite4(ball_x, ball_y, ball_img,
                         BALL_W, BALL_H, BANK_BALL, 0);
 
-    /* HUD: score top-left, lives top-right. */
+    /* HUD: score top-left, lives top-right.
+     * draw_text advances 4*scale = 8 px per glyph and each glyph is 6 px
+     * wide at scale 2, so "LIVES" spans 38 px: SCREEN_W-90 .. SCREEN_W-53.
+     * The life boxes start at SCREEN_W-26-i*10, i.e. SCREEN_W-38 (434 on a
+     * 480 px screen) — at the old SCREEN_W-74 the label ran under them and
+     * the squares were painted over the last two glyphs. */
     draw_text(6, 6, 2, "SCORE", RGB(24, 26, 30));
     draw_number(50, 6, 2, score, RGB(31, 31, 10));
-    draw_text(SCREEN_W - 74, 6, 2, "LIVES", RGB(24, 26, 30));
+    draw_text(SCREEN_W - 90, 6, 2, "LIVES", RGB(24, 26, 30));
     {
         int i;
         for (i = 0; i < lives; i++)

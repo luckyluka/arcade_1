@@ -30,7 +30,7 @@ test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
 test-persist test-frame-rules test-video-worst test-video-palette \
 test-video-sprite4 test-video-tilemap4 test-color test-run \
-test-barrier: | $(TESTDIR)
+test-barrier test-m29game: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -66,7 +66,8 @@ GUEST_ARCS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GUEST_PROGS)))
 ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
-GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color
+GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
+                  m29game
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -105,7 +106,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-worst test-video-palette test-video-sprite4 \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
-        test-barrier test-build test-oob
+        test-barrier test-build test-oob \
+        test-m29game
 
 all: $(TARGET)
 
@@ -698,6 +700,11 @@ test-run: $(CLI_BIN) $(ARC1_ROM_DIR)/color_demo.arc1 $(ARC1_ROM_DIR)/breakout.ar
 
 # The three example games: shell-script tests in the style of test_run.sh,
 # asserting through named variables (--syms/--vars) and captured frames.
+# M29's game as golden game 6: the record copy lives in docs/m29/game.c,
+# this is the copy that builds and locks (tests/golden/m29game.txt).
+test-m29game: $(CLI_BIN) $(ARC1_ROM_DIR)/m29game.arc1 | $(TESTDIR)
+	sh tests/test_m29game.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
 test-pong: $(CLI_BIN) $(ARC1_ROM_DIR)/example_pong.arc1 | $(TESTDIR)
 	sh tests/test_pong.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
@@ -771,7 +778,8 @@ golden-update: | $(TESTDIR)
 # golden update, and say in the commit message why (a golden change IS a
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
-GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color
+GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
+                  m29game
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)
