@@ -422,6 +422,76 @@ Added paletted 4-bit graphics on top of the unchanged 1-bit commands:
 
 Verify: `make clean && make check` (all tests + 5-game `test-golden`), `make android`.
 
+## Example games, cheat sheet, docs (M28, steps 4–10)
+
+Closing the M28 SDK gaps (`MILESTONES_2.md` M28; the three docs keep
+distinct roles: CHEATSHEET.md = guest API, SDK.md = CLI, GAME_DEV_GUIDE.md
+= workflow). One commit per step; `make clean && make check` after each;
+the five older goldens (breakout/tetris/platformer/scroll/color) are
+byte-identical throughout (md5-verified before and after).
+
+* **Step 4 — `programs/arcade1.h` drawing helpers**: thin wrappers
+  `arcade1_sprite/sprite4/tilemap/tilemap4` over the gfx.h commands, with
+  the units stated once (world-space coordinates, ROM/RAM image
+  addresses, 32-bit map cells, 4-bit bytes = two pixels, leftmost in the
+  high nibble). No new machine behaviour.
+* **Step 5 — `programs/example_color.c` fixed**: the old demo poked raw
+  registers, pointed TILE_ADDR at 0 and left an unexplained NOTE. Now a
+  40x20 grid of `unsigned int` cells ([15:0] tile, [19:16] bank, [20]
+  flipX, [21] flipY), four real 16x16 4-bit tiles with the tile-size
+  registers set by the helper, a 16-colour palette + a 4-entry bank 1, a
+  camera that moves every frame, and an asymmetric arrow sprite drawn
+  flipped. Frame 0 has 8 distinct colours.
+* **Step 6 — observable state as file-scope globals**: example_pong
+  (bx,by,dx,dy,py,oy,score,opp_score,state), example_snake
+  (sx,sy,length,dx,dy,fx,fy,score,state), example_color (cam_x,cam_y) —
+  so `--vars`/`--syms` can read them. The pong opponent AI now tracks at
+  2 px/frame (ball vertical is 3) so a rally can be won.
+* **Step 7 — tests + goldens for the three examples**: they join the
+  golden regression (GUEST_PROGS/GOLDEN_IMGS/GOLDEN_GAMES) with shell
+  tests in the style of test_run.sh asserting through named variables and
+  captured frames — pong: sweep rally scores 4-5, first to 5 sets game
+  over, START resets (trace-checked); snake: growth (length 3→4, score
+  0→1) then wall game over, START resets; color: ≥6 distinct colours,
+  camera (0,0)→(100,25) by frame 50, tilemap band differs. New goldens
+  pong.txt/snake.txt/example-color.txt; the five older ones unchanged.
+* **Step 8 — CHEATSHEET.md**: the whole guest API in 120 lines (all
+  commands, palette, camera, flags, coordinate spaces, clipping/ignore
+  rules, input bits, memory map, frame protocol, the observable-state
+  rule, CLI usage). `tests/test_cheatsheet.sh` extracts every fenced C
+  block and compiles it with the real guest toolchain under -Wall
+  -Wextra, so documented API drift fails make check.
+* **Step 9 — GAME_DEV_GUIDE.md**: the pasted copy of gfx.h (200 lines of
+  drift-prone duplication) is removed; the doc keeps exactly the workflow
+  role and points at the headers. Pinned: the three docs' roles, the two
+  testability rules, the build/run/test/golden-lock workflow, and that
+  experimental/ holds untested works in progress.
+* **Step 10 — asteroid_run.c**: converted to arcade1.h and moved to
+  programs/experimental/ — NOT built by default, NOT covered by make check
+  (a `make experimental` target builds it on demand; verified it compiles
+  and runs). The test+golden promotion is deferred.
+
+Verify: `make clean && make check` (all tests + 8-game `test-golden`),
+`make android`.
+
+## Assumptions
+
+* The pong opponent AI was slowed (3 → 2 px/frame) so the scripted rally
+  can produce player scores; the task did not pin the AI's difficulty.
+* The pong test's restart assertion keys on the deterministic game-over
+  frame (~675) and a START held from frame 725; both were verified
+  empirically and are stable because the machine is deterministic.
+* The color test compares a full-width band (rows 32..127) as "the
+  tilemap area"; the camera shift (100,25) is not a tile multiple, so the
+  band is guaranteed to differ.
+* "At least 6 distinct palette colours" is checked on the rendered frame
+  (8 found), not just the uploaded palette entries.
+* asteroid_run takes the experimental route (no test/golden); promoting
+  it later means adding it to GUEST_PROGS + a test + golden-update.
+* The golden game entry for example_color is spelled `example-color`
+  (hyphen) because make target names use hyphens; the golden file is
+  tests/golden/example-color.txt.
+
 ## Record/replay capture (M28, step 3)
 
 Third slice of the developer SDK (`MILESTONES_2.md` M28; design principles
