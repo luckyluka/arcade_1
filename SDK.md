@@ -6,11 +6,12 @@ Libretro, no RetroArch, no GPU, no host input devices — so it runs identically
 in a terminal, in CI, and inside an AI agent's sandbox.
 
 This document covers the **foundation** landed in M28 step 1: the headless
-runner `arcade1 run`, plus **named game variables** (step 2) and
-**record/replay** (step 3). The remaining M28 deliverables (the full
-`arcade1 build/test/capture` command set, a cheat sheet, and two example
-games) are listed under [Remaining](#remaining-m28-deliverables) and are not
-built yet.
+runner `arcade1 run`, plus **named game variables** (step 2),
+**record/replay** (step 3) and the **example games** (steps 4–7: pong,
+snake, color — each golden-locked and covered by `make check`). The
+cheat sheet lives in CHEATSHEET.md; the remaining M28 deliverables (the
+full `arcade1 build/test/capture` command set) are listed under
+[Remaining](#remaining-m28-deliverables).
 
 ---
 
@@ -169,4 +170,13 @@ replayed here — the replay format is the script format.
 
 ## Remaining M28 deliverables
 
-Prototype only (needs validation): build/test/capture/inspect commands, cheat sheet, example games. M29 not complete.
+Not built yet (future steps, then the rest of the roadmap):
+
+- **Full `arcade1` command set** — `build` (RISC-V guest → `.arc1`), `test`
+  (run + assert hashes), `capture` (dump frames), built on `run`.
+
+Done since the earlier list was written: the cheat sheet (CHEATSHEET.md,
+with a snippet compile test) and the example games (example_pong /
+example_snake / example_color — each with a test, a golden regression and
+a ROM snapshot; see GAME_DEV_GUIDE.md "Test and golden-lock it"). M29
+(SDK validation) not complete.
