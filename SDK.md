@@ -9,9 +9,9 @@ This document covers the **foundation** landed in M28 step 1: the headless
 runner `arcade1 run`, plus **named game variables** (step 2),
 **record/replay** (step 3) and the **example games** (steps 4–7: pong,
 snake, color — each golden-locked and covered by `make check`). The
-cheat sheet lives in CHEATSHEET.md; the remaining M28 deliverables (the
-full `arcade1 build/test/capture` command set) are listed under
-[Remaining](#remaining-m28-deliverables).
+cheat sheet lives in CHEATSHEET.md. The full `arcade1` command set
+(`run`, `capture`, `test`, `build`, `inspect`) is built — see
+[The other commands](#the-other-commands) below.
 
 ---
 
@@ -30,6 +30,13 @@ arcade1 run <game.arc1|bin> [options]
   --record FILE         write the applied per-frame buttons to FILE, in the
                         input script format (run-length, "none" = idle)
   --quiet              suppress the per-frame hash lines (summary only)
+  --inspect            print the final frame, pc, instruction count and all
+                       32 registers after the run (the `inspect` command
+                       is exactly this flag)
+  --strict             exit non-zero if any draw read a source address
+                       outside ROM/RAM — those draws silently paint nothing.
+                       Without it the same condition still prints one
+                       warning line on stderr (stdout stays machine-readable)
 ```
 
 The image may be a packaged `.arc1` game image (validated: magic, version,
@@ -38,7 +45,8 @@ size, CRC-32) or a raw flat `.bin` (like the tests). Exit codes:
 | Code | Meaning                                             |
 |------|-----------------------------------------------------|
 | 0    | success                                             |
-| 1    | runtime error (missing file, bad/oversized image)   |
+| 1    | runtime error (missing file, bad/oversized image),  |
+|      | or `--strict` tripped on an out-of-window draw      |
 | 2    | usage error (unknown command/option, missing ROM)   |
 
 Build it with `make build/arcade1` (or as a prerequisite of `make test-run`).
@@ -168,15 +176,37 @@ replayed here — the replay format is the script format.
 
 ---
 
+## The other commands
+
+```
+arcade1 capture <game.arc1|bin> [arcade1 run options]
+    run + dump frames. Creates and uses captures/ by default
+    (--capture-dir DIR), or writes one final frame with --capture FILE.
+
+arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
+    smoke run: the exit status propagates. --golden FILE compares the
+    `frame N hash=.. fb=..` lines against FILE (a golden's first pass,
+    the layout the tests/golden files use) and fails on any difference;
+    --quiet is ignored in that mode.
+
+arcade1 build <program.c> [output.arc1]
+    compile a guest into an .arc1 image. Self-contained: crt0, the linker
+    script and the SDK headers are carried inside the CLI and the image is
+    packed in process, so it works in any directory with no checkout and
+    no build/ tree — only riscv64-unknown-elf-gcc (and objcopy) on PATH.
+    The .arc1 header layout is in CHEATSHEET.md.
+
+arcade1 inspect <game.arc1|bin> [arcade1 run options]
+    alias for `arcade1 run --inspect`.
+```
+
 ## Remaining M28 deliverables
 
-Not built yet (future steps, then the rest of the roadmap):
-
-- **Full `arcade1` command set** — `build` (RISC-V guest → `.arc1`), `test`
-  (run + assert hashes), `capture` (dump frames), built on `run`.
-
-Done since the earlier list was written: the cheat sheet (CHEATSHEET.md,
+Done since the earlier list was written: the full `arcade1` command set
+(`build`, `test`, `capture`, `inspect` — see
+[The other commands](#the-other-commands)); the cheat sheet (CHEATSHEET.md,
 with a snippet compile test) and the example games (example_pong /
 example_snake / example_color — each with a test, a golden regression and
-a ROM snapshot; see GAME_DEV_GUIDE.md "Test and golden-lock it"). M29
-(SDK validation) not complete.
+a ROM snapshot; see GAME_DEV_GUIDE.md "Test and golden-lock it").
+
+What remains is the rest of the roadmap beyond the SDK itself.

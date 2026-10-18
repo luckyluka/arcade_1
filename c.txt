@@ -1,0 +1,4 @@
+usage: arcade1 capture <game.arc1|bin> [arcade1 run options]
+  runs the game and dumps frames; default destination is
+  captures/frame_NNNN.ppm (override with --capture-dir DIR,
+  or a single final frame with --capture FILE).

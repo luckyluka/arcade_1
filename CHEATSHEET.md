@@ -11,6 +11,30 @@ down 0x2, left 0x4, right 0x8, a 0x10, b 0x20, start 0x40, select 0x80.
 ## Frame protocol
 One loop iteration = one 60 fps frame: clear, draw, `arcade1_present()`. The machine steps the guest one frame per host frame.
 
+**A frame ends when the guest writes the PRESENT command** — nothing else
+ends it. The machine runs the guest until that write, or until the
+per-frame instruction budget runs out. A loop without `arcade1_present()`
+burns the whole budget in the first frame: nothing moves, nothing errors,
+the game just looks frozen. Put the present at the end of every frame,
+inside the loop:
+
+```c
+#include "arcade1.h"
+
+#define BLACK 0u
+
+static void draw_stuff(void) { arcade1_rect(0, 0, 8, 8, 0xFFFFu); }
+
+int main(void)
+{
+    for (;;) {                  /* one iteration == one 60 fps frame */
+        arcade1_clear(BLACK);
+        draw_stuff();
+        arcade1_present();      /* this write ENDS the frame */
+    }
+}
+```
+
 ## Commands (GFX_REG_CMD values)
 clear 1, set_pixel 2, present 3, fill 4, sprite 5, tilemap 6, sprite4 7, tilemap4 8.
 Everything clips to the 480x270 screen; w/h <= 0, zero sizes or a zero tile index draw nothing.
@@ -76,12 +100,53 @@ tilemap4, rng, fp_mul — thin wrappers over the gfx.h commands. Build a
 guest: add it to programs/ + GUEST_PROGS in the Makefile, `make program`
 → programs/build/<name>.arc1 (needs riscv64-unknown-elf-gcc on PATH).
 
-## CLI (arcade1 run)
-    arcade1 run <game.arc1|bin> [options]
+## The .arc1 image
+A 16-byte little-endian header, then the flat guest binary (the bytes
+`objcopy -O binary` produced). This is what `arcade1 build` writes:
+
+    offset 0x00  char[4]  magic "ARC1"
+    offset 0x04  u32      format version = 1
+    offset 0x08  u32      payload size in bytes (1..262144 = ROM size)
+    offset 0x0C  u32      CRC-32 of the payload (standard zlib CRC-32)
+    offset 0x10  payload  flat RV32IM .bin, loaded at 0x00000000
+
+Every load validates magic, version, size (it must equal the file length)
+and CRC before the payload is mapped. `arcade1 run` also accepts a raw
+.bin with no header. The writer and the parser share one implementation
+(`src/arcade1/rom.c`) and are used by the CLI, the tests and the repo's
+`build/packarc1` helper alike, so they cannot drift apart.
+
+## CLI (arcade1)
+    arcade1 run     <game.arc1|bin> [options]   headless run (options below)
+    arcade1 capture <game.arc1|bin> [options]   run + dump frames; creates and
+                                                uses captures/ by default
+                                                (--capture-dir DIR, or a single
+                                                final frame via --capture FILE)
+    arcade1 test    <game.arc1|bin> [--golden FILE] [options]
+                                                smoke run; --golden compares the
+                                                `frame N hash=.. fb=..` lines
+                                                against FILE (a golden's first
+                                                pass) and fails on a difference
+    arcade1 build   <program.c> [output.arc1]   compile a guest, self-contained:
+                                                crt0, the linker script and the
+                                                headers travel inside the CLI
+                                                and the .arc1 is packed in
+                                                process. Needs only
+                                                riscv64-unknown-elf-gcc on PATH
+                                                and runs in any directory.
+    arcade1 inspect <game.arc1|bin> [options]   same as `run --inspect`
+
+    options:
       --frames N / --input FILE / --record FILE / --capture FILE
       --capture-dir DIR / --capture-every K / --syms FILE
       --vars LIST / --var-every K / --quiet
-Exit codes: 0 ok, 1 runtime error, 2 usage error.
+      --inspect    print the final frame, pc, instruction count and all
+                   32 registers (the `inspect` command is this flag)
+      --strict     exit non-zero if any draw read a source address outside
+                   ROM/RAM — those draws silently paint nothing. Without
+                   --strict the run still prints one warning line on stderr
+                   (stdout stays machine-readable).
+Exit codes: 0 ok, 1 runtime error (or --strict tripped), 2 usage error.
 Input script: `<first> <last> <buttons...>` per line, inclusive frames,
 later lines win, `none` holds nothing, `#` comments. A recording feeds
 straight back through --input.

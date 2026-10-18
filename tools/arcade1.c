@@ -72,6 +72,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>       /* fork, execvp, unlink, rmdir, mkdtemp */
+#include <sys/stat.h>     /* mkdir: the capture subcommand's directory */
+#include <errno.h>
 #include <sys/wait.h>     /* waitpid */
 
 /* --- Input script --------------------------------------------------------- */
@@ -550,26 +552,211 @@ static int cmd_run(int argc, char **argv)
 /* --- entry point ---------------------------------------------------------- */
 
 
-/* --- capture subcommand: run + dump frames (wrapper over run) ------------ */
+/* --- capture subcommand: run + dump frames --------------------------------
+ * `arcade1 run` only writes images when it is told where (so a capture that
+ * captures nothing was easy to get). This wrapper always captures: frames
+ * land in captures/ unless --capture or --capture-dir says otherwise. */
 static int cmd_capture(int argc, char **argv)
 {
-    /* Default to a capture directory if none given. */
-    int has_dir = 0;
-    for (int i = 0; i < argc; i++)
-        if (!strcmp(argv[i], "--capture-dir")) has_dir = 1;
-    if (!has_dir) {
-        /* append --capture-dir captures */
-        /* build new argv */
+    int has_capture_file = 0;
+    const char *dir = "captures";
+
+    if (argc < 1) {
+        fprintf(stderr,
+                "usage: arcade1 capture <game.arc1|bin> [arcade1 run options]\n"
+                "  runs the game and dumps frames; default destination is\n"
+                "  captures/frame_NNNN.ppm (override with --capture-dir DIR,\n"
+                "  or a single final frame with --capture FILE).\n");
+        return 2;
     }
-    /* Delegate to run; run already supports --capture/--capture-dir. */
-    return cmd_run(argc, argv);
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--capture"))
+            has_capture_file = 1;
+        if (!strcmp(argv[i], "--capture-dir") && i + 1 < argc)
+            dir = argv[i + 1];
+    }
+    /* A capture command creates its own destination — asking the caller to
+     * mkdir first is how "capture" ended up capturing nothing. */
+    if (!has_capture_file && mkdir(dir, 0777) != 0 && errno != EEXIST) {
+        fprintf(stderr, "arcade1 capture: cannot create '%s'\n", dir);
+        return 1;
+    }
+    /* A single --capture FILE needs nothing from us: run writes it. */
+    if (has_capture_file)
+        return cmd_run(argc, argv);
+
+    /* An explicit --capture-dir likewise — run honours it, we only mkdir'd. */
+    for (int i = 0; i < argc; i++)
+        if (!strcmp(argv[i], "--capture-dir"))
+            return cmd_run(argc, argv);
+
+    char **nargv = calloc((size_t)argc + 2, sizeof *nargv);
+    if (!nargv)
+        return 1;
+    for (int i = 0; i < argc; i++)
+        nargv[i] = argv[i];
+    nargv[argc]     = (char *)"--capture-dir";
+    nargv[argc + 1] = (char *)dir;
+    int rc = cmd_run(argc + 2, nargv);
+    free(nargv);
+    return rc;
 }
 
-/* --- test subcommand: run a game and (optionally) check golden hashes ----- */
+/* --- test subcommand: smoke run, optional golden compare ------------------
+ * `arcade1 test <game>` runs it headlessly and propagates the exit status
+ * (a smoke test: the image loads, the guest runs, nothing blows up).
+ *
+ * `arcade1 test <game> --golden FILE` additionally compares the per-frame
+ * `frame N hash=0x.. fb=0x..` lines against FILE — the same layout the
+ * golden files under tests/golden use — and fails if they differ. A state hash
+ * folds in the guest's instruction counter, so a golden pins an exact image:
+ * check a freshly rebuilt guest against the ROM the golden was made from. */
+static int golden_compare(const char *run_path, const char *golden_path)
+{
+    FILE *a = fopen(run_path, "r");
+    FILE *b = fopen(golden_path, "r");
+    char  la[512], lb[512];
+    unsigned total = 0, n = 0, mismatch = 0;
+    unsigned fn, prev = 0;
+    int have_prev = 0, run_out = 0;
+
+    if (!a || !b) {
+        fprintf(stderr, "arcade1 test: cannot read %s\n",
+                a ? golden_path : run_path);
+        if (a) fclose(a);
+        if (b) fclose(b);
+        return 1;
+    }
+
+    /* Pass 1 of the golden: `frame 0`, `frame 1`, ... — stop at the first
+     * break in that sequence. A golden file also carries the reset-and-
+     * replay pass (which starts at frame 0 again) and one `arcade1 test`
+     * run cannot reproduce it; tests/test_run.sh compares the same first
+     * pass for the same reason. */
+    while (fgets(lb, sizeof lb, b)) {
+        if (strncmp(lb, "frame ", 6) != 0)
+            continue;
+        if (sscanf(lb, "frame %u", &fn) != 1 || (have_prev && fn != prev + 1))
+            break;
+        have_prev = 1;
+        prev = fn;
+        total++;
+    }
+    rewind(b);
+    if (total == 0) {
+        fprintf(stderr, "arcade1 test: %s has no frame lines to compare\n",
+                golden_path);
+        fclose(a);
+        fclose(b);
+        return 1;
+    }
+
+    /* Walk the golden's first pass, pulling one frame line per step from
+     * the captured run output. */
+    while (n < total && fgets(lb, sizeof lb, b)) {
+        if (strncmp(lb, "frame ", 6) != 0)
+            continue;
+        do {
+            if (!fgets(la, sizeof la, a)) { run_out = 1; break; }
+        } while (strncmp(la, "frame ", 6) != 0);
+        if (run_out)
+            break;
+        n++;
+        if (strcmp(la, lb) != 0 && !mismatch) {
+            mismatch = n;
+            fprintf(stderr,
+                    "arcade1 test: frame line %u differs\n"
+                    "  ran     %s"
+                    "  golden  %s", n, la, lb);
+        }
+    }
+    fclose(a);
+    fclose(b);
+
+    if (mismatch)
+        return 1;
+    if (n == 0) {
+        fprintf(stderr, "arcade1 test: no frame lines compared against %s\n",
+                golden_path);
+        return 1;
+    }
+    if (n < total)
+        printf("arcade1 test: %u of %u golden frame lines match %s\n"
+               "  (the run was shorter than the golden's first pass; "
+               "--frames %u covers it)\n", n, total, golden_path, total);
+    else
+        printf("arcade1 test: %u frame lines match %s\n", n, golden_path);
+    return 0;
+}
+
 static int cmd_test(int argc, char **argv)
 {
-    /* Smoke: just run; non-zero run result propagates. */
-    return cmd_run(argc, argv);
+    const char *golden = NULL;
+    char      **rest;
+    int         nrest = 0, rc;
+
+    if (argc < 1) {
+        fprintf(stderr,
+                "usage: arcade1 test <game.arc1|bin> [arcade1 run options]\n"
+                "       arcade1 test <game.arc1|bin> --golden FILE [options]\n"
+                "  smoke: runs the game and exits non-zero on any failure.\n"
+                "  --golden FILE compares the per-frame hash lines against\n"
+                "  FILE (the golden files' frame lines, first pass) and\n"
+                "  fails on a difference. --quiet is ignored in that mode.\n");
+        return 2;
+    }
+
+    rest = calloc((size_t)argc, sizeof *rest);
+    if (!rest)
+        return 1;
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--golden") && i + 1 < argc) {
+            golden = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "--quiet"))
+            continue;                       /* the hash lines are the point */
+        rest[nrest++] = argv[i];
+    }
+
+    if (!golden) {
+        rc = cmd_run(nrest, rest);
+        free(rest);
+        return rc;
+    }
+
+    /* Run with stdout captured, then diff it against the golden. */
+    char tmpl[] = "/tmp/arcade1-test-XXXXXX";
+    int  saved = -1, fd = mkstemp(tmpl);
+
+    if (fd < 0) {
+        fprintf(stderr, "arcade1 test: cannot create a temp file\n");
+        free(rest);
+        return 1;
+    }
+    fflush(stdout);
+    saved = dup(1);
+    if (saved < 0 || dup2(fd, 1) < 0) {
+        close(fd);
+        free(rest);
+        return 1;
+    }
+    close(fd);
+
+    rc = cmd_run(nrest, rest);
+    free(rest);
+
+    fflush(stdout);
+    dup2(saved, 1);
+    close(saved);
+
+    if (rc != 0) {
+        unlink(tmpl);
+        return rc;
+    }
+    rc = golden_compare(tmpl, golden);
+    unlink(tmpl);
+    return rc;
 }
 
 /* --- build subcommand: compile a guest C program into a .arc1 image ------ */
@@ -779,11 +966,11 @@ int main(int argc, char **argv)
                 "arcade1 — ARCADE-1 developer CLI (M28 foundation)\n"
                 "usage: arcade1 <command> [args]\n"
                 "commands:\n"
-                "  run      run a game headlessly with scripted input, hashes, dumps\n"
-                "  capture  dump frames to a directory (wrapper over run)\n"
-                "  test     run a game (smoke; optional golden compare)\n"
+                "  run      run a game headlessly: scripted input, hashes, captures\n"
+                "  capture  run + dump frames (default dir: captures/)\n"
+                "  test     smoke run; --golden FILE compares per-frame hashes\n"
                 "  build    compile a guest C program into a .arc1 image\n"
-                "  inspect  dump machine state after a run\n");
+                "  inspect  run, then dump final PC, registers, instruction count\n");
         return 2;
     }
     if (!strcmp(argv[1], "run"))

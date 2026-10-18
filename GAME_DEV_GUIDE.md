@@ -30,23 +30,39 @@ of this shape — start by reading one.
 
 ## Build
 
-Add the program to `programs/` and to `GUEST_PROGS` in the Makefile, then
-`make program` → `programs/build/<name>.arc1` (+ `.elf`/`.bin`). Needs
-`riscv64-unknown-elf-gcc` on PATH. The build flags (architecture,
-freestanding, linker script) are set by the Makefile — do not hand-roll
-them; a guest that builds differently may behave differently.
+One command, from any directory, with nothing but the CLI and your source:
+
+    arcade1 build game.c game.arc1
+
+`arcade1 build` is self-contained: the startup code, the linker script and
+the SDK headers travel inside the CLI, and the image is packed in process.
+It needs only `riscv64-unknown-elf-gcc` (and `objcopy`) on PATH, leaves
+nothing behind except the image you named, and uses the same flags as the
+Makefile path below. The image format is the 16-byte `.arc1` header
+documented in CHEATSHEET.md.
+
+Inside this checkout the same guests are built by the Makefile: add the
+program to `programs/` and to `GUEST_PROGS`, then `make program` →
+`programs/build/<name>.arc1` (+ `.elf`/`.bin`). Either way the build
+flags (architecture, freestanding, linker script) are fixed by the build
+system — do not hand-roll them; a guest that builds differently may
+behave differently.
 
 ## Run and iterate
 
-    arcade1 run programs/build/mygame.arc1 --frames 600 --quiet
-    arcade1 run programs/build/mygame.arc1 --frames 120 --capture frame.ppm
-    arcade1 run programs/build/mygame.arc1 --frames 120 --input script.txt \
-        --syms mygame.syms --vars score,state --var-every 60
+    arcade1 run game.arc1 --frames 600 --quiet
+    arcade1 run game.arc1 --frames 120 --capture frame.ppm
+    arcade1 run game.arc1 --frames 120 --input script.txt \
+        --syms game.syms --vars score,state --var-every 60
+    arcade1 test game.arc1 --golden tests/golden/mygame.txt   # hash check
 
 Per-frame hash lines are diffable against `tests/golden/<game>.txt`
-(`--quiet` hides them). `--capture` dumps PPM frames; `--vars` reads your
-game's globals by name; `--input` plays a scripted session; `--record`
-writes one. See SDK.md for the full flag reference.
+(`--quiet` hides them) — `arcade1 test --golden` does that comparison for
+you. `--capture` dumps a PPM frame; `arcade1 capture` dumps every frame
+into `captures/`; `--vars` reads your game's globals by name; `--input`
+plays a scripted session; `--record` writes one. `--strict` fails the run
+if any draw read a source address outside ROM/RAM (see SDK.md for the
+full flag reference).
 
 ## Test and golden-lock it
 

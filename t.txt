@@ -1,0 +1,6 @@
+usage: arcade1 test <game.arc1|bin> [arcade1 run options]
+       arcade1 test <game.arc1|bin> --golden FILE [options]
+  smoke: runs the game and exits non-zero on any failure.
+  --golden FILE compares the per-frame hash lines against
+  FILE (the tests/golden/*.txt layout) and fails on a
+  difference. --quiet is ignored in that mode.
