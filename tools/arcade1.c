@@ -439,7 +439,10 @@ static int write_capture(const char *path, const uint16_t *fb, unsigned scale)
  * — exactly how test-breakout etc. read score/lives/state). */
 
 #define SYM_MAX 8192
-#define VAR_MAX 1024
+/* The --vars selection is sized to hold every loaded name: "all" prints
+ * every name in the symbol file and can never silently truncate
+ * (ROADMAP_V3 card A4; a comma list is bounded by its own 1 KiB text). */
+#define VAR_MAX SYM_MAX
 
 typedef struct symbol {
     uint32_t addr;
@@ -549,12 +552,14 @@ static int resolve_vars(const char *list)
     g_nvars = 0;
 
     if (!strcmp(list, "all")) {
+        /* Every name in the symbol file, no cap (ROADMAP_V3 card A4).
+         * load_syms already keeps only RAM-window names, and g_vars is
+         * sized to SYM_MAX, so this selection cannot silently truncate. */
         for (unsigned i = 0; i < g_nsyms && g_nvars < VAR_MAX; i++) {
             const symbol_t *s = &g_syms[i];
             if (s->name[0] == '_')            /* linker internals (_sbss, ...) */
                 continue;
-            if (sym_is_ram_var(s))
-                g_vars[g_nvars++] = s;
+            g_vars[g_nvars++] = s;
         }
         return g_nvars ? 0 : -1;
     }

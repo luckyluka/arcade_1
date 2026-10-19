@@ -153,6 +153,20 @@ else
     note "named variables skipped — no breakout.syms and no riscv nm to make one"
 fi
 
+# A4: --vars all has no silent name cap — a 3,000-name symbol file prints
+# 3,000 variables (ROADMAP_V3). All names sit inside the RAM window at
+# word stride, so they load; none starts with '_', so none is skipped.
+syn="$OUT/many.syms"
+: > "$syn"
+i=0
+while [ "$i" -lt 3000 ]; do
+    printf '%08x D var%04d\n' $((0x20000000 + i * 4)) "$i" >> "$syn"
+    i=$((i + 1))
+done
+"$CLI" run "$BREAK" --frames 2 --syms "$syn" --vars all --quiet > "$OUT/vall.txt"
+n=$(grep -c '^var var' "$OUT/vall.txt")
+[ "$n" -eq 3000 ] || fail "--vars all printed $n variables, want 3000"
+
 # --- 7) record/replay --------------------------------------------------------
 # --record run-length encodes the applied per-frame buttons into the input
 # script format. Overlapping entries (later lines win) must normalize into

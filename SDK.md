@@ -144,9 +144,10 @@ var lives = 3
   with one summary warning on stderr. A dump written by `arcade1 build`
   starts with `# arc1-syms crc32=0x…`, the image's payload CRC.
 * `--vars LIST` selects what to print: a comma list of names, or `all` for
-  every RAM variable in the dump (linker internals like `_sbss` skipped).
-  Without `--syms` it auto-loads `<image>.syms` beside the image — what
-  `arcade1 build` writes.
+  **every name in the symbol file** — every name it holds is printed, with
+  no name cap (linker internals like `_sbss` are skipped). Without `--syms`
+  it auto-loads `<image>.syms` beside the image — what `arcade1 build`
+  writes.
 * Each variable is read as one 32-bit word — the guest's `int`, printed
   signed — exactly how the game tests read `score`/`lives`/`state`.
 * `--var-every K` additionally prints a `vars <frame> <name>=<value> ...`
