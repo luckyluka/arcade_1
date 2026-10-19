@@ -29,7 +29,10 @@ RGB565 = (r>>3)<<11 | (g>>2)<<5 | (b>>3) — device upload semantics.
 """
 import argparse
 import json
+import os
+import struct
 import sys
+import zlib
 
 FORMAT = 1
 
@@ -98,11 +101,14 @@ def build_palette(name, spec):
 
     entries = []
     seen_at = {}
+    key_rgb = None
     for i, text in enumerate(colors):
         rgb = parse_hex_color(text)
         if rgb is None:
             fail_asset(where, 'bad color %s — use #RRGGBB' % json.dumps(text))
             return None
+        if i == 0:
+            key_rgb = rgb
         val = rgb565(*rgb)
         if val in seen_at:
             fail_asset(where,
@@ -113,7 +119,12 @@ def build_palette(name, spec):
         entries.append(val)
 
     entries += [0] * (16 - len(entries))
-    return {"bank": bank, "entries": entries}
+    return {"bank": bank, "entries": entries,
+            "count": len(colors),
+            # The key is matched on the AUTHORED 8-bit colour: a colour that
+            # merely collapses onto it through >>3 must fail loudly instead
+            # of silently vanishing (F3: no silent masking).
+            "key_rgb": key_rgb}
 
 
 def collect_auto(sprite_name, pixels):
@@ -136,7 +147,199 @@ def collect_auto(sprite_name, pixels):
             'sprite %s: %d colours (max 15 + transparent) — reduce '
             'colours, use "quantize": "nearest" with an explicit '
             'palette, or split the sheet' % (sprite_name, len(colors)))
-    return {"entries": [0] + colors + [0] * (15 - len(colors))}
+    return {"entries": [0] + colors + [0] * (15 - len(colors)),
+            "count": 1 + len(colors), "key_rgb": None}
+
+
+# --- image loading (card 1.3) ------------------------------------------------
+
+class ImageError(Exception):
+    """IO-class failure: unreadable/corrupt input -> exit 2."""
+
+
+class UnsupportedImage(Exception):
+    """Valid file, unsupported shape -> validation error (exit 1)."""
+
+
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_PNG_CHANNELS = {0: 1, 2: 3, 3: 1, 6: 4}   # gray, RGB, palette, RGBA
+
+
+def _png_unfilter(raw, w, h, bpp):
+    """Reverse the five PNG scanline filters; returns raw channel bytes."""
+    stride = w * bpp
+    out = bytearray()
+    prev = bytearray(stride)
+    pos = 0
+    for _ in range(h):
+        f = raw[pos]
+        line = bytearray(raw[pos + 1:pos + 1 + stride])
+        pos += 1 + stride
+        if f == 0:
+            pass
+        elif f == 1:                     # Sub
+            for i in range(bpp, stride):
+                line[i] = (line[i] + line[i - bpp]) & 0xFF
+        elif f == 2:                     # Up
+            for i in range(stride):
+                line[i] = (line[i] + prev[i]) & 0xFF
+        elif f == 3:                     # Average
+            for i in range(stride):
+                left = line[i - bpp] if i >= bpp else 0
+                line[i] = (line[i] + ((left + prev[i]) >> 1)) & 0xFF
+        elif f == 4:                     # Paeth
+            for i in range(stride):
+                a = line[i - bpp] if i >= bpp else 0
+                b = prev[i]
+                c = prev[i - bpp] if i >= bpp else 0
+                p = a + b - c
+                pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+                pred = a if (pa <= pb and pa <= pc) else (b if pb <= pc else c)
+                line[i] = (line[i] + pred) & 0xFF
+        else:
+            raise ImageError("unknown PNG filter %d in scanline" % f)
+        out += line
+        prev = line
+    return bytes(out)
+
+
+def decode_png(data, label):
+    """PNG (non-interlaced, 8-bit) -> (w, h, [(r, g, b, a), ...]) row-major."""
+    if data[:8] != _PNG_MAGIC:
+        raise ImageError("%s is not a PNG (bad signature)" % label)
+    ihdr = plte = trns = None
+    idat = []
+    pos = 8
+    while pos + 8 <= len(data):
+        ln = int.from_bytes(data[pos:pos + 4], "big")
+        tag = data[pos + 4:pos + 8]
+        body = data[pos + 8:pos + 8 + ln]
+        if len(body) != ln:
+            raise ImageError("%s is truncated (%s chunk)" % (label, tag.decode()))
+        if tag == b"IHDR":
+            ihdr = body
+        elif tag == b"PLTE":
+            plte = body
+        elif tag == b"tRNS":
+            trns = body
+        elif tag == b"IDAT":
+            idat.append(body)
+        elif tag == b"IEND":
+            break
+        pos += 12 + ln
+    if ihdr is None or len(ihdr) != 13:
+        raise ImageError("%s has no IHDR chunk" % label)
+    w, h, depth, ctype, comp, filt, inter = struct.unpack(">IIBBBBB", ihdr)
+    if depth != 8 or inter != 0 or comp != 0 or filt != 0:
+        raise UnsupportedImage(
+            "%s is a %d-bit %sinterlaced PNG — need non-interlaced 8-bit "
+            "(gray/RGB/palette/RGBA)"
+            % (label, depth, "" if inter == 0 else "interlaced "))
+    if ctype not in _PNG_CHANNELS:
+        raise UnsupportedImage(
+            "%s has PNG color type %d — need 0/2/3/6 (gray/RGB/palette/RGBA)"
+            % (label, ctype))
+    try:
+        raw = zlib.decompress(b"".join(idat))
+    except zlib.error as e:
+        raise ImageError("%s has corrupt image data: %s" % (label, e))
+    bpp = _PNG_CHANNELS[ctype]
+    if len(raw) != h * (1 + w * bpp):
+        raise ImageError("%s image data is %d bytes, want %d"
+                         % (label, len(raw), h * (1 + w * bpp)))
+    chan = _png_unfilter(raw, w, h, bpp)
+
+    px = []
+    if ctype == 0:                       # gray
+        for i in range(w * h):
+            g = chan[i]
+            a = 0 if (trns and len(trns) >= 2 and g == int.from_bytes(trns[:2], "big")) else 255
+            px.append((g, g, g, a))
+    elif ctype == 2:                     # RGB
+        for i in range(w * h):
+            r, g, b = chan[i * 3:i * 3 + 3]
+            a = 0 if (trns and len(trns) >= 6 and
+                      (r, g, b) == tuple(trns[:6])) else 255
+            px.append((r, g, b, a))
+    elif ctype == 3:                     # palette indices
+        if plte is None or len(plte) % 3:
+            raise ImageError("%s palette image has no PLTE" % label)
+        n = len(plte) // 3
+        for i in range(w * h):
+            idx = chan[i]
+            if idx >= n:
+                raise ImageError("%s pixel uses palette index %d but PLTE has %d"
+                                 % (label, idx, n))
+            r, g, b = plte[idx * 3:idx * 3 + 3]
+            a = trns[idx] if (trns and idx < len(trns)) else 255
+            px.append((r, g, b, a))
+    else:                                 # RGBA
+        for i in range(w * h):
+            px.append(tuple(chan[i * 4:i * 4 + 4]))
+    return (w, h, px)
+
+
+def decode_ppm(data, label):
+    """PPM P6 (maxval 255) -> (w, h, [(r, g, b, 255), ...]) row-major."""
+    if not data.startswith(b"P6"):
+        raise ImageError("%s is not a P6 PPM (bad magic)" % label)
+
+    tokens = []
+    i = 2
+    while len(tokens) < 3 and i < len(data):
+        c = data[i:i + 1]
+        if c == b"#":
+            while i < len(data) and data[i:i + 1] != b"\n":
+                i += 1
+        elif c.isspace():
+            i += 1
+        else:
+            j = i
+            while j < len(data) and not data[j:j + 1].isspace():
+                j += 1
+            tokens.append(data[i:j])
+            i = j
+    if len(tokens) < 3:
+        raise ImageError("%s has an incomplete PPM header" % label)
+    try:
+        w, h, maxval = (int(t) for t in tokens)
+    except ValueError:
+        raise ImageError("%s has a malformed PPM header" % label)
+    if maxval != 255:
+        raise UnsupportedImage("%s is a maxval-%d PPM — re-export as maxval 255"
+                               % (label, maxval))
+    i += 1                                # exactly one whitespace after maxval
+    need = w * h * 3
+    if len(data) < i + need:
+        raise ImageError("%s is truncated (%d pixel bytes, want %d)"
+                         % (label, max(0, len(data) - i), need))
+    body = data[i:i + need]
+    px = [(body[k], body[k + 1], body[k + 2], 255) for k in range(0, need, 3)]
+    return (w, h, px)
+
+
+_image_cache = {}
+
+
+def load_image(path):
+    """Decode an image by magic (PNG or P6 PPM); cached per path."""
+    if path in _image_cache:
+        return _image_cache[path]
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        raise ImageError("cannot read %s: %s" % (path, e.strerror))
+    if data[:8] == _PNG_MAGIC:
+        out = decode_png(data, path)
+    elif data[:2] == b"P6":
+        out = decode_ppm(data, path)
+    else:
+        raise ImageError(
+            "%s is neither a PNG nor a P6 PPM — export the strip as 8-bit "
+            "PNG or binary PPM" % path)
+    _image_cache[path] = out
+    return out
 
 
 def load_document(path):
@@ -197,6 +400,12 @@ def validate_sprites(doc, palettes):
         if not isinstance(sprite, dict):
             fail_asset(where, "each sprite must be an object")
             continue
+        quant = sprite.get("quantize", "exact")
+        if quant not in ("exact", "nearest"):
+            fail_asset(where,
+                       '"quantize" must be "exact" or "nearest" (got %s)'
+                       % json.dumps(sprite.get("quantize")))
+            continue
         pal_ref = sprite.get("palette")
         if not isinstance(pal_ref, str) or not pal_ref:
             fail_asset(where,
@@ -224,15 +433,236 @@ def validate_sprites(doc, palettes):
                            % json.dumps(pal_ref))
 
 
-def compile_assets(doc, out_dir, report):
-    """Validate (and later compile) every asset. Cards 1.3-1.4 add the
-    image loader, quantization and the header emitter."""
+def _c_ident(s):
+    """C identifier (ASCII only — the header derives names from it)."""
+    if not s or not (s[0].isalpha() or s[0] == "_"):
+        return False
+    return all(c.isascii() and (c.isalnum() or c == "_") for c in s)
+
+
+def _nearest_index(pal, r, g, b):
+    """Nearest drawable colour by squared RGB distance (8-bit expansion of
+    each RGB565 entry); ties go to the lowest index (ROADMAP_V3 4.2)."""
+    entries = pal["entries"]
+    best, bestd = None, None
+    for idx in range(1, pal["count"]):
+        e = entries[idx]
+        er, eg, eb = (e >> 11) & 31, (e >> 5) & 63, e & 31
+        er8 = (er << 3) | (er >> 2)
+        eg8 = (eg << 2) | (eg >> 4)
+        eb8 = (eb << 3) | (eb >> 2)
+        d = (r - er8) ** 2 + (g - eg8) ** 2 + (b - eb8) ** 2
+        if bestd is None or d < bestd:
+            best, bestd = idx, d
+    return best, bestd
+
+
+def compile_sprites(doc, palettes, base_dir):
+    """Load every sprite image, quantize it, slice it into frames.
+    Returns (sprites, auto_palettes); errors go through fail_asset."""
+    sprites = {}
+    autos = {}
+
+    for i, sprite in enumerate(doc.get("sprites", [])):
+        where = sprite_label(i, sprite)
+        if where in _errored_assets:
+            continue                    # already failed schema validation
+
+        name = sprite.get("name")
+        if not isinstance(name, str) or not _c_ident(name):
+            fail_asset(where,
+                       'missing or invalid "name" — the header needs a C '
+                       "identifier (letters, digits, _)")
+            continue
+        path = sprite.get("file")
+        if not isinstance(path, str) or not path:
+            fail_asset(where,
+                       'missing "file" — path to the strip (PNG or P6 PPM), '
+                       "relative to assets.json")
+            continue
+        frames = sprite.get("frames")
+        if not isinstance(frames, int) or isinstance(frames, bool):
+            fail_asset(where,
+                       'missing or non-integer "frames" — how many frames the '
+                       "strip holds (width = frames x frame width)")
+            continue
+        if frames < 1:
+            fail_asset(where, "frames %d — a strip needs at least 1 frame" % frames)
+            continue
+
+        full = path if os.path.isabs(path) else os.path.join(base_dir, path)
+        try:
+            w, h, px = load_image(full)
+        except UnsupportedImage as e:
+            fail_asset(where, str(e))
+            continue
+        # ImageError propagates: unreadable/corrupt input is IO (exit 2).
+
+        if w < 1 or h < 1:
+            fail_asset(where, "image %dx%d — a strip needs at least 1x1 pixel"
+                       % (w, h))
+            continue
+        if w % frames:
+            fail_asset(where,
+                       "image width %d not divisible by frames %d — sheets "
+                       "are horizontal strips (width = frames x frame width)"
+                       % (w, frames))
+            continue
+        fw = w // frames
+        if fw % 2:
+            fail_asset(where,
+                       "frame width %d is odd (image %d / %d frames) — the "
+                       "4-bit blit needs an even width, odd draws nothing; "
+                       "pad every frame by one pixel" % (fw, w, frames))
+            continue
+
+        # Resolve the palette (schema was validated by card 1.2).
+        ref = sprite["palette"]
+        if ref == "auto":
+            if name in palettes:
+                fail_asset(where,
+                           'auto palette clashes with the declared palette '
+                           '"%s" — rename one of them' % name)
+                continue
+            try:
+                pal = collect_auto(name, (None if a == 0 else rgb565(r, g, b)
+                                          for (r, g, b, a) in px))
+            except AutoPaletteError as e:
+                fail_asset(where, str(e))
+                continue
+            pal = dict(pal, bank=sprite["bank"])
+            autos[name] = pal
+            pal_ref = name
+        else:
+            pal = palettes[ref]
+            pal_ref = ref
+
+        # Quantize every pixel to a nibble: alpha 0 (or the declared key
+        # color, colors[0]) -> 0 (transparent; the blit never draws it).
+        mode = sprite.get("quantize", "exact")
+        exact_map = {pal["entries"][k]: k for k in range(1, pal["count"])}
+        indexed = []
+        maxerr = 0
+        npix = 0
+        err = None
+        for idx, (r, g, b, a) in enumerate(px):
+            if a == 0 or (pal["key_rgb"] is not None and (r, g, b) == pal["key_rgb"]):
+                indexed.append(0)
+                continue
+            if pal["count"] <= 1:
+                err = ("pixel (%d,%d) #%02X%02X%02X not in palette '%s' — "
+                       "no drawable colours; add at least one color after "
+                       "the key" % (idx % w, idx // w, r, g, b, pal_ref))
+                break
+            v = rgb565(r, g, b)
+            best, d = _nearest_index(pal, r, g, b)
+            if mode == "exact" and v not in exact_map:
+                err = ("pixel (%d,%d) #%02X%02X%02X not in palette '%s' "
+                       "(nearest #%06X, d=%d) — fix the art or extend the "
+                       "palette"
+                       % (idx % w, idx // w, r, g, b, pal_ref,
+                          _expand565(pal["entries"][best]), d))
+                break
+            if mode == "nearest":
+                npix += 1
+                if d > maxerr:
+                    maxerr = d
+                indexed.append(best)
+            else:
+                indexed.append(exact_map[v])
+        if err is not None:
+            fail_asset(where, err)
+            continue
+
+        # Slice the strip into frames; two pixels per byte, left in the
+        # HIGH nibble (src/arcade1/video.c M27).
+        stride = (fw // 2) * h
+        data = bytearray()
+        for f in range(frames):
+            x0 = f * fw
+            for y in range(h):
+                row = indexed[y * w + x0:y * w + x0 + fw]
+                for k in range(0, fw, 2):
+                    data.append((row[k] << 4) | row[k + 1])
+        assert len(data) == stride * frames
+
+        sprites[name] = {"w": fw, "h": h, "frames": frames,
+                         "stride": stride, "data": bytes(data),
+                         "palette": pal_ref, "quantize": mode,
+                         "maxerr": maxerr, "npix": npix}
+    return sprites, autos
+
+
+def _expand565(v):
+    """RGB565 -> #RRGGBB the way the device expands it on scanout."""
+    er, eg, eb = (v >> 11) & 31, (v >> 5) & 63, v & 31
+    return (((er << 3) | (er >> 2)) << 16) | (((eg << 2) | (eg >> 4)) << 8) | \
+        ((eb << 3) | (eb >> 2))
+
+
+def check_banks(palettes, autos):
+    """Every emitted palette needs its own device bank (a collision would
+    silently overwrite entries at upload time)."""
+    owner = {}
+    for name, pal in sorted(palettes.items()):
+        b = pal["bank"]
+        if b in owner:
+            fail_asset(name, 'bank %d is already used by "%s" — give each '
+                             "palette its own bank" % (b, owner[b]))
+        else:
+            owner[b] = name
+    for name, pal in sorted(autos.items()):
+        b = pal["bank"]
+        if b in owner:
+            fail_asset(name, 'bank %d is already used by "%s" — give each '
+                             "palette its own bank" % (b, owner[b]))
+        else:
+            owner[b] = name
+
+
+def emit_header(sprites, out_path):
+    """Write the generated header: one banner comment listing every sprite
+    (sorted), then the sheet arrays, 16 bytes per line. No timestamps."""
+    banner = ["/* generated by tools/arc1_assetc.py (format 1) — DO NOT EDIT."]
+    for name in sorted(sprites):
+        s = sprites[name]
+        banner.append(" * %s: %dx%d x%d frames, 4-bit"
+                      % (name, s["w"], s["h"], s["frames"]))
+    banner.append(" */")
+    text = "\n".join(banner) + "\n\n"
+    for name in sorted(sprites):
+        s = sprites[name]
+        text += "static const unsigned char %s_sheet[%d] = {\n" % (
+            name, len(s["data"]))
+        hexs = ["0x%02x" % b for b in s["data"]]
+        for k in range(0, len(hexs), 16):
+            text += "    " + ", ".join(hexs[k:k + 16]) + ",\n"
+        text += "};\n\n"
+    try:
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError as e:
+        raise ImageError("cannot write %s: %s" % (out_path, e.strerror))
+
+
+def compile_assets(doc, out_dir, report, base_dir, stem):
+    """Validate then compile every asset to out_dir/<stem>.h."""
     validate_document(doc)
     if errors:
         return {}                     # document-level errors: stop here
     palettes = parse_palettes(doc)
     validate_sprites(doc, palettes)
-    return {}                        # emitted bytes per asset (emitter, 1.4)
+    if errors:
+        return {}
+    sprites, autos = compile_sprites(doc, palettes, base_dir)
+    if errors:
+        return {}
+    check_banks(palettes, autos)
+    if errors:
+        return {}
+    emit_header(sprites, os.path.join(out_dir, stem + ".h"))
+    return {name: len(s["data"]) for name, s in sprites.items()}
 
 
 def main(argv=None):
@@ -248,7 +678,13 @@ def main(argv=None):
     a = ap.parse_args(argv)          # usage errors exit 2
 
     doc = load_document(a.assets)    # IO errors exit 2
-    compile_assets(doc, a.out_dir, a.report)
+    base_dir = os.path.dirname(os.path.abspath(a.assets))
+    stem = os.path.splitext(os.path.basename(a.assets))[0]
+    try:
+        compile_assets(doc, a.out_dir, a.report, base_dir, stem)
+    except ImageError as e:           # unreadable/corrupt images: exit 2
+        sys.stderr.write("arc1-assetc: %s\n" % e)
+        return 2
 
     if errors:
         for e in errors:
