@@ -34,6 +34,59 @@ Two rules make games testable:
 The three `programs/example_*.c` games are the reference implementations
 of this shape — start by reading one.
 
+## Assets via arc1-assetc
+
+Sprite art reaches the ROM only as compiled data, so art is compiled
+ahead of the build by `tools/arc1_assetc.py` (python3, stdlib only). The
+committed generated header is the build truth and the tool is the master:
+regenerate it, never hand-edit.
+
+    python3 tools/arc1_assetc.py --assets art/assets.json --out-dir programs --report
+
+Exit 0 = compiled, 1 = validation error (one teaching line per asset on
+stderr), 2 = usage/IO. One `assets.json` per game declares the palettes
+and the sprites; images are horizontal strips (image width = frames ×
+frame width, even frame width), transparent pixels are alpha 0 or the
+declared key colour (`colors[0]`), at most 15 colours plus transparent
+per bank:
+
+```json
+{
+  "format": 1,
+  "palettes": {
+    "world": { "bank": 3, "colors": ["#000000", "#F8D8A8", "#503000"] }
+  },
+  "sprites": [
+    { "name": "player", "file": "art/player.png", "palette": "world",
+      "frames": 6, "quantize": "nearest" },
+    { "name": "spark",  "file": "art/spark.png",  "palette": "auto",
+      "bank": 7, "frames": 4 }
+  ]
+}
+```
+
+`"palette": "auto"` collects the sheet's distinct colours into `bank`
+for you; `"quantize": "nearest"` maps off-palette pixels to the closest
+palette entry instead of failing (the default `"exact"` fails loudly
+with the pixel, the nearest colour and the distance). `--report` prints
+what each asset cost and how far the quantizer strayed — real output of
+the manifest above:
+
+    SPRITE player 32x40 x6 = 3840 B
+    QUANT player maxerr=515 pixels=5760
+    SPRITE spark 16x16 x4 = 512 B
+    PALETTE spark bank 7 = 32 B
+    PALETTE world bank 3 = 32 B
+    ROM assets 4416 / 262144 (1.7 %)
+
+The guest includes the emitted header (`#include "assets.h"`): the
+per-sprite defines (`PLAYER_W`, `PLAYER_H`, `PLAYER_FRAMES`,
+`PLAYER_STRIDE`), the sheet bytes (`player_sheet`) and the palette
+(`world_palette`, uploaded with `gfx_pal_upload` + `gfx_pal_bank`). The
+tool re-derives byte-identical output from the same inputs (asserted in
+`tests/test_arc1assetc.sh`), so after any art change regenerate the
+header — nothing else re-checks it for you.
+
 ## Build
 
 One command, from any directory, with nothing but the CLI and your source:

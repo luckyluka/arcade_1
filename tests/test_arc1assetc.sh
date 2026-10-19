@@ -159,7 +159,7 @@ expect 0 "a valid named palette compiles" \
     python3 "$TOOL" --assets "$OUT/palok.json" --out-dir "$OUT/gen"
 
 # --- 6) module units: rgb565 + auto palette (ROADMAP_V3 4.2) ----------------
-python3 - "$ROOT" <<'PY' || fail "module units"
+python3 -B - "$ROOT" <<'PY' || fail "module units"
 import sys
 sys.path.insert(1, sys.argv[1] + "/tools")
 import arc1_assetc as m

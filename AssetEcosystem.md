@@ -240,7 +240,14 @@ The walkdemo experiment is the existence proof for Phase 1: a
 225-line dependency-free generator rendered a 40×56 4-bit 7-frame sheet
 (7 840 B = 3.0 % of ROM) with a ROM-cost report and caught two silent
 colour corruptions by validating against independent expectations.
-`arc1-assetc` is that, generalised.
+`arc1-assetc` is that, generalised — seed: implemented as
+[`tools/arc1_assetc.py`](tools/arc1_assetc.py), **v0** (sprite sheets,
+named + automatic palettes, PNG/P6-PPM input, exact/nearest
+quantization, teaching-error validators, deterministic header emission;
+usage in [GAME_DEV_GUIDE.md](GAME_DEV_GUIDE.md), "Assets via
+arc1-assetc"; findings in `docs/experiments/arc1-assetc.md`). The
+Aseprite/WAV input, tile deduplication and compression stages of the
+pipeline above are not implemented yet.
 
 ## 12. Native asset representation
 

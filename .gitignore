@@ -10,6 +10,10 @@ programs/build/
 # Test executables (built by the make test-* targets)
 /build/
 
+# Python bytecode left by running tools/*.py in tests
+__pycache__/
+*.pyc
+
 # Editor / OS noise
 *.swp
 *~
