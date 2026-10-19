@@ -142,14 +142,23 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
                                                 process. Needs only
                                                 riscv64-unknown-elf-gcc on PATH
                                                 and runs in any directory.
-    arcade1 inspect <game.arc1|bin> [options]   same as `run --inspect`
+    arcade1 inspect <game.arc1|bin> [options]   structured last-frame report:
+                                                greppable KEY value lines
+                                                (FRAME, PC, INSTRET_FRAME,
+                                                STRAY, VIDEO_CMDS, …);
+                                                --json one object, --regs
+                                                for the register dump
 
     options:
       --frames N / --input FILE / --record FILE / --capture FILE
       --capture-dir DIR / --capture-every K / --syms FILE
       --vars LIST / --var-every K / --quiet
       --inspect    print the final frame, pc, instruction count and all
-                   32 registers (the `inspect` command is this flag)
+                   32 registers (the `inspect` subcommand is the
+                   structured form of this)
+      --json / --regs (inspect only)
+                   one object with the same keys / the register dump —
+                   inspect prints no per-frame lines either way
       --strict     exit non-zero if any draw read a source address outside
                    ROM/RAM — those draws silently paint nothing. Without
                    --strict the run still prints one warning line on stderr
@@ -158,6 +167,11 @@ Exit codes: 0 ok, 1 runtime error (or --strict tripped), 2 usage error.
 Input script: `<first> <last> <buttons...>` per line, inclusive frames,
 later lines win, `none` holds nothing, `#` comments. A recording feeds
 straight back through --input.
+
+`arcade1 inspect` is the one-call machine report: run the conditions,
+then print the last frame's counters as KEY value lines (host-side
+counters only — nothing in any hash; the register dump moved behind
+--regs). Every key is listed in SDK.md.
 
 ## Tests
 `make check`: unit tests, golden regression (tests/golden), CLI tests

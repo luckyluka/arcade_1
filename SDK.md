@@ -38,8 +38,8 @@ arcade1 run <game.arc1|bin> [options]
                         input script format (run-length, "none" = idle)
   --quiet              suppress the per-frame hash lines (summary only)
   --inspect            print the final frame, pc, instruction count and all
-                       32 registers after the run (the `inspect` command
-                       is exactly this flag)
+                       32 registers after the run (the `inspect` subcommand
+                       is the structured form of this)
   --strict             exit non-zero if any draw read a source address
                        outside ROM/RAM — those draws silently paint nothing.
                        Without it the same condition still prints one
@@ -227,8 +227,33 @@ arcade1 build <program.c> [output.arc1]
     the build still succeeds and prints "arcade1: warning: nm not found,
     no .syms written". The .arc1 header layout is in CHEATSHEET.md.
 
-arcade1 inspect <game.arc1|bin> [arcade1 run options]
-    alias for `arcade1 run --inspect`.
+arcade1 inspect <game.arc1|bin> [--frames N] [--input FILE] [--syms FILE]
+                [--vars LIST] [--json] [--regs]
+    runs N frames (default 600) and reports the LAST frame as greppable
+    KEY value lines:
+
+      FRAME <n>                     frames completed (== --frames)
+      PC 0x........                 final program counter
+      INSTRET_FRAME <n>             instructions executed by the last frame
+      STRAY <n>                     run total: bus accesses to unmapped or
+                                    illegal addresses (diagnostic counter)
+      VIDEO_CMDS CLEAR=.. FILL=.. SPRITE=.. TILEMAP=.. SPRITE4=..
+              TILEMAP4=.. PRESENT=.. the last frame's command counts
+      VIDEO_PIXELS_WRITTEN <n>      the last frame's framebuffer writes
+      VIDEO_OOB_DRAWS <n>           run total: draws whose source address
+                                    fell outside ROM/RAM — the same
+                                    condition `run --strict` fails on
+      ROM_USED <n> / 262144         payload bytes used / budget
+      VAR <name> <value>            one line per --vars selection (RAM
+                                    globals by name; <image>.syms is
+                                    auto-loaded if --syms is omitted)
+
+    --json prints one object with the same keys (VIDEO_CMDS nests, VAR
+    maps names to values, ROM_USED maps used/size); the 32-register
+    dump appears only with --regs (`run --inspect` still prints it
+    inline). Host-side only: existing counters, no MMIO, no guest-visible
+    change, nothing in any hash. Exit: 0 ok, 2 usage. Nothing else is
+    printed, so the report pipes straight into grep/awk/jq.
 ```
 
 ## Remaining M28 deliverables

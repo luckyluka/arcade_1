@@ -127,8 +127,10 @@ you. `--capture` dumps a frame (`.png` or `.ppm` by extension; it holds
 the frame after `--frames N`, i.e. `N-1`'s screen); `arcade1 capture`
 dumps every frame into `captures/` (`--format png`, `--scale N`);
 `--vars` reads your game's globals by name; `--input` plays a scripted
-session; `--record` writes one. `arcade1 inspect` runs the game, then
-dumps the final PC, all 32 registers and the instruction count.
+session; `--record` writes one. `arcade1 inspect` runs the game, then reports
+the last frame as greppable `KEY value` lines (video counters, payload
+budget, your `--vars`; `--json` for one object, `--regs` for the
+register dump).
 `--strict` fails the run if any draw read a source address outside
 ROM/RAM (see SDK.md for the full flag reference).
 

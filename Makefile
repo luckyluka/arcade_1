@@ -108,7 +108,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
-        test-golden-conditions
+        test-golden-conditions test-inspect
 
 all: $(TARGET)
 
@@ -273,6 +273,11 @@ test-text: $(CLI_BIN) $(GUEST_BUILD)/text_probe.bin
 # stdlib host tooling — no build step, the test invokes it directly.
 test-arc1assetc: tools/arc1_assetc.py tests/test_arc1assetc.sh
 	sh tests/test_arc1assetc.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# Wave B card B1 (ROADMAP_V3 §5): structured last-frame inspect report —
+# every key on m29game, --strict agreement, --json parses, --regs gate.
+test-inspect: $(CLI_BIN) tests/test_inspect.sh
+	sh tests/test_inspect.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # Wave 0 card 0.4 (ROADMAP_V3 4.1): the F9 conditions manifest is
 # enforced — it parses, the CLI reproduces the recorded runs from it, a

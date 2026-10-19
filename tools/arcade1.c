@@ -1356,15 +1356,208 @@ static int cmd_build(int argc, char **argv)
 }
 
 
+/* --- inspect subcommand: structured last-frame report (ROADMAP_V3 5, B1) --
+ * `run` answers "did the state change?"; `inspect` answers "what is the
+ * machine doing at the END of this run": one greppable KEY value line per
+ * fact — the last frame's video work (frame_totals), the run's hazards
+ * (STRAY, VIDEO_OOB_DRAWS — same meaning as --strict), the payload budget
+ * and the selected globals. Reads existing host-side counters only: no
+ * MMIO, no guest-visible change, nothing in any hash. The register dump
+ * moved behind --regs; --json prints one object with the same keys. */
 static int cmd_inspect(int argc, char **argv)
 {
-    /* Build argv with --inspect appended. */
-    char **nargv = calloc(argc + 1, sizeof(char*));
-    for (int i = 0; i < argc; i++) nargv[i] = argv[i];
-    nargv[argc] = (char*)"--inspect";
-    int rc = cmd_run(argc + 1, nargv);
-    free(nargv);
-    return rc;
+    const char *rom_path = NULL, *input_path = NULL;
+    const char *syms_path = NULL, *var_list = NULL;
+    unsigned    frames = 600;
+    int         json = 0, regs = 0;
+    static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
+    static arcade1_machine_t m;
+    size_t   n;
+    const void *rom;
+    size_t   rom_size;
+    FILE    *f;
+    arcade1_input_t in;
+    unsigned long long oob = 0;              /* run: OOB source draws      */
+    unsigned long long instret_before_last = 0;
+
+    for (int i = 0; i < argc; i++) {
+        const char *a = argv[i];
+
+        if (!strcmp(a, "--frames") && i + 1 < argc)
+            frames = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--input") && i + 1 < argc)
+            input_path = argv[++i];
+        else if (!strcmp(a, "--syms") && i + 1 < argc)
+            syms_path = argv[++i];
+        else if (!strcmp(a, "--vars") && i + 1 < argc)
+            var_list = argv[++i];
+        else if (!strcmp(a, "--json"))
+            json = 1;
+        else if (!strcmp(a, "--regs"))
+            regs = 1;
+        else if (a[0] == '-') {
+            fprintf(stderr, "arcade1 inspect: unknown option '%s'\n", a);
+            return 2;
+        } else if (!rom_path) {
+            rom_path = a;
+        } else {
+            fprintf(stderr, "arcade1 inspect: unexpected argument '%s'\n",
+                    a);
+            return 2;
+        }
+    }
+    if (!rom_path || frames == 0) {
+        fprintf(stderr,
+                "usage: arcade1 inspect <game.arc1|bin> [--frames N]\n"
+                "                        [--input FILE] [--syms FILE]\n"
+                "                        [--vars LIST] [--json] [--regs]\n"
+                "  runs N frames (default 600) and reports the LAST frame:\n"
+                "  greppable KEY value lines — FRAME, PC, INSTRET_FRAME,\n"
+                "  STRAY, VIDEO_CMDS, VIDEO_PIXELS_WRITTEN, VIDEO_OOB_DRAWS,\n"
+                "  ROM_USED, then VAR <name> <value> per --vars selection.\n"
+                "  --json prints one object with the same keys; the\n"
+                "  32-register dump appears only with --regs.\n"
+                "  --vars reads RAM globals by name; without --syms it\n"
+                "  auto-loads <image>.syms ('arcade1 build' writes it).\n"
+                "  exit: 0 ok, 2 usage\n");
+        return 2;
+    }
+
+    /* --vars without --syms: auto-load the sidecar `arcade1 build` writes
+     * beside the image (game.arc1 -> game.syms). No sidecar is a clear,
+     * teachable error, not a usage error (ROADMAP_V3 card A1). */
+    if (var_list && !syms_path) {
+        static char side[1024];
+
+        syms_path_for_image(rom_path, side, sizeof side);
+        if (access(side, R_OK) != 0) {
+            fprintf(stderr,
+                    "arcade1: no symbols for %s: build with 'arcade1 build' "
+                    "(writes game.syms) or pass --syms FILE\n", rom_path);
+            return 2;
+        }
+        syms_path = side;
+    }
+
+    /* Load the image (accept a raw flat binary too, like the tests). */
+    f = fopen(rom_path, "rb");
+    if (!f) {
+        fprintf(stderr, "arcade1: cannot open '%s'\n", rom_path);
+        return 1;
+    }
+    n = fread(img, 1, sizeof img, f);
+    fclose(f);
+    if (n == 0 || n > sizeof img) {
+        fprintf(stderr, "arcade1: '%s' is empty or too large\n", rom_path);
+        return 1;
+    }
+    rom = img;
+    rom_size = n;
+    int      img_have_crc = 0;
+    uint32_t img_crc = 0;
+
+    if (arcade1_image_recognized(img, n)) {
+        arcade1_image_t parsed;
+        const arcade1_image_err_t err = arcade1_image_parse(img, n, &parsed);
+        if (err != ARCADE1_IMAGE_OK) {
+            fprintf(stderr, "arcade1: '%s': %s\n", rom_path,
+                    arcade1_image_strerror(err));
+            return 1;
+        }
+        rom = parsed.payload;
+        rom_size = parsed.payload_size;
+        img_have_crc = 1;                    /* header bytes 12..15, LE */
+        img_crc = (uint32_t)img[12] | (uint32_t)img[13] << 8 |
+                  (uint32_t)img[14] << 16 | (uint32_t)img[15] << 24;
+    }
+
+    if (input_path && load_input(input_path) != 0)
+        return 1;
+    if (syms_path && load_syms(syms_path) != 0)
+        return 1;
+    if (syms_path && g_syms_have_crc && img_have_crc && g_syms_crc != img_crc) {
+        fprintf(stderr,
+                "arcade1: syms file belongs to a different build "
+                "(syms crc 0x%08x vs image 0x%08x); "
+                "rebuild or pass the matching file\n", g_syms_crc, img_crc);
+        return 2;
+    }
+    if (var_list && resolve_vars(var_list) != 0)
+        return 1;
+
+    arcade1_init(&m);
+    arcade1_reset(&m);
+    if (arcade1_load_rom(&m.bus, rom, (uint32_t)rom_size) != rom_size) {
+        fprintf(stderr, "arcade1: ROM did not load\n");
+        return 1;
+    }
+    arcade1_set_firmware(&m, true);
+
+    /* No recording, no captures, no printing here — the report must not
+     * perturb the run (host-side only, B1 rules). */
+    for (unsigned fr = 0; fr < frames; fr++) {
+        instret_before_last = m.cpu.instret;   /* value before the last frame */
+        input_for_frame(fr, &in);
+        arcade1_set_input(&m, &in);
+        arcade1_run_frame(&m);
+        oob += arcade1_video_frame_totals(&m.video)->skipped_ops;
+    }
+
+    {
+        const arcade1_video_stats_t *ft =
+            arcade1_video_frame_totals(&m.video);
+
+        if (json) {
+            printf("{\"FRAME\":%u,\"PC\":\"0x%08X\",\"INSTRET_FRAME\":%llu,"
+                   "\"STRAY\":%u,"
+                   "\"VIDEO_CMDS\":{\"CLEAR\":%u,\"FILL\":%u,\"SPRITE\":%u,"
+                   "\"TILEMAP\":%u,\"SPRITE4\":%u,\"TILEMAP4\":%u,"
+                   "\"PRESENT\":%u},"
+                   "\"VIDEO_PIXELS_WRITTEN\":%u,\"VIDEO_OOB_DRAWS\":%llu,"
+                   "\"ROM_USED\":{\"used\":%u,\"size\":%u},\"VAR\":{",
+                   m.frame_counter, m.cpu.pc,
+                   (unsigned long long)(m.cpu.instret - instret_before_last),
+                   m.bus.stray_accesses,
+                   ft->cmds_clear, ft->cmds_fill, ft->cmds_sprite,
+                   ft->cmds_tilemap, ft->cmds_sprite4, ft->cmds_tilemap4,
+                   ft->cmds_present, ft->pixels_written, oob,
+                   (unsigned)rom_size, (unsigned)ARCADE1_ROM_SIZE);
+            for (unsigned v = 0; v < g_nvars; v++)
+                printf("%s\"%s\":%d", v ? "," : "", g_vars[v]->name,
+                       (int)(int32_t)arcade1_read32(&m.bus,
+                                                    g_vars[v]->addr));
+            printf("}");                       /* close VAR */
+            if (regs) {
+                printf(",\"REGS\":[");
+                for (int r = 0; r < 32; r++)
+                    printf("%s\"0x%08X\"", r ? "," : "", m.cpu.regs[r]);
+                printf("]");
+            }
+            printf("}\n");                     /* close the object */
+        } else {
+            printf("FRAME %u\n", m.frame_counter);
+            printf("PC 0x%08X\n", m.cpu.pc);
+            printf("INSTRET_FRAME %llu\n",
+                   (unsigned long long)(m.cpu.instret - instret_before_last));
+            printf("STRAY %u\n", m.bus.stray_accesses);
+            printf("VIDEO_CMDS CLEAR=%u FILL=%u SPRITE=%u TILEMAP=%u "
+                   "SPRITE4=%u TILEMAP4=%u PRESENT=%u\n",
+                   ft->cmds_clear, ft->cmds_fill, ft->cmds_sprite,
+                   ft->cmds_tilemap, ft->cmds_sprite4, ft->cmds_tilemap4,
+                   ft->cmds_present);
+            printf("VIDEO_PIXELS_WRITTEN %u\n", ft->pixels_written);
+            printf("VIDEO_OOB_DRAWS %llu\n", oob);
+            printf("ROM_USED %u / %u\n", (unsigned)rom_size,
+                   (unsigned)ARCADE1_ROM_SIZE);
+            for (unsigned v = 0; v < g_nvars; v++)
+                printf("VAR %s %d\n", g_vars[v]->name,
+                       (int)(int32_t)arcade1_read32(&m.bus, g_vars[v]->addr));
+            if (regs)
+                for (int r = 0; r < 32; r++)
+                    printf("  x%-2d = 0x%08X\n", r, m.cpu.regs[r]);
+        }
+    }
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -1378,7 +1571,7 @@ int main(int argc, char **argv)
                 "  capture  run + dump frames (default dir: captures/)\n"
                 "  test     smoke run; --golden FILE compares per-frame hashes\n"
                 "  build    compile a guest C program into a .arc1 image\n"
-                "  inspect  run, then dump final PC, registers, instruction count\n");
+                "  inspect  structured last-frame report: KEY value lines (--json, --regs)\n");
         return 2;
     }
     if (!strcmp(argv[1], "run"))
