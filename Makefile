@@ -107,7 +107,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
-        test-m29game test-syms test-capture-png test-text
+        test-m29game test-syms test-capture-png test-text test-arc1assetc
 
 all: $(TARGET)
 
@@ -267,6 +267,11 @@ $(GUEST_BUILD)/text_probe.bin: $(PROBE_DIR)/text_probe.c programs/text.h \
 
 test-text: $(CLI_BIN) $(GUEST_BUILD)/text_probe.bin
 	sh tests/test_text.sh $(CLI_BIN) $(GUEST_BUILD)/text_probe.bin $(GOLDEN_DIR)
+
+# Wave 1 card 1.1 (docs/ROADMAP_CREATION_FLOW.md): arc1-assetc is python3
+# stdlib host tooling — no build step, the test invokes it directly.
+test-arc1assetc: tools/arc1_assetc.py tests/test_arc1assetc.sh
+	sh tests/test_arc1assetc.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 $(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
         src/arcade1/video.c src/arcade1/timer.c src/arcade1/audio.c \
