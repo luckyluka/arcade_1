@@ -13,8 +13,8 @@ detail, effectively yes, via a host-side converter. Details below.)
 
 | Piece | File |
 |---|---|
-| Sheet generator (the "art tool") | `tools/gen_walk_sheet.py` |
-| Generated sheet (checked in) | `programs/experimental/walkdemo_sheet.h` |
+| Sheet generator (the "art tool") | `tools/gen_walk_sheet.py` → `walkdemo_sheet_art.png` + `walkdemo_sheet.json` |
+| Generated sheet (checked in) | `programs/experimental/walkdemo_sheet.h` (arc1-assetc output since Wave 3) |
 | The guest | `programs/experimental/walkdemo.c` |
 | The test | `tests/test_walkdemo.sh` (`make test-walkdemo`) |
 
@@ -61,6 +61,11 @@ Run it:
    includes it, the build compiles it in. The committed header is the source
    of truth for builds (so `make experimental` needs no Python); the
    generator is the master artwork, rerun by hand when the art changes.
+   *(Superseded by Wave 3: walkdemo now runs through arc1-assetc — the
+   generator emits a PNG + assets.json, the header is the compiler's output
+   with refs and animation tables, and the guest plays them with
+   anim_tick(). The sheet's nibbles stayed byte-identical; see
+   `docs/experiments/arcade1-assetc.md`, Wave 3.)*
    Because the M29 step-3 CLI is self-contained, the whole experiment also
    builds from a bare directory — `arcade1 build walkdemo.c walkdemo.arc1`
    with only the binary + two sources present (the sheet header resolves
@@ -138,7 +143,8 @@ Run it:
 ## Ideas if this grows
 
 - A PNG→header converter (same shape as `gen_walk_sheet.py`, PIL-based) so
-  real art tools can author sheets.
+  real art tools can author sheets. *(Done as `arc1-assetc`, Waves 1-3:
+  PNG/PPM in, refs + animations out, no PIL — walkdemo itself migrated.)*
 - Two palette banks for the character (32 colours) — the blit takes a bank
   per call, so a detail pass (face, shading) can live in a second bank.
 - A run cycle (longer strides, more bob) and a jump pose; the sheet stride

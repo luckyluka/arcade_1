@@ -157,3 +157,85 @@ its committed generated header (`asset_demo_sheet.h`, regenerate with
    `SDK_FILES` (`arcade1 build`'s self-contained SDK), matching the
    card's text — add it when a self-contained build wants asset support.
    The GDG gained no new ```c fences, so `test-cheatsheet` is untouched.
+
+---
+
+# Wave 3 — animation resources (ROADMAP_CREATION_FLOW §7)
+
+Status: shipped. `assets.json` gains a top-level `"animations"` array
+(`{name, sprite, frames, ms}`) → per animation the emitter emits
+`NAME_MS`, `NAME_STEPS` and a frame table
+`static const sprite4_ref *const NAME_frames[NAME_STEPS]` of refs into
+the sprite's frames, in play order. `programs/asset.h` gains
+`anim_state` + `ANIM()` + `anim_reset(a, timer)` + `anim_tick(a, timer)`
+(modes `ANIM_LOOP` / `ANIM_PINGPONG` / `ANIM_ONCE`), timed by the frame
+timer via the new opt-in `arcade1_timer_count()` in `programs/arcade1.h`
+(+1 per machine frame, never host time; unused static inline, so no
+existing guest's bytes move — A6's precedent). `tests/test_arc1assetc.sh`
+grew a Wave 3 section (104 → 134 checks).
+
+## walkdemo migration (the card's proof)
+
+`tools/gen_walk_sheet.py` no longer emits the header; it is now the
+master of the ART only — it writes `walkdemo_sheet_art.png` (280×56,
+every pixel authored in the palette's expanded 8-bit colour, transparent
+= key `#000000`) and `walkdemo_sheet.json` (palette in the script's index
+order, sprite `hero`, animations `idle` [0] 200 ms and `walk` [1..6]
+67 ms — the old `WALK_TICK` = 4 frames at 60 fps). `arc1-assetc`
+compiles the header; `make walkdemo-sheet` runs both halves.
+`walkdemo.c` plays the emitted tables with `anim_tick()` and draws with
+`asset_sprite4()` — the hand-rolled `WALK_TICK`/`tick`/`dir` counter is
+gone; `anim` (the var the test greps) is computed as
+`(int)(fr - hero_frames)`, the ref's own sheet index. `make test-walkdemo`
+was NOT touched and stays green: idle 12 frames one fb hash, 2 px/frame
+to x=100, cycle 1..6, pupil mirrors 23 → 16.
+
+## Measured facts
+
+| Fact | Value |
+|---|---|
+| Sheet bytes through the PNG→assetc round trip | **byte-identical** to the old direct pack (hero_sheet == walk_sheet, 7840 B; palette identical) |
+| Walkdemo ROM const data | sheet 7840 + palette 32 (unchanged) + refs 7×40 = 280 B + anim tables 4+24 = 28 B |
+| Walkdemo payload | 9168 B vs 8580 B before (+588: 280 B refs + 28 B tables + anim code, minus the removed tick counter) |
+| `ms` exactness | one frame = 1000 units of 1/60 ms; 80 ms = 4800 units = 4.8 frames exactly, no drift |
+| Test checks | assetc 104 → 134 (10 schema errors, table order, report/budget, host compile-proof, runnable anim_tick probe, determinism) |
+
+## Findings
+
+1. **The anim_tick unit probe caught its own oracle.** The first
+   hand-written expected sequences were off by one call: I had written
+   them as if the reset-anchored first tick consumed a frame, but the
+   first call carries dt=0, so each step reads for exactly 3 frames and
+   step 1 first shows at t=3. Nine `FAIL` lines proved the assertions
+   bite; the fix was to the oracle, not to `anim_tick` (the probe's
+   catch-up / wrap / clamp checks passed throughout). Lesson kept:
+   timing oracles must state where the anchor sits.
+2. **Mode is runtime, not schema.** The card's JSON has no mode field,
+   so the emitter stays data-only: the table is the play ORDER, the
+   game chooses `ANIM_LOOP`/`ANIM_PINGPONG`/`ANIM_ONCE` when it builds
+   its `anim_state`. walkdemo plays the same sheet's frames as a
+   ping-pong walk and a 1-step idle loop.
+3. **Tables hold refs, not indices.** Emitting `unsigned char[]` of
+   frame numbers would push `sprite_refs[table[step]]` back into game
+   code; ref-pointer tables keep `anim_tick()` returning a ready
+   `const sprite4_ref *` for `asset_sprite4()` — zero arithmetic, which
+   is the whole point of Waves 2+3.
+4. **The PNG round trip was verified byte-for-byte before migrating**
+   (old `walk_sheet` vs new `hero_sheet` parsed and compared) — the
+   walkdemo test's pupil-column assertions then re-verified it
+   behaviourally. Two independent oracles, one migration.
+5. **Design choices stated:** a stall reads as at most 600 frames
+   (10 s) of catch-up so a hiccup never fast-forwards an animation;
+   unsigned subtraction makes the timer's wrap-around exact;
+   `anim_reset` takes the current timer so a state change can't
+   inherit the old carry (walkdemo resets on the step-off, keeping the
+   original's contact-pose start).
+
+## Reproduce (Wave 3)
+
+```
+python3 tools/gen_walk_sheet.py
+python3 tools/arc1_assetc.py --assets programs/experimental/walkdemo_sheet.json --out-dir programs/experimental
+make test-walkdemo
+make test-arc1assetc
+```

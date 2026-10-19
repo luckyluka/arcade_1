@@ -32,6 +32,20 @@ names it, so games include asset.h FIRST. asset_sprite4(ref, x, y, flags)
 in that header wraps arcade1_sprite4; names resolve at build time only,
 never by strcmp on the target (AssetEcosystem.md 13).
 
+Animations (Wave 3) are a top-level "animations" array referencing sprites
+by name:
+
+    "animations": [ { "name": "run", "sprite": "player",
+                      "frames": [0,1,2,3,4,5], "ms": 80 } ]
+
+Each emits NAME_MS, NAME_STEPS and a frame table
+
+    static const sprite4_ref *const run_frames[RUN_STEPS] = {…};
+
+of refs into that sprite's frames. Games play a table with anim_tick()
+from programs/asset.h (modes loop / ping-pong / once), timed by the
+frame timer — never host time.
+
 Palette semantics (card 1.2): a palette fills one device bank — colors[i]
 lands at PALETTE[bank*16 + i], at most 16 colors, bank 0..15. The device
 never DRAWS nibble 0 (transparent), so colors[0] is the declared key /
@@ -385,6 +399,8 @@ def validate_document(doc):
         fail_asset("assets.json", '"palettes" must be an object keyed by palette name')
     if not isinstance(doc.get("sprites", []), list):
         fail_asset("assets.json", '"sprites" must be an array')
+    if not isinstance(doc.get("animations", []), list):
+        fail_asset("assets.json", '"animations" must be an array')
 
 
 def parse_palettes(doc):
@@ -661,6 +677,76 @@ def compile_sprites(doc, palettes, base_dir):
     return sprites, autos
 
 
+def anim_label(index, anim):
+    """How an animation is addressed in errors: by name, else by position."""
+    if isinstance(anim, dict) and isinstance(anim.get("name"), str) \
+            and anim["name"]:
+        return anim["name"]
+    return "#%d" % (index + 1)
+
+
+def compile_animations(doc, sprites):
+    """Validate "animations" (Wave 3) and return {name: {sprite, steps, ms}}
+    for the valid ones. Names must be C identifiers that clash with nothing
+    the header emits; "sprite" must name a compiled sprite; "frames" index
+    its frames; "ms" bounds one step's length (the anim_tick() helper in
+    programs/asset.h plays the table, loop / ping-pong / once)."""
+    anims = {}
+    for i, anim in enumerate(doc.get("animations", [])):
+        where = anim_label(i, anim)
+        if not isinstance(anim, dict):
+            fail_asset("animation %s" % where, "each animation must be an object")
+            continue
+        name = anim.get("name")
+        if not isinstance(name, str) or not _c_ident(name):
+            fail_asset(where,
+                       'missing or invalid "name" — the header needs a C '
+                       "identifier (letters, digits, _)")
+            continue
+        where = name
+        if name in anims:
+            fail_asset(where, "duplicate animation name — each animation "
+                              "needs its own name")
+            continue
+        if name in sprites:
+            fail_asset(where,
+                       'clashes with sprite "%s" — an animation and a sprite '
+                       "would emit the same symbols; rename one of them"
+                       % name)
+            continue
+        spr = anim.get("sprite")
+        if not isinstance(spr, str) or spr not in sprites:
+            fail_asset(where,
+                       "sprite %s not defined — name a sprite from "
+                       '"sprites"' % json.dumps(spr))
+            continue
+        frames = anim.get("frames")
+        n = sprites[spr]["frames"]
+        if not isinstance(frames, list) or not frames or \
+                not all(isinstance(f, int) and not isinstance(f, bool)
+                        for f in frames):
+            fail_asset(where,
+                       '"frames" must be a non-empty array of integers — '
+                       "which frames of %s to play, in order"
+                       % json.dumps(spr))
+            continue
+        bad = [f for f in frames if not 0 <= f < n]
+        if bad:
+            fail_asset(where,
+                       "frame %d out of range — sprite %s has %d frames "
+                       "(0..%d)" % (bad[0], spr, n, n - 1))
+            continue
+        ms = anim.get("ms")
+        if not isinstance(ms, int) or isinstance(ms, bool) or \
+                not 1 <= ms <= 60000:
+            fail_asset(where,
+                       '"ms" must be an integer 1..60000 (got %s) — how long '
+                       "one animation step lasts" % json.dumps(ms))
+            continue
+        anims[name] = {"sprite": spr, "steps": list(frames), "ms": ms}
+    return anims
+
+
 def _expand565(v):
     """RGB565 -> #RRGGBB the way the device expands it on scanout."""
     er, eg, eb = (v >> 11) & 31, (v >> 5) & 63, v & 31
@@ -688,12 +774,13 @@ def check_banks(palettes, autos):
             owner[b] = name
 
 
-def emit_header(sprites, palettes, out_path):
-    """Write the generated header (card 1.4 contract, extended by Wave 2):
-    one banner comment listing every sprite with its palette, geometry and
-    metadata, #defines per sprite (sorted), sheet arrays, the per-frame
-    sprite4_ref arrays, then palette arrays — 16 hex values per line, no
-    timestamps, ever."""
+def emit_header(sprites, anims, palettes, out_path):
+    """Write the generated header (card 1.4 contract, extended by Waves
+    2-3): one banner comment listing every sprite with its palette,
+    geometry and metadata plus every animation, #defines per sprite
+    (sorted), sheet arrays, the per-frame sprite4_ref arrays, the
+    animation frame tables, then palette arrays — 16 hex values per line,
+    no timestamps, ever."""
     banner = ["/* generated by tools/arc1_assetc.py (format 1) — DO NOT EDIT."]
     for name in sorted(sprites):
         s = sprites[name]
@@ -705,7 +792,11 @@ def emit_header(sprites, palettes, out_path):
                          s["origin"][0], s["origin"][1],
                          s["collision"][0], s["collision"][1],
                          s["collision"][2], s["collision"][3]))
-    if sprites:
+    for name in sorted(anims):
+        a = anims[name]
+        banner.append(" * anim %s of %s: %d steps, %d ms"
+                      % (name, a["sprite"], len(a["steps"]), a["ms"]))
+    if sprites or anims:
         banner.append(" * the NAME_frames refs need programs/asset.h"
                       " (sprite4_ref) — include it first")
         banner.append(" */")
@@ -739,6 +830,18 @@ def emit_header(sprites, palettes, out_path):
                         bank, ox, oy, cx, cy, cw, ch))
         text += "};\n\n"
 
+    for name in sorted(anims):
+        a = anims[name]
+        macro = name.upper()
+        text += "#define %s_MS %d        /* one animation step */\n" % (
+            macro, a["ms"])
+        text += "#define %s_STEPS %d\n" % (macro, len(a["steps"]))
+        text += "static const sprite4_ref *const %s_frames[%s_STEPS] = {\n" % (
+            name, macro)
+        for f in a["steps"]:
+            text += "    &%s_frames[%d],\n" % (a["sprite"], f)
+        text += "};\n\n"
+
     for name in sorted(palettes):
         p = palettes[name]
         text += "static const unsigned short %s_palette[16] = {\n" % name
@@ -754,7 +857,8 @@ def emit_header(sprites, palettes, out_path):
 
 
 def print_report(result):
-    """Greppable KEY lines (card 1.4): SPRITE / QUANT / PALETTE / ROM."""
+    """Greppable KEY lines (card 1.4): SPRITE / QUANT / ANIM / PALETTE /
+    ROM. An animation's frame table costs one rv32 pointer (4 B) per step."""
     sprites, palettes = result["sprites"], result["palettes"]
     total = 0
     for name in sorted(sprites):
@@ -766,6 +870,12 @@ def print_report(result):
         if s["quantize"] == "nearest":
             print("QUANT %s maxerr=%d pixels=%d"
                   % (name, s["maxerr"], s["npix"]))
+    for name in sorted(result.get("anims", {})):
+        a = result["anims"][name]
+        n = 4 * len(a["steps"])
+        total += n
+        print("ANIM %s of %s: %d steps, %d ms = %d B"
+              % (name, a["sprite"], len(a["steps"]), a["ms"], n))
     for name in sorted(palettes):
         total += 32
         print("PALETTE %s bank %d = 32 B" % (name, palettes[name]["bank"]))
@@ -785,20 +895,27 @@ def compile_assets(doc, out_dir, report, base_dir, stem):
     sprites, autos = compile_sprites(doc, palettes, base_dir)
     if errors:
         return None
+    anims = compile_animations(doc, sprites)
+    if errors:
+        return None
     all_pals = dict(palettes)
     all_pals.update(autos)
     check_banks(all_pals, {})
     if errors:
         return None
-    total = sum(len(s["data"]) for s in sprites.values()) + 32 * len(all_pals)
+    # An animation's frame table costs one rv32 pointer per step (4 B).
+    total = sum(len(s["data"]) for s in sprites.values()) + \
+        32 * len(all_pals) + \
+        4 * sum(len(a["steps"]) for a in anims.values())
     if total > ROM_BUDGET:
         fail_asset("assets.json",
                    "ROM assets %d / %d — over budget: reduce the art "
                    "(fewer frames or colours) or split the manifest"
                    % (total, ROM_BUDGET))
         return None
-    emit_header(sprites, all_pals, os.path.join(out_dir, stem + ".h"))
-    return {"sprites": sprites, "palettes": all_pals, "total": total}
+    emit_header(sprites, anims, all_pals, os.path.join(out_dir, stem + ".h"))
+    return {"sprites": sprites, "palettes": all_pals, "anims": anims,
+            "total": total}
 
 
 def main(argv=None):

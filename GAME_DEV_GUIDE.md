@@ -113,6 +113,37 @@ the target looks art up by string). A working end-to-end example:
 `programs/experimental/asset_demo.c`, built by `make experimental` and
 pinned pixel-for-pixel by `make test-assetdemo`.
 
+`"animations"` (top-level, referencing sprites by name) turns a list of
+frames into a played resource:
+
+```json
+"animations": [
+  { "name": "run", "sprite": "player", "frames": [0,1,2,3,4,5], "ms": 80 }
+]
+```
+
+Each emits `#define RUN_MS`, `#define RUN_STEPS` and a frame table
+`static const sprite4_ref *const run_frames[RUN_STEPS]` — refs into the
+sprite's frames, in play order. The game PLAYS a table with
+`anim_tick()` from `programs/asset.h`: an `anim_state` names the table,
+the step length and the mode — `ANIM_LOOP` wraps, `ANIM_PINGPONG` runs
+forward and back without repeating the turnarounds, `ANIM_ONCE` stops on
+the last step and sets `done`. Time comes from the frame timer
+(`arcade1_timer_count()`: +1 per machine frame, never host time), so
+playback is a pure function of frames and identical across hosts. Read
+the timer once per frame and tick:
+
+    static anim_state run = ANIM(run_frames, RUN_MS, ANIM_LOOP);
+    ...
+    unsigned t = arcade1_timer_count();
+    asset_sprite4(anim_tick(&run, t), x, y, flip);
+
+`anim_reset(&run, t)` restarts from the first step, anchored at the
+current reading — call it on state changes so the new animation doesn't
+inherit the old carry. A worked example: `programs/experimental/
+walkdemo.c` plays the emitted idle/walk tables from its assetc-compiled
+sheet (`make test-walkdemo` pins the behaviour).
+
 ## Build
 
 One command, from any directory, with nothing but the CLI and your source:

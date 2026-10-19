@@ -1,5 +1,6 @@
 #!/bin/sh
-# ROADMAP Wave 1 cards 1.1-1.5 + Wave 2 metadata/refs: arc1-assetc harness.
+# ROADMAP Wave 1 cards 1.1-1.5 + Wave 2 refs/metadata + Wave 3 animations:
+# arc1-assetc harness.
 #
 # Fixture images are BUILT IN-TEST by the embedded python mini-PNG-writer
 # (struct + zlib, non-interlaced 8-bit RGB) — no binary fixtures in git.
@@ -582,6 +583,200 @@ cmp "$OUT/det3/meta.h" "$OUT/det4/meta.h" || \
 CHECKS=$((CHECKS + 2))
 echo "  ok: metadata headers byte-identical across two runs"
 
+# --- 11) animations + anim_tick (Wave 3) ------------------------------------
+# animmanifest <path> <animations-json>: game.json's 4x4 2-frame player plus
+# an "animations" array.
+animmanifest() {
+    python3 - "$OUT/game.json" "$1" "$2" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+doc["animations"] = json.loads(sys.argv[3])
+json.dump(doc, open(sys.argv[2], "w"))
+PY
+}
+
+echo '{"format":1,"palettes":{},"sprites":[],"animations":{}}' > "$OUT/animshape.json"
+expect 1 '"animations" must be an array' \
+    python3 "$TOOL" --assets "$OUT/animshape.json" --out-dir "$OUT/gen"
+assert_has '"animations" must be an array' "animations container error"
+
+animmanifest "$OUT/animobj.json" '[42]'
+expect 1 "a non-object animation is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animobj.json" --out-dir "$OUT/gen"
+assert_has "each animation must be an object" "animation object error"
+
+animmanifest "$OUT/animname.json" '[{"name":"run!","sprite":"player","frames":[0],"ms":80}]'
+expect 1 "a non-identifier animation name is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animname.json" --out-dir "$OUT/gen"
+assert_has 'missing or invalid "name"' "animation name error"
+
+animmanifest "$OUT/animdup.json" \
+    '[{"name":"run","sprite":"player","frames":[0],"ms":80},{"name":"run","sprite":"player","frames":[1],"ms":80}]'
+expect 1 "a duplicate animation name is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animdup.json" --out-dir "$OUT/gen"
+assert_has "duplicate animation name" "duplicate animation error"
+
+animmanifest "$OUT/animclash.json" '[{"name":"player","sprite":"player","frames":[0],"ms":80}]'
+expect 1 "an animation named like its sprite is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animclash.json" --out-dir "$OUT/gen"
+assert_has 'clashes with sprite "player"' "sprite/animation clash error"
+
+animmanifest "$OUT/animnospr.json" '[{"name":"run","sprite":"nope","frames":[0],"ms":80}]'
+expect 1 "an undefined sprite reference is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animnospr.json" --out-dir "$OUT/gen"
+assert_has 'sprite "nope" not defined' "undefined sprite error"
+
+animmanifest "$OUT/animframes.json" '[{"name":"run","sprite":"player","frames":[],"ms":80}]'
+expect 1 "an empty frames list is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animframes.json" --out-dir "$OUT/gen"
+assert_has '"frames" must be a non-empty array of integers' "empty frames error"
+
+animmanifest "$OUT/animrange.json" '[{"name":"run","sprite":"player","frames":[0,1,2],"ms":80}]'
+expect 1 "an out-of-range frame is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animrange.json" --out-dir "$OUT/gen"
+assert_has "frame 2 out of range — sprite player has 2 frames (0..1)" "frame range error"
+
+animmanifest "$OUT/animms.json" '[{"name":"run","sprite":"player","frames":[0],"ms":0}]'
+expect 1 "ms 0 is a validation error" \
+    python3 "$TOOL" --assets "$OUT/animms.json" --out-dir "$OUT/gen"
+assert_has '"ms" must be an integer 1..60000' "ms range error"
+
+# happy path: the table preserves PLAY order (frames [1, 0]), and the
+# report counts the 4 B-per-step pointers in the ROM total (16 B sheet +
+# 32 B palette + 2 steps x 4 B = 56)
+animmanifest "$OUT/run.json" '[{"name":"run","sprite":"player","frames":[1,0],"ms":80}]'
+expect 0 "a valid animation compiles into a frame table" \
+    python3 "$TOOL" --assets "$OUT/run.json" --out-dir "$OUT/gen" --report
+H="$OUT/gen/run.h"
+for wantdef in "#define RUN_MS 80" \
+               "#define RUN_STEPS 2" \
+               "static const sprite4_ref *const run_frames[RUN_STEPS] = {" \
+               "anim run of player: 2 steps, 80 ms"; do
+    grep -Fq "$wantdef" "$H" || fail "anim header missing: $wantdef — $(cat "$H")"
+    CHECKS=$((CHECKS + 1))
+done
+FIRST=$(awk '/run_frames\[RUN_STEPS\]/{f=1;next} f&&/&player_frames/{print;exit}' "$H")
+case "$FIRST" in
+    *"[1],"*) CHECKS=$((CHECKS + 1))
+        echo "  ok: anim table in play order (RUN_MS/STEPS, &frames[1] first, banner)" ;;
+    *) fail "anim table must start at &player_frames[1] — got: $FIRST" ;;
+esac
+assert_has "ANIM run of player: 2 steps, 80 ms = 8 B" "ANIM report line"
+assert_has "ROM assets 56 / 262144 (0.0 %)" "ROM total counts the anim table"
+
+# the emitted table must COMPILE against the real programs/asset.h — the
+# ANIM() macro, anim_tick() and the emitter's types cannot drift apart
+cat > "$OUT/anim_check.c" <<'EOF'
+#include "asset.h"
+#include "gen/run.h"
+static const sprite4_ref *probe(void)
+{
+    static anim_state run = ANIM(run_frames, RUN_MS, ANIM_LOOP);
+    return anim_tick(&run, 0u);
+}
+int anim_ref_probe(void) { return (int)(probe() - player_frames); }
+EOF
+CC=${CC:-cc}
+if "$CC" -fsyntax-only -Wall -Wextra -Wno-unused -Wno-pointer-to-int-cast \
+        -I"$ROOT/programs" -I"$OUT" "$OUT/anim_check.c" 2> "$OUT/anim_err.txt"; then
+    CHECKS=$((CHECKS + 1))
+    echo "  ok: emitted anim table compiles against the real asset.h"
+else
+    cat "$OUT/anim_err.txt" >&2
+    fail "emitted anim table does not compile"
+fi
+
+# anim_tick itself: a runnable host probe over all three modes plus the
+# timing edges (exact 3-frame steps at 50 ms, catch-up, wrap, stall clamp)
+cat > "$OUT/anim_probe.c" <<'EOF'
+#include <stdio.h>
+#include "asset.h"
+
+static const sprite4_ref refs[3] = {
+    { 0, 1, 1, 0, 0, 0, 0, 0, 0, 0 },   /* w = 1 identifies step 0 */
+    { 0, 2, 2, 0, 0, 0, 0, 0, 0, 0 },   /* w = 2 identifies step 1 */
+    { 0, 3, 3, 0, 0, 0, 0, 0, 0, 0 },   /* w = 3 identifies step 2 */
+};
+static const sprite4_ref *const loop3[3] = { &refs[0], &refs[1], &refs[2] };
+static const sprite4_ref *const pong3[3] = { &refs[0], &refs[1], &refs[2] };
+static const sprite4_ref *const once3[3] = { &refs[0], &refs[1], &refs[2] };
+
+static anim_state a_loop = ANIM(loop3, 50, ANIM_LOOP);
+static anim_state a_pong = ANIM(pong3, 50, ANIM_PINGPONG);
+static anim_state a_once = ANIM(once3, 50, ANIM_ONCE);
+static anim_state a_stall = ANIM(pong3, 60000, ANIM_PINGPONG);
+
+static int fails;
+#define CHECK(c) do { if (!(c)) { printf("FAIL %d: %s\n", __LINE__, #c); fails++; } } while (0)
+
+static int step_of(const sprite4_ref *fr) { return fr->w - 1; }
+
+int main(void)
+{
+    /* every step reads for exactly 3 frames (50 ms = 3 frames), the
+     * first tick carries dt=0 (reset anchors at t=0), so step 1 first
+     * shows at t=3 */
+    static const int want_loop[10] = {0,0,0,1,1,1,2,2,2,0};
+    static const int want_pong[14]  = {0,0,0,1,1,1,2,2,2,1,1,1,0,0};
+    static const int want_once[10]  = {0,0,0,1,1,1,2,2,2,2};
+    unsigned t;
+
+    /* LOOP: 50 ms = 3000 units = exactly 3 frames per step, no drift */
+    anim_reset(&a_loop, 0);
+    for (t = 0; t < 10; t++)
+        CHECK(step_of(anim_tick(&a_loop, t)) == want_loop[t]);
+
+    /* PINGPONG: forward to the end, back, no repeats at the turns */
+    anim_reset(&a_pong, 0);
+    for (t = 0; t < 14; t++)
+        CHECK(step_of(anim_tick(&a_pong, t)) == want_pong[t]);
+
+    /* ONCE: reaches the last step and holds (done) */
+    anim_reset(&a_once, 0);
+    for (t = 0; t < 10; t++)
+        CHECK(step_of(anim_tick(&a_once, t)) == want_once[t]);
+    CHECK(a_once.done);
+
+    /* catch-up: one call after 7 frames advances TWO steps at once and
+     * carries the remainder (7000 - 2*3000 = 1000) */
+    anim_reset(&a_loop, 0);
+    CHECK(step_of(anim_tick(&a_loop, 7)) == 2);
+    CHECK(a_loop.sub == 1000u);
+
+    /* wrap-around: unsigned arithmetic keeps the delta exact (dt = 3) */
+    anim_reset(&a_pong, 0xFFFFFFFEu);
+    CHECK(step_of(anim_tick(&a_pong, 1u)) == 1);
+
+    /* stall clamp: 100 000 frames read as at most 600 (10 s), so the
+     * 60 000 ms animation must NOT jump a step */
+    anim_reset(&a_stall, 0);
+    CHECK(step_of(anim_tick(&a_stall, 100000u)) == 0);
+
+    if (fails) { printf("anim probe: %d FAILS\n", fails); return 1; }
+    printf("anim probe: ok\n");
+    return 0;
+}
+EOF
+if "$CC" -Wall -Wextra -Wno-pointer-to-int-cast -I"$ROOT/programs" \
+        -o "$OUT/anim_probe" "$OUT/anim_probe.c" 2> "$OUT/anim_cc_err.txt" &&
+   "$OUT/anim_probe" > "$OUT/anim_out.txt" 2>&1; then
+    CHECKS=$((CHECKS + 1))
+    echo "  ok: anim_tick unit probe (loop/ping-pong/once, catch-up, wrap, clamp)"
+else
+    cat "$OUT/anim_cc_err.txt" "$OUT/anim_out.txt" >&2
+    fail "anim_tick unit probe failed"
+fi
+
+# determinism holds with animations in play (two processes, byte-identical)
+python3 "$TOOL" --assets "$OUT/run.json" --out-dir "$OUT/det5" 2>/dev/null || \
+    fail "animation determinism run 1"
+python3 "$TOOL" --assets "$OUT/run.json" --out-dir "$OUT/det6" 2>/dev/null || \
+    fail "animation determinism run 2"
+cmp "$OUT/det5/run.h" "$OUT/det6/run.h" || \
+    fail "animation headers differ between two runs"
+CHECKS=$((CHECKS + 2))
+echo "  ok: animation headers byte-identical across two runs"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -590,4 +785,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5 + Wave 2 refs/metadata)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5 + Wave 2 refs/metadata + Wave 3 animations)"

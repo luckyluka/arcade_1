@@ -13,6 +13,12 @@
 #define REG_INPUT_PAD (GFX_MMIO_BASE + 0x200u)
 static inline unsigned arcade1_pad(void){ return *(volatile unsigned int*)REG_INPUT_PAD; }
 
+/* Frame time from the timer device (MMIO offset 0x00, read-only): +1 per
+ * machine frame, no host clock anywhere, so the count is a pure function
+ * of frames executed and identical across hosts. This is the time source
+ * for asset.h's anim_tick(); read it once per frame. Wave 3. */
+static inline unsigned arcade1_timer_count(void){ return *(volatile unsigned int*)(ARCADE1_MMIO_BASE + 0x00u); }
+
 static inline void arcade1_clear(unsigned c){ gfx_clear(c); }
 static inline void arcade1_rect(int x,int y,int w,int h,unsigned c){ gfx_rect(x,y,w,h,c); }
 /* Every command — including PRESENT — goes out through gfx_cmd() (gfx.h),

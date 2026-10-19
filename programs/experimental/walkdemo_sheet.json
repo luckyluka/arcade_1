@@ -1,0 +1,57 @@
+{
+  "format": 1,
+  "palettes": {
+    "hero": {
+      "bank": 3,
+      "colors": [
+        "#000000",
+        "#100821",
+        "#B53831",
+        "#632018",
+        "#E7B294",
+        "#A58263",
+        "#FFFFFF",
+        "#080431",
+        "#2992FF",
+        "#1859A5",
+        "#63EBFF",
+        "#FFD321",
+        "#7341C6",
+        "#422484",
+        "#B5B2C6",
+        "#101442"
+      ]
+    }
+  },
+  "sprites": [
+    {
+      "name": "hero",
+      "file": "walkdemo_sheet_art.png",
+      "palette": "hero",
+      "frames": 7
+    }
+  ],
+  "animations": [
+    {
+      "name": "idle",
+      "sprite": "hero",
+      "frames": [
+        0
+      ],
+      "ms": 200
+    },
+    {
+      "name": "walk",
+      "sprite": "hero",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "ms": 67
+    }
+  ]
+}
