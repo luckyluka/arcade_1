@@ -1363,13 +1363,58 @@ static int cmd_build(int argc, char **argv)
  * (STRAY, VIDEO_OOB_DRAWS — same meaning as --strict), the payload budget
  * and the selected globals. Reads existing host-side counters only: no
  * MMIO, no guest-visible change, nothing in any hash. The register dump
- * moved behind --regs; --json prints one object with the same keys. */
+ * moved behind --regs; --json prints one object with the same keys.
+ * B2 adds provenance: --commands prints the last frame's command records,
+ * --at X,Y names the last command that wrote a pixel (recorded only when
+ * asked — zero cost otherwise), and STATE_HASH/FB_HASH expose the same
+ * fingerprints `run` prints so a report can be cross-checked. */
+
+static const char *video_type_name(unsigned type)
+{
+    switch (type) {
+    case ARCADE1_VIDEO_CMD_CLEAR:     return "CLEAR";
+    case ARCADE1_VIDEO_CMD_SET_PIXEL: return "SET_PIXEL";
+    case ARCADE1_VIDEO_CMD_PRESENT:   return "PRESENT";
+    case ARCADE1_VIDEO_CMD_FILL:      return "FILL";
+    case ARCADE1_VIDEO_CMD_SPRITE:    return "SPRITE";
+    case ARCADE1_VIDEO_CMD_TILEMAP:   return "TILEMAP";
+    case ARCADE1_VIDEO_CMD_SPRITE4:   return "SPRITE4";
+    case ARCADE1_VIDEO_CMD_TILEMAP4:  return "TILEMAP4";
+    default:                          return "?";
+    }
+}
+
+/* One record as a greppable CMD line (execution order). */
+static void inspect_print_cmd(const arcade1_video_cmd_t *r)
+{
+    printf("CMD %u %s x=%d y=%d w=%u h=%u addr=0x%08X flags=%u "
+           "camera=0x%08X pc=0x%08X px=%u clipped=%u oob=%u\n",
+           r->id, video_type_name(r->type), r->x, r->y, r->w, r->h,
+           r->addr, r->flags, r->camera, r->pc, r->px_written,
+           (unsigned)r->clipped, r->oob);
+}
+
+/* The same record as one JSON object (no newline; for COMMANDS/AT). */
+static void inspect_print_cmd_json(const arcade1_video_cmd_t *r)
+{
+    printf("{\"id\":%u,\"type\":\"%s\",\"x\":%d,\"y\":%d,\"w\":%u,\"h\":%u,"
+           "\"addr\":\"0x%08X\",\"flags\":%u,\"camera\":\"0x%08X\","
+           "\"pc\":\"0x%08X\",\"px_written\":%u,\"clipped\":%u,\"oob\":%u}",
+           r->id, video_type_name(r->type), r->x, r->y, r->w, r->h,
+           r->addr, r->flags, r->camera, r->pc, r->px_written,
+           (unsigned)r->clipped, r->oob);
+}
+
 static int cmd_inspect(int argc, char **argv)
 {
     const char *rom_path = NULL, *input_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     unsigned    frames = 600;
     int         json = 0, regs = 0;
+    int         commands = 0, at_set = 0;
+    unsigned    at_x = 0, at_y = 0;
+    int         recording = 0;
+    unsigned    at_id = 0;
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
     size_t   n;
@@ -1395,6 +1440,35 @@ static int cmd_inspect(int argc, char **argv)
             json = 1;
         else if (!strcmp(a, "--regs"))
             regs = 1;
+        else if (!strcmp(a, "--commands"))
+            commands = 1;
+        else if (!strcmp(a, "--at")) {
+            const char *s;
+            char       *e = NULL;
+            unsigned long xv, yv;
+
+            if (i + 1 >= argc) {
+                fprintf(stderr, "arcade1 inspect: --at needs X,Y\n");
+                return 2;
+            }
+            s  = argv[++i];
+            xv = strtoul(s, &e, 10);
+            if (e == s || *e != ',') {
+                fprintf(stderr, "arcade1 inspect: --at wants pixel "
+                        "coordinates X,Y (got '%s')\n", s);
+                return 2;
+            }
+            s = e + 1;
+            yv = strtoul(s, &e, 10);
+            if (e == s || *e != '\0') {
+                fprintf(stderr, "arcade1 inspect: --at wants pixel "
+                        "coordinates X,Y (got '%s')\n", argv[i]);
+                return 2;
+            }
+            at_x = (unsigned)xv;
+            at_y = (unsigned)yv;
+            at_set = 1;
+        }
         else if (a[0] == '-') {
             fprintf(stderr, "arcade1 inspect: unknown option '%s'\n", a);
             return 2;
@@ -1411,14 +1485,21 @@ static int cmd_inspect(int argc, char **argv)
                 "usage: arcade1 inspect <game.arc1|bin> [--frames N]\n"
                 "                        [--input FILE] [--syms FILE]\n"
                 "                        [--vars LIST] [--json] [--regs]\n"
+                "                        [--commands] [--at X,Y]\n"
                 "  runs N frames (default 600) and reports the LAST frame:\n"
                 "  greppable KEY value lines — FRAME, PC, INSTRET_FRAME,\n"
                 "  STRAY, VIDEO_CMDS, VIDEO_PIXELS_WRITTEN, VIDEO_OOB_DRAWS,\n"
-                "  ROM_USED, then VAR <name> <value> per --vars selection.\n"
+                "  ROM_USED, STATE_HASH, FB_HASH, then VAR <name> <value>\n"
+                "  per --vars selection. The hashes are the ones `run`\n"
+                "  prints, so a report cross-checks against any golden.\n"
                 "  --json prints one object with the same keys; the\n"
                 "  32-register dump appears only with --regs.\n"
                 "  --vars reads RAM globals by name; without --syms it\n"
                 "  auto-loads <image>.syms ('arcade1 build' writes it).\n"
+                "  --commands records the last frame's commands and prints\n"
+                "  them in order (CMD lines); --at X,Y names the last\n"
+                "  command that wrote that pixel. Recording happens only\n"
+                "  when one of the two is asked for.\n"
                 "  exit: 0 ok, 2 usage\n");
         return 2;
     }
@@ -1494,14 +1575,32 @@ static int cmd_inspect(int argc, char **argv)
     arcade1_set_firmware(&m, true);
 
     /* No recording, no captures, no printing here — the report must not
-     * perturb the run (host-side only, B1 rules). */
+     * perturb the run (B1 rules). B2: when (and only when) --commands or
+     * --at asks, the video device records the LAST frame's commands —
+     * so the buffers exist for exactly one frame of a run that asked. */
     for (unsigned fr = 0; fr < frames; fr++) {
+        if ((commands || at_set) && fr + 1u == frames) {
+            if (arcade1_video_record_start(&m.video) != 0) {
+                fprintf(stderr,
+                        "arcade1 inspect: cannot allocate the command "
+                        "record\n");
+                return 1;
+            }
+            recording = 1;
+        }
         instret_before_last = m.cpu.instret;   /* value before the last frame */
         input_for_frame(fr, &in);
         arcade1_set_input(&m, &in);
         arcade1_run_frame(&m);
         oob += arcade1_video_frame_totals(&m.video)->skipped_ops;
     }
+
+    /* --at: the owner buffer holds the id of the last command that wrote
+     * each pixel during the recorded frame (0 = never written / not
+     * recorded — an off-screen pixel trivially counts as never written). */
+    if (at_set && at_x < (unsigned)ARCADE1_WIDTH &&
+        at_y < (unsigned)ARCADE1_HEIGHT)
+        at_id = m.video.owner[at_y * (unsigned)ARCADE1_WIDTH + at_x];
 
     {
         const arcade1_video_stats_t *ft =
@@ -1514,14 +1613,18 @@ static int cmd_inspect(int argc, char **argv)
                    "\"TILEMAP\":%u,\"SPRITE4\":%u,\"TILEMAP4\":%u,"
                    "\"PRESENT\":%u},"
                    "\"VIDEO_PIXELS_WRITTEN\":%u,\"VIDEO_OOB_DRAWS\":%llu,"
-                   "\"ROM_USED\":{\"used\":%u,\"size\":%u},\"VAR\":{",
+                   "\"ROM_USED\":{\"used\":%u,\"size\":%u},"
+                   "\"STATE_HASH\":\"0x%016llX\",\"FB_HASH\":\"0x%016llX\","
+                   "\"VAR\":{",
                    m.frame_counter, m.cpu.pc,
                    (unsigned long long)(m.cpu.instret - instret_before_last),
                    m.bus.stray_accesses,
                    ft->cmds_clear, ft->cmds_fill, ft->cmds_sprite,
                    ft->cmds_tilemap, ft->cmds_sprite4, ft->cmds_tilemap4,
                    ft->cmds_present, ft->pixels_written, oob,
-                   (unsigned)rom_size, (unsigned)ARCADE1_ROM_SIZE);
+                   (unsigned)rom_size, (unsigned)ARCADE1_ROM_SIZE,
+                   (unsigned long long)state_hash(&m.cpu, &m.bus),
+                   (unsigned long long)fb_hash(&m));
             for (unsigned v = 0; v < g_nvars; v++)
                 printf("%s\"%s\":%d", v ? "," : "", g_vars[v]->name,
                        (int)(int32_t)arcade1_read32(&m.bus,
@@ -1532,6 +1635,23 @@ static int cmd_inspect(int argc, char **argv)
                 for (int r = 0; r < 32; r++)
                     printf("%s\"0x%08X\"", r ? "," : "", m.cpu.regs[r]);
                 printf("]");
+            }
+            if (commands) {
+                printf(",\"COMMANDS\":[");
+                for (uint32_t k = 0; k < m.video.rec_count; k++) {
+                    if (k) printf(",");
+                    inspect_print_cmd_json(&m.video.rec[k]);
+                }
+                printf("]");
+            }
+            if (at_set) {
+                printf(",\"AT\":{\"x\":%u,\"y\":%u,\"id\":%u,\"cmd\":",
+                       at_x, at_y, at_id);
+                if (at_id >= 1 && at_id <= m.video.rec_count)
+                    inspect_print_cmd_json(&m.video.rec[at_id - 1]);
+                else
+                    printf("null");
+                printf("}");
             }
             printf("}\n");                     /* close the object */
         } else {
@@ -1549,14 +1669,31 @@ static int cmd_inspect(int argc, char **argv)
             printf("VIDEO_OOB_DRAWS %llu\n", oob);
             printf("ROM_USED %u / %u\n", (unsigned)rom_size,
                    (unsigned)ARCADE1_ROM_SIZE);
+            printf("STATE_HASH 0x%016llX\n",
+                   (unsigned long long)state_hash(&m.cpu, &m.bus));
+            printf("FB_HASH 0x%016llX\n",
+                   (unsigned long long)fb_hash(&m));
             for (unsigned v = 0; v < g_nvars; v++)
                 printf("VAR %s %d\n", g_vars[v]->name,
                        (int)(int32_t)arcade1_read32(&m.bus, g_vars[v]->addr));
             if (regs)
                 for (int r = 0; r < 32; r++)
                     printf("  x%-2d = 0x%08X\n", r, m.cpu.regs[r]);
+            if (commands)
+                for (uint32_t k = 0; k < m.video.rec_count; k++)
+                    inspect_print_cmd(&m.video.rec[k]);
+            if (at_set) {
+                printf("AT %u,%u id=%u\n", at_x, at_y, at_id);
+                if (at_id >= 1 && at_id <= m.video.rec_count)
+                    inspect_print_cmd(&m.video.rec[at_id - 1]);
+                else
+                    printf("AT %u,%u pixel never written in the recorded "
+                           "frame\n", at_x, at_y);
+            }
         }
     }
+    if (recording)
+        arcade1_video_record_stop(&m.video);
     return 0;
 }
 
@@ -1571,7 +1708,8 @@ int main(int argc, char **argv)
                 "  capture  run + dump frames (default dir: captures/)\n"
                 "  test     smoke run; --golden FILE compares per-frame hashes\n"
                 "  build    compile a guest C program into a .arc1 image\n"
-                "  inspect  structured last-frame report: KEY value lines (--json, --regs)\n");
+                "  inspect  structured last-frame report: KEY value lines\n"
+                "           (--json, --regs, --commands, --at X,Y)\n");
         return 2;
     }
     if (!strcmp(argv[1], "run"))

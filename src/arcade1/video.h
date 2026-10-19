@@ -126,6 +126,48 @@ typedef struct arcade1_video_stats {
                                * countable.                               */
 } arcade1_video_stats_t;
 
+/* --- B2 (ROADMAP_V3 §5): command records ---------------------------------- *
+ *
+ * When (and only when) a host asks — `arcade1 inspect --commands`/`--at` —
+ * the device records what each command did during the recorded frame. Field
+ * set pinned by card B2: {id, type, x, y, w, h, addr, flags, camera,
+ * pc_of_issuing_store, px_written, clipped, oob}.
+ *
+ *   id        1-based position in the record list. 0 means "no command":
+ *             the per-pixel owner buffer uses it for never-written pixels
+ *             and for commands beyond the 4096 cap.
+ *   x, y      X/Y registers at execution, signed as the guest API means them
+ *   addr      source pointer: ADDR for SPRITE/SPRITE4, MAP_ADDR for
+ *             TILEMAP/TILEMAP4, 0 otherwise (TILE_ADDR has no slot in the
+ *             pinned field set)
+ *   camera    CAM_X in bits 15..0, CAM_Y in bits 31..16 (raw halves)
+ *   pc        PC of the store that issued the command — valid because the
+ *             machine wires store_pc to &cpu->pc and exec.c commits cpu->pc
+ *             only AFTER an instruction retires, so a store's own MMIO
+ *             write still sees its own PC. 0 if not wired.
+ *   px_written framebuffer writes the command made (pixels_written delta)
+ *   clipped   1 when part of the requested rectangle fell off-screen
+ *   oob       source reads outside ROM/RAM (skipped_ops delta; M29) */
+typedef struct arcade1_video_cmd {
+    uint16_t id;
+    uint8_t  type;
+    uint8_t  flags;
+    int32_t  x;
+    int32_t  y;
+    uint32_t w;
+    uint32_t h;
+    uint32_t addr;
+    uint32_t camera;
+    uint32_t pc;
+    uint32_t px_written;
+    uint8_t  clipped;
+    uint8_t  _pad[3];
+    uint32_t oob;           /* examined pixels that read outside ROM/RAM —
+                            * can reach w*h <= 480*270, so it is wide   */
+} arcade1_video_cmd_t;
+
+#define ARCADE1_VIDEO_REC_MAX 4096u   /* card B2: "up to 4,096 records"      */
+
 /* --- Device state --------------------------------------------------------- */
 
 typedef struct arcade1_video {
@@ -149,6 +191,19 @@ typedef struct arcade1_video {
     uint32_t presents;       /* PRESENT commands executed (STATUS)        */
     arcade1_video_stats_t stats;        /* work done so far this frame    */
     arcade1_video_stats_t frame_totals; /* snapshot at end of last frame  */
+
+    /* --- B2 recording (host-side, inspect only; off unless record_start) --
+     * Disabled cost: one NULL check at the command dispatch; the clear and
+     * fill loops are hand-versioned so the disabled loops compile back to
+     * exactly the pre-recording ones, and the blits carry one loop-invariant
+     * NULL check per written pixel (measured at baseline, see
+     * docs/experiments/arcade1-inspect.md). No hash can change: state_hash
+     * covers CPU+RAM+stray, fb_hash the framebuffer — never this state. */
+    const uint32_t *store_pc;  /* wired by the machine: &cpu->pc           */
+    arcade1_video_cmd_t *rec;  /* record list (malloc'd while recording)   */
+    uint32_t rec_count;        /* records captured (cap 4096)              */
+    uint32_t rec_cur_id;       /* id stamped into pixels; 0 = none          */
+    uint16_t *owner;           /* per-pixel last-writer id (calloc'd)      */
 } arcade1_video_t;
 
 /* Registers/power-on: parameters zeroed, nothing presented. Keeps the
@@ -175,5 +230,16 @@ void arcade1_video_stats_end_frame(arcade1_video_t *v);
  * `frame_totals` is the completed last frame. */
 const arcade1_video_stats_t *arcade1_video_stats(const arcade1_video_t *v);
 const arcade1_video_stats_t *arcade1_video_frame_totals(const arcade1_video_t *v);
+
+/* --- B2: recording control (host-side; `arcade1 inspect` only) ------------ *
+ * record_start allocates the record list and the per-pixel owner buffer —
+ * the only allocation this device ever does, and it happens only when a host
+ * asked for provenance. Commands executed while recording are captured
+ * (up to ARCADE1_VIDEO_REC_MAX; beyond the cap they execute unrecorded and
+ * stamp pixel ownership with id 0). record_stop frees both buffers and is
+ * safe to call at any time. Returns 0 ok, 1 allocation failure (nothing is
+ * left half-allocated). store_pc is read only between these calls. */
+int  arcade1_video_record_start(arcade1_video_t *v);
+void arcade1_video_record_stop(arcade1_video_t *v);
 
 #endif /* ARCADE1_VIDEO_H */

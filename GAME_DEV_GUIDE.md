@@ -130,7 +130,8 @@ dumps every frame into `captures/` (`--format png`, `--scale N`);
 session; `--record` writes one. `arcade1 inspect` runs the game, then reports
 the last frame as greppable `KEY value` lines (video counters, payload
 budget, your `--vars`; `--json` for one object, `--regs` for the
-register dump).
+register dump, `--commands`/`--at X,Y` for command records and pixel
+provenance).
 `--strict` fails the run if any draw read a source address outside
 ROM/RAM (see SDK.md for the full flag reference).
 

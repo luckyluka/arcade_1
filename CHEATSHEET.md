@@ -145,9 +145,11 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
     arcade1 inspect <game.arc1|bin> [options]   structured last-frame report:
                                                 greppable KEY value lines
                                                 (FRAME, PC, INSTRET_FRAME,
-                                                STRAY, VIDEO_CMDS, …);
-                                                --json one object, --regs
-                                                for the register dump
+                                                STRAY, VIDEO_CMDS, STATE_HASH,
+                                                …); --json one object, --regs
+                                                for the register dump,
+                                                --commands/--at for command
+                                                records and pixel provenance
 
     options:
       --frames N / --input FILE / --record FILE / --capture FILE
@@ -159,6 +161,10 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
       --json / --regs (inspect only)
                    one object with the same keys / the register dump —
                    inspect prints no per-frame lines either way
+      --commands / --at X,Y (inspect only)
+                   record the last frame and list its commands in order
+                   / name the last command that wrote that pixel. Only
+                   these two ask the device to record anything.
       --strict     exit non-zero if any draw read a source address outside
                    ROM/RAM — those draws silently paint nothing. Without
                    --strict the run still prints one warning line on stderr
@@ -171,7 +177,9 @@ straight back through --input.
 `arcade1 inspect` is the one-call machine report: run the conditions,
 then print the last frame's counters as KEY value lines (host-side
 counters only — nothing in any hash; the register dump moved behind
---regs). Every key is listed in SDK.md.
+--regs). `--commands`/`--at X,Y` add provenance: which command drew
+what, and which command last wrote a pixel — recorded only when asked.
+Every key is listed in SDK.md.
 
 ## Tests
 `make check`: unit tests, golden regression (tests/golden), CLI tests

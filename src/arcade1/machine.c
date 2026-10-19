@@ -237,6 +237,11 @@ void arcade1_init(arcade1_machine_t *m)
     m->video.framebuffer = m->framebuffer;
     m->video.rom         = m->bus.rom;
     m->video.ram         = m->bus.ram;
+    /* B2 (ROADMAP_V3 §5): expose the PC of the executing store to the video
+     * hook. It is the STORE's own PC because exec.c commits cpu->pc only
+     * after an instruction retires, so during a command write cpu->pc still
+     * points at that store. Host-side wiring only; kept across resets. */
+    m->video.store_pc    = &m->cpu.pc;
     /* Attach the machine's muxed handler to the MMIO window (the M11 handler
      * mechanism). arcade1_bus_reset() keeps this attachment, so a reset
      * restarts the devices without re-registering anything. */

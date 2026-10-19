@@ -12,6 +12,7 @@
 #include "machine.h"   /* for the screen geometry only (ARCADE1_WIDTH/HEIGHT) */
 
 #include <string.h>    /* memset: the per-frame stats reset (task C counters) */
+#include <stdlib.h>    /* malloc/calloc/free: B2 record buffers (inspect only) */
 
 /* --- M29: where the device may read -------------------------------------- *
  * The device fetches image bytes from the integer addresses the guest hands
@@ -79,9 +80,17 @@ void arcade1_video_reset(arcade1_video_t *v)
     v->presents = 0u;
     arcade1_video_stats_begin_frame(v);   /* counters start clean too */
     v->frame_totals = v->stats;           /* and read as zero until a frame */
+    /* B2 recording is a host session, not power-on state: a reset drops it
+     * (the buffers are host-owned between record_start and record_stop, so
+     * never reset while recording). Nulling here is also what makes a direct
+     * arcade1_video_reset(&local_v) safe — the dispatch reads v->rec. */
+    v->rec = NULL;
+    v->owner = NULL;
+    v->rec_count = 0;
+    v->rec_cur_id = 0;
     /* v->framebuffer / v->rom / v->ram are deliberately kept: they are
      * assigned once at machine init and survive resets (like the bus's MMIO
-     * attachment). */
+     * attachment). v->store_pc is host wiring the same way. */
 }
 
 /* --- Host-side work counters (DEVICE_BUDGET.md, BEFORE_M25 task C) -------- *
@@ -119,8 +128,18 @@ static void video_clear(arcade1_video_t *v)
     v->stats.commands++;
     if (v->framebuffer == 0)
         return;
-    for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++)
-        v->framebuffer[i] = c;
+    if (v->owner == 0) {                    /* B2 off: exactly the old loop */
+        for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++)
+            v->framebuffer[i] = c;
+    } else {                                /* recording: stamp as we write  */
+        const uint16_t  id = (uint16_t)v->rec_cur_id;
+        uint16_t *const owner = v->owner;
+
+        for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++) {
+            v->framebuffer[i] = c;
+            owner[i] = id;
+        }
+    }
     v->stats.pixels_written += (uint32_t)ARCADE1_FB_PIXELS;
 }
 
@@ -136,6 +155,9 @@ static void video_set_pixel(arcade1_video_t *v)
      * but the plot is clipped: nothing is written outside the screen. */
     if (v->x < (uint32_t)ARCADE1_WIDTH && v->y < (uint32_t)ARCADE1_HEIGHT) {
         v->framebuffer[v->y * (uint32_t)ARCADE1_WIDTH + v->x] = c;
+        if (v->owner)
+            v->owner[v->y * (uint32_t)ARCADE1_WIDTH + v->x] =
+                (uint16_t)v->rec_cur_id;
         v->stats.pixels_written++;      /* clipped away: no pixel written */
     }
 }
@@ -192,10 +214,23 @@ static void video_fill(arcade1_video_t *v)
 
     video_clip((int32_t)v->x, (int32_t)v->y, v->w, v->h, &x0, &x1, &y0, &y1);
 
-    for (py = y0; py < y1; py++)
-        for (px = x0; px < x1; px++)
-            v->framebuffer[py * (int64_t)ARCADE1_WIDTH + px] =
-                (uint16_t)v->color;
+    if (v->owner == 0) {                    /* B2 off: exactly the old loop */
+        for (py = y0; py < y1; py++)
+            for (px = x0; px < x1; px++)
+                v->framebuffer[py * (int64_t)ARCADE1_WIDTH + px] =
+                    (uint16_t)v->color;
+    } else {                                /* recording: stamp as we write  */
+        const uint16_t  id = (uint16_t)v->rec_cur_id;
+        uint16_t *const owner = v->owner;
+
+        for (py = y0; py < y1; py++)
+            for (px = x0; px < x1; px++) {
+                const int64_t i = py * (int64_t)ARCADE1_WIDTH + px;
+
+                v->framebuffer[i] = (uint16_t)v->color;
+                owner[i] = id;
+            }
+    }
     /* Every pixel of the clipped window is written (a fill has no
      * transparency), so the on-screen area is exactly the work done. */
     v->stats.pixels_written += (uint32_t)((x1 - x0) * (y1 - y0));
@@ -228,6 +263,8 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
                             uint16_t color)
 {
     int64_t x0, x1, y0, y1, sx, sy;
+    uint16_t *const owner = v->owner;      /* B2: loop-invariant provenance  */
+    const uint16_t  id    = (uint16_t)v->rec_cur_id;
 
     if (v->framebuffer == 0)
         return;
@@ -255,6 +292,8 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
             /* Set bits are drawn in color; clear bits are transparent. */
             if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u) {
                 v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = color;
+                if (owner)                 /* B2: only written pixels stamp  */
+                    owner[sy * (int64_t)ARCADE1_WIDTH + sx] = id;
                 v->stats.pixels_written++;   /* transparent: writes nothing */
             }
         }
@@ -295,6 +334,8 @@ static void video_blit_4bpp(arcade1_video_t *v, uint64_t src_addr,
     int64_t x0, x1, y0, y1, sx, sy;
     const uint64_t stride = (w + 1u) / 2u;   /* bytes per row (even w: w/2) */
     const uint16_t *pal = &v->palette[(uint32_t)pal_bank * 16u];
+    uint16_t *const owner = v->owner;      /* B2: loop-invariant provenance  */
+    const uint16_t  id    = (uint16_t)v->rec_cur_id;
 
     if (v->framebuffer == 0)
         return;
@@ -323,6 +364,8 @@ static void video_blit_4bpp(arcade1_video_t *v, uint64_t src_addr,
                                      : (uint8_t)(byte >> 4);
             if (nib != 0u) {
                 v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = pal[nib];
+                if (owner)                 /* B2: value 0 never stamps      */
+                    owner[sy * (int64_t)ARCADE1_WIDTH + sx] = id;
                 v->stats.pixels_written++;   /* transparent: writes nothing */
             }
         }
@@ -538,6 +581,141 @@ static void video_tilemap4(arcade1_video_t *v)
     }
 }
 
+/* --- B2: command recording (host-side; inspect only) ---------------------- */
+
+int arcade1_video_record_start(arcade1_video_t *v)
+{
+    if (v->rec != NULL || v->owner != NULL)
+        return 0;                        /* already recording: harmless no-op */
+    v->rec   = malloc(ARCADE1_VIDEO_REC_MAX * sizeof *v->rec);
+    v->owner = calloc((size_t)ARCADE1_FB_PIXELS, sizeof *v->owner);
+    if (v->rec == NULL || v->owner == NULL) {
+        free(v->rec);
+        free(v->owner);
+        v->rec = NULL;
+        v->owner = NULL;
+        return 1;                        /* nothing half-allocated            */
+    }
+    v->rec_count  = 0;
+    v->rec_cur_id = 0;
+    return 0;
+}
+
+void arcade1_video_record_stop(arcade1_video_t *v)
+{
+    free(v->rec);
+    free(v->owner);
+    v->rec = NULL;
+    v->owner = NULL;
+    v->rec_count = 0;
+    v->rec_cur_id = 0;
+}
+
+/* Open the record for `cmd` before it executes: snapshot the registers, the
+ * geometry source and the PC of the issuing store, and prime the pixel-stamp
+ * id. NULL for an ignored (unknown) command, or once the 4096 cap is reached
+ * — the command then executes unrecorded and stamps id 0. */
+static arcade1_video_cmd_t *video_rec_begin(arcade1_video_t *v, uint32_t cmd,
+                                            uint32_t *px0, uint32_t *oob0)
+{
+    arcade1_video_cmd_t *r;
+
+    switch (cmd) {
+    case ARCADE1_VIDEO_CMD_CLEAR:    case ARCADE1_VIDEO_CMD_SET_PIXEL:
+    case ARCADE1_VIDEO_CMD_PRESENT:  case ARCADE1_VIDEO_CMD_FILL:
+    case ARCADE1_VIDEO_CMD_SPRITE:   case ARCADE1_VIDEO_CMD_TILEMAP:
+    case ARCADE1_VIDEO_CMD_SPRITE4:  case ARCADE1_VIDEO_CMD_TILEMAP4:
+        break;
+    default:
+        return NULL;                   /* unknown command: ignored, no record */
+    }
+    if (v->rec_count >= ARCADE1_VIDEO_REC_MAX) {
+        v->rec_cur_id = 0;
+        return NULL;
+    }
+    r = &v->rec[v->rec_count];
+    v->rec_count++;
+    v->rec_cur_id = v->rec_count;       /* 1-based: 0 in the owner buffer
+                                         * means "never written / over cap"  */
+    r->id     = (uint16_t)v->rec_cur_id;
+    r->type   = (uint8_t)cmd;
+    r->flags  = v->flags;
+    r->x      = (int32_t)v->x;
+    r->y      = (int32_t)v->y;
+    r->w      = v->w;
+    r->h      = v->h;
+    switch (cmd) {
+    case ARCADE1_VIDEO_CMD_SPRITE:
+    case ARCADE1_VIDEO_CMD_SPRITE4:    r->addr = v->addr;        break;
+    case ARCADE1_VIDEO_CMD_TILEMAP:
+    case ARCADE1_VIDEO_CMD_TILEMAP4:   r->addr = v->map_addr;    break;
+    default:                           r->addr = 0u;             break;
+    }
+    r->camera = (v->cam_x & 0xFFFFu) | ((v->cam_y & 0xFFFFu) << 16);
+    r->pc = (v->store_pc != NULL) ? *v->store_pc : 0u;
+    r->px_written = 0;
+    r->clipped = 0;
+    r->oob = 0;
+    *px0 = v->stats.pixels_written;
+    *oob0 = v->stats.skipped_ops;
+    return r;
+}
+
+/* Close the record after execution: the two stats deltas, plus the clipped
+ * verdict recomputed for the command's geometry exactly as the drawing paths
+ * clip it. Recording-only work — none of this runs when disabled. */
+static void video_rec_end(arcade1_video_t *v, arcade1_video_cmd_t *r,
+                          uint32_t px0, uint32_t oob0)
+{
+    int64_t x0, x1, y0, y1;
+
+    r->px_written = v->stats.pixels_written - px0;
+    r->oob = v->stats.skipped_ops - oob0;
+
+    switch (r->type) {
+    case ARCADE1_VIDEO_CMD_SET_PIXEL:
+        r->clipped = !((uint32_t)r->x < (uint32_t)ARCADE1_WIDTH &&
+                       (uint32_t)r->y < (uint32_t)ARCADE1_HEIGHT);
+        break;
+    case ARCADE1_VIDEO_CMD_FILL:
+        video_clip((int32_t)r->x, (int32_t)r->y, r->w, r->h,
+                   &x0, &x1, &y0, &y1);
+        r->clipped = (x0 != (int32_t)r->x) || (y0 != (int32_t)r->y) ||
+                     (x1 != (int64_t)(int32_t)r->x + (int64_t)r->w) ||
+                     (y1 != (int64_t)(int32_t)r->y + (int64_t)r->h);
+        break;
+    case ARCADE1_VIDEO_CMD_SPRITE:
+    case ARCADE1_VIDEO_CMD_SPRITE4: {
+        const int64_t ox =
+            (int64_t)(int32_t)r->x - (int64_t)(int32_t)v->cam_x;
+        const int64_t oy =
+            (int64_t)(int32_t)r->y - (int64_t)(int32_t)v->cam_y;
+
+        video_clip(ox, oy, r->w, r->h, &x0, &x1, &y0, &y1);
+        r->clipped = (x0 != ox) || (y0 != oy) ||
+                     (x1 != ox + (int64_t)r->w) ||
+                     (y1 != oy + (int64_t)r->h);
+        break;
+    }
+    case ARCADE1_VIDEO_CMD_TILEMAP:
+    case ARCADE1_VIDEO_CMD_TILEMAP4: {
+        const int64_t ox =
+            (int64_t)(int32_t)r->x - (int64_t)(int32_t)v->cam_x;
+        const int64_t oy =
+            (int64_t)(int32_t)r->y - (int64_t)(int32_t)v->cam_y;
+        const int64_t gw = (int64_t)r->w * (int64_t)v->cols;
+        const int64_t gh = (int64_t)r->h * (int64_t)v->rows;
+
+        video_clip(ox, oy, gw, gh, &x0, &x1, &y0, &y1);
+        r->clipped = (x0 != ox) || (y0 != oy) ||
+                     (x1 != ox + gw) || (y1 != oy + gh);
+        break;
+    }
+    default:
+        break;   /* CLEAR covers the whole screen, PRESENT draws nothing */
+    }
+}
+
 /* --- MMIO handlers (ctx is the arcade1_video_t*) -------------------------- */
 
 uint32_t arcade1_video_mmio_read(void *ctx, uint32_t offset)
@@ -622,17 +800,30 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         v->flags = (uint8_t)(value & 0x03u);      /* bit0 flipX, bit1 flipY */
         return;
     case ARCADE1_VIDEO_REG_CMD:
+    {
+        arcade1_video_cmd_t *rec = NULL;
+        uint32_t px0 = 0, oob0 = 0;
+
+        /* B2: when nobody is recording, v->rec is NULL and this is one
+         * predicted branch — the switch below is exactly what it was. */
+        if (v->rec != NULL)
+            rec = video_rec_begin(v, value, &px0, &oob0);
+
         switch (value) {
-        case ARCADE1_VIDEO_CMD_CLEAR:     video_clear(v);     return;
-        case ARCADE1_VIDEO_CMD_SET_PIXEL: video_set_pixel(v); return;
-        case ARCADE1_VIDEO_CMD_PRESENT:   video_present(v);   return;
-        case ARCADE1_VIDEO_CMD_FILL:      video_fill(v);      return;
-        case ARCADE1_VIDEO_CMD_SPRITE:    video_sprite(v);    return;
-        case ARCADE1_VIDEO_CMD_TILEMAP:   video_tilemap(v);   return;
-        case ARCADE1_VIDEO_CMD_SPRITE4:   video_sprite4(v);   return;
-        case ARCADE1_VIDEO_CMD_TILEMAP4:  video_tilemap4(v);  return;
+        case ARCADE1_VIDEO_CMD_CLEAR:     video_clear(v);     break;
+        case ARCADE1_VIDEO_CMD_SET_PIXEL: video_set_pixel(v); break;
+        case ARCADE1_VIDEO_CMD_PRESENT:   video_present(v);   break;
+        case ARCADE1_VIDEO_CMD_FILL:      video_fill(v);      break;
+        case ARCADE1_VIDEO_CMD_SPRITE:    video_sprite(v);    break;
+        case ARCADE1_VIDEO_CMD_TILEMAP:   video_tilemap(v);   break;
+        case ARCADE1_VIDEO_CMD_SPRITE4:   video_sprite4(v);   break;
+        case ARCADE1_VIDEO_CMD_TILEMAP4:  video_tilemap4(v);  break;
         default:                          return;             /* ignored */
         }
+        if (rec != NULL)
+            video_rec_end(v, rec, px0, oob0);
+        return;
+    }
     default:
         return;   /* Unknown register: ignored. */
     }

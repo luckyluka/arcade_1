@@ -108,7 +108,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
-        test-golden-conditions test-inspect
+        test-golden-conditions test-inspect test-inspect-commands
 
 all: $(TARGET)
 
@@ -278,6 +278,17 @@ test-arc1assetc: tools/arc1_assetc.py tests/test_arc1assetc.sh
 # every key on m29game, --strict agreement, --json parses, --regs gate.
 test-inspect: $(CLI_BIN) tests/test_inspect.sh
 	sh tests/test_inspect.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# Wave B card B2 (ROADMAP_V3 §5): inspect command records + pixel
+# provenance. tests/guests/probe_cmds.c draws a sprite, then a FILL
+# covering it, paced by the timer tick; the .elf survives so the test can
+# bound main's symbol range with $(RISCV_NM) and prove each record's pc
+# is the issuing store's PC.
+test-inspect-commands: $(CLI_BIN) $(GUEST_BUILD)/probe_cmds.arc1 \
+        $(GUEST_BUILD)/probe_cmds.elf
+	sh tests/test_inspect_commands.sh $(CLI_BIN) \
+	    $(GUEST_BUILD)/probe_cmds.arc1 $(GUEST_BUILD)/probe_cmds.elf \
+	    $(RISCV_NM)
 
 # Wave 0 card 0.4 (ROADMAP_V3 4.1): the F9 conditions manifest is
 # enforced — it parses, the CLI reproduces the recorded runs from it, a

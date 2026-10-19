@@ -228,7 +228,7 @@ arcade1 build <program.c> [output.arc1]
     no .syms written". The .arc1 header layout is in CHEATSHEET.md.
 
 arcade1 inspect <game.arc1|bin> [--frames N] [--input FILE] [--syms FILE]
-                [--vars LIST] [--json] [--regs]
+                [--vars LIST] [--json] [--regs] [--commands] [--at X,Y]
     runs N frames (default 600) and reports the LAST frame as greppable
     KEY value lines:
 
@@ -244,16 +244,48 @@ arcade1 inspect <game.arc1|bin> [--frames N] [--input FILE] [--syms FILE]
                                     fell outside ROM/RAM — the same
                                     condition `run --strict` fails on
       ROM_USED <n> / 262144         payload bytes used / budget
+      STATE_HASH 0x................ the CPU+RAM+stray fingerprint `run`
+                                    prints — cross-check against any
+                                    golden's `frame N hash=...` line
+      FB_HASH 0x..................  the framebuffer fingerprint `run`
+                                    prints
       VAR <name> <value>            one line per --vars selection (RAM
                                     globals by name; <image>.syms is
                                     auto-loaded if --syms is omitted)
 
+    --commands records the LAST frame's video commands (only when asked:
+    the record list and the per-pixel buffer are allocated just for that
+    frame, up to 4096 records) and prints each as a CMD line, in
+    execution order:
+
+      CMD <id> <TYPE> x=.. y=.. w=.. h=.. addr=0x........ flags=<n>
+              camera=0x........ pc=0x........ px=<n> clipped=<0|1>
+              oob=<n>
+
+    with id 1-based; x/y/w/h the parameter registers at execution; addr
+    the source pointer (SPRITE*: ADDR, TILEMAP*: MAP_ADDR, else 0);
+    camera = CAM_X | CAM_Y<<16; pc the PC of the store that issued the
+    command; px the framebuffer writes it made; clipped 1 when part of
+    the requested rectangle fell off-screen; oob the source reads that
+    landed outside ROM/RAM (M29). A command beyond the 4096 cap executes
+    unrecorded and stamps pixels with id 0.
+
+    --at X,Y prints `AT X,Y id=<n>` plus the record of the LAST command
+    that wrote that pixel during the recorded frame (id 0 = never
+    written, with a note). Off-screen pixels are trivially id 0. Both
+    flags imply recording; runs without them allocate nothing and the
+    draw paths are loop-versioned so the disabled loops compile back to
+    exactly the pre-recording ones (measured at baseline).
+
     --json prints one object with the same keys (VIDEO_CMDS nests, VAR
-    maps names to values, ROM_USED maps used/size); the 32-register
-    dump appears only with --regs (`run --inspect` still prints it
-    inline). Host-side only: existing counters, no MMIO, no guest-visible
-    change, nothing in any hash. Exit: 0 ok, 2 usage. Nothing else is
-    printed, so the report pipes straight into grep/awk/jq.
+    maps names to values, ROM_USED maps used/size); with --commands /
+    --at the object gains COMMANDS (array of the same records) / AT
+    ({x, y, id, cmd}). The 32-register dump appears only with --regs
+    (`run --inspect` still prints it inline). Host-side only: existing
+    counters, no MMIO, no guest-visible change, nothing in any hash —
+    STATE_HASH is identical with and without recording. Exit: 0 ok,
+    2 usage. Nothing else is printed, so the report pipes straight into
+    grep/awk/jq.
 ```
 
 ## Remaining M28 deliverables
