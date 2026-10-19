@@ -904,9 +904,10 @@ static int run_cmd_capture(char *const argv[], const char *out_path)
 
 /* Write <image>.syms from an nm dump: the build header line first, then the
  * RAM-window names in nm's own "<hexaddr> <type> <name>" format. Warnings on
- * stderr, never a failure — the image is already built (ROADMAP_V3 card A1). */
-static void write_syms_file(const char *nmout_path, const char *syms_path,
-                            uint32_t img_crc)
+ * stderr, never a failure — the image is already built (ROADMAP_V3 card A1).
+ * Returns 1 when the file was written, 0 when it was not. */
+static int write_syms_file(const char *nmout_path, const char *syms_path,
+                           uint32_t img_crc)
 {
     FILE    *in = fopen(nmout_path, "r");
     FILE    *outf;
@@ -916,14 +917,14 @@ static void write_syms_file(const char *nmout_path, const char *syms_path,
     if (!in) {
         fprintf(stderr, "arcade1: warning: cannot read nm output, "
                         "no .syms written\n");
-        return;
+        return 0;
     }
     outf = fopen(syms_path, "w");
     if (!outf) {
         fprintf(stderr, "arcade1: warning: cannot write %s, no .syms written\n",
                 syms_path);
         fclose(in);
-        return;
+        return 0;
     }
     fprintf(outf, "# arc1-syms crc32=0x%08x\n", img_crc);
     while (fgets(line, sizeof line, in)) {
@@ -944,7 +945,9 @@ static void write_syms_file(const char *nmout_path, const char *syms_path,
         unlink(syms_path);
         fprintf(stderr, "arcade1: warning: nm reported no RAM symbols, "
                         "no .syms written\n");
+        return 0;
     }
+    return 1;
 }
 
 /* Pack a flat guest binary into an .arc1 image, in process. Uses the same
@@ -1020,11 +1023,40 @@ static int cmd_build(int argc, char **argv)
     const size_t nsdk = sizeof sdk_names / sizeof sdk_names[0];
 
     if (argc < 1) {
-        fprintf(stderr, "usage: arcade1 build <program.c> [output.arc1]\n");
+        fprintf(stderr,
+                "usage: arcade1 build <program.c> [output.arc1]\n"
+                "  output must end in .arc1; the default is <source stem>.arc1\n");
         return 2;
     }
     const char *src = argv[0];
-    const char *out = (argc >= 2) ? argv[1] : "program.arc1";
+    char        defout[1024];
+    const char *out;
+
+    if (argc >= 2) {
+        const size_t olen = strlen(argv[1]);
+
+        out = argv[1];
+        if (olen < 5 || strcmp(out + olen - 5, ".arc1") != 0) {
+            fprintf(stderr, "arcade1: output must end in .arc1 (got '%s')\n",
+                    out);
+            return 2;
+        }
+    } else {
+        /* <source stem>.arc1 in the current directory (ROADMAP_V3 A2):
+         * game.c -> game.arc1, dir/game.c -> game.arc1 here. The stem
+         * buffer leaves room for the ".arc1" suffix (-Wformat-truncation). */
+        const char *base = strrchr(src, '/');
+        char        stem[1024 - 5];
+        char       *dot;
+
+        base = base ? base + 1 : src;
+        snprintf(stem, sizeof stem, "%s", base);
+        dot = strrchr(stem, '.');
+        if (dot && dot != stem)
+            *dot = '\0';
+        snprintf(defout, sizeof defout, "%s.arc1", stem);
+        out = defout;
+    }
 
     /* Scratch directory: $TMPDIR if set, else /tmp. */
     char dir[1024];
@@ -1088,6 +1120,8 @@ static int cmd_build(int argc, char **argv)
      * so a later run can reject a .syms from a different build. A missing or
      * failing nm never fails the build — it warns. */
     char syms[1200], nmout[1200];
+    int  wrote_syms = 0;
+
     syms_path_for_image(out, syms, sizeof syms);
     snprintf(nmout, sizeof nmout, "%s/nm.out", dir);
     {
@@ -1099,7 +1133,7 @@ static int cmd_build(int argc, char **argv)
         else if (nm_rc != 0)
             fprintf(stderr, "arcade1: warning: nm failed, no .syms written\n");
         else if (rc == 0)
-            write_syms_file(nmout, syms, img_crc);
+            wrote_syms = write_syms_file(nmout, syms, img_crc);
     }
 
     /* elf + bin + nm output on top of the SDK files. */
@@ -1111,8 +1145,13 @@ static int cmd_build(int argc, char **argv)
     tmpfiles[nsdk + 2] = (char *)"nm.out";
     cleanup_sdk_dir(dir, tmpfiles, nsdk + 3);
 
-    if (rc == 0)
-        printf("arcade1: built %s\n", out);
+    /* The final line reports every file written (ROADMAP_V3 A2). */
+    if (rc == 0) {
+        if (wrote_syms)
+            printf("arcade1: built %s (+ %s)\n", out, syms);
+        else
+            printf("arcade1: built %s\n", out);
+    }
     return rc;
 }
 

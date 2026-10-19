@@ -38,8 +38,11 @@ One command, from any directory, with nothing but the CLI and your source:
 the SDK headers travel inside the CLI, and the image is packed in process.
 It needs `riscv64-unknown-elf-gcc` (and `objcopy`) on PATH — plus `nm` to
 write the symbol file (without it the build still succeeds and prints a
-warning) — and writes exactly two files: the image you named and its
-`<image>.syms`. It uses the same flags as the Makefile path below. The
+warning) — and writes exactly two files: the image and its `<image>.syms`.
+The output name must end in `.arc1`; omit it and the source stem is used
+(`game.c` → `game.arc1`, in the current directory). The final line lists
+what was written: `arcade1: built game.arc1 (+ game.syms)`. It uses the
+same flags as the Makefile path below. The
 image format is the 16-byte `.arc1` header documented in CHEATSHEET.md.
 Because the `.syms` sits beside the image, `--vars` needs no `--syms`:
 `arcade1 run game.arc1 --vars score` just works after a build.

@@ -84,9 +84,20 @@ PX=$(tail -c $((480 * 270 * 3)) f.ppm | od -An -v -tu1 | awk '
 [ "$PX" = "16" ] || fail "built image painted $PX pixels, want 16"
 
 # --- 3) defaults and argument handling -------------------------------------
-./arcade1 build game.c > default.txt || fail "build with no output name failed"
-[ -f program.arc1 ] || fail "default output name is not program.arc1"
+# No output name: <source stem>.arc1 in the current directory, and the final
+# line reports every file written (ROADMAP_V3 A2).
+cp game.c solo.c
+./arcade1 build solo.c > default.txt || fail "build with no output name failed"
+[ -f solo.arc1 ] || fail "default output name should be solo.arc1 (source stem)"
+grep -q '^arcade1: built solo.arc1 (+ solo.syms)$' default.txt ||
+    fail "final line should report every file written: $(cat default.txt)"
 ./arcade1 build 2> usage.txt && fail "build with no source should fail"
 [ "$(cat usage.txt)" != "" ] || fail "build printed no usage on error"
+# An output not ending in .arc1 is rejected before anything is built.
+rc=0; ./arcade1 build game.c game.bin 2> ext.txt || rc=$?
+[ "$rc" -eq 2 ] || fail "non-.arc1 output should exit 2, got $rc"
+grep -q "output must end in .arc1 (got 'game.bin')" ext.txt ||
+    fail "missing extension message: $(cat ext.txt)"
+[ ! -f game.bin ] || fail "rejected output was still written"
 
 echo "test-build: ok — built and ran a game from an empty directory (16 px)"

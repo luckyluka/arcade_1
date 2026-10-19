@@ -199,7 +199,12 @@ arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
     --quiet is ignored in that mode.
 
 arcade1 build <program.c> [output.arc1]
-    compile a guest into an .arc1 image. Self-contained: crt0, the linker
+    compile a guest into an .arc1 image. The output must end in .arc1 —
+    anything else is exit 2, `output must end in .arc1 (got 'out.ext')` —
+    and when omitted it defaults to the source stem in the current
+    directory (game.c -> game.arc1). The final line reports every file
+    written: `arcade1: built game.arc1 (+ game.syms)`. Self-contained:
+    crt0, the linker
     script and the SDK headers are carried inside the CLI and the image is
     packed in process, so it works in any directory with no checkout and
     no build/ tree — only riscv64-unknown-elf-gcc (and objcopy) on PATH.
