@@ -1,5 +1,9 @@
 # ARCADE-1 Asset Ecosystem — Analysis and Design Task
 
+> **Status:** superseded by `AssetEcosystem.md`, which answers the
+> questions posed here with machine facts verified in this repo. Kept as
+> the record of the original analysis task.
+
 We need to think seriously about the asset ecosystem for ARCADE-1.
 
 Do **not implement anything yet**.
