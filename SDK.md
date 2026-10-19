@@ -21,9 +21,15 @@ cheat sheet lives in CHEATSHEET.md. The full `arcade1` command set
 arcade1 run <game.arc1|bin> [options]
   --frames N           run N frames (default 600)
   --input FILE         scripted input (see Input script format)
-  --capture FILE       write the final framebuffer to FILE as a PPM (P6)
-  --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every frames
+  --capture FILE       write the final framebuffer to FILE — format by
+                       extension (.png or .ppm); the file holds the frame
+                       after `--frames N`, i.e. the screen of frame N-1
+  --capture-dir DIR    write frame_NNNN.<ext> into DIR every --capture-every
+                       frames (<ext> is set by --format)
   --capture-every K    frame stride for --capture-dir (default 1)
+  --format F           capture-dir image format: png or ppm (default ppm)
+  --scale N            upscale captures N x, nearest neighbour, 1..8
+                       (--scale 4 on 480x270 gives exactly 1920x1080)
   --syms FILE          load an `nm` symbol dump (<game>.syms); for --vars it
                        is optional — <image>.syms is auto-loaded if omitted
   --vars LIST          print named game variables (comma list, or "all")
@@ -191,6 +197,9 @@ replayed here — the replay format is the script format.
 arcade1 capture <game.arc1|bin> [arcade1 run options]
     run + dump frames. Creates and uses captures/ by default
     (--capture-dir DIR), or writes one final frame with --capture FILE.
+    --format png|ppm picks the capture-dir extension (default ppm, PNG
+    is also chosen automatically for --capture *.png), and --scale N
+    upscales every written frame.
 
 arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
     smoke run: the exit status propagates. --golden FILE compares the

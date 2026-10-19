@@ -21,9 +21,12 @@
  *   arcade1 run <game.arc1|bin> [options]
  *     --frames N           run N frames (default 600)
  *     --input FILE         scripted input (see INPUT SCRIPT FORMAT below)
- *     --capture FILE       write the final framebuffer to FILE as a PPM (P6)
- *     --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every
+ *     --capture FILE       write the final framebuffer to FILE (.png or .ppm
+ *                          by extension); --frames N captures frame N-1
+ *     --capture-dir DIR    write frame_NNNN.<ext> into DIR every --capture-every
  *     --capture-every K    frame stride for --capture-dir (default 1)
+ *     --format F           --capture-dir extension: png or ppm (default ppm)
+ *     --scale N            upscale captures N x, nearest neighbour (1..8)
  *     --syms FILE          load an `nm` symbol dump (<game>.syms); omitted
  *                          with --vars it auto-loads <image>.syms
  *     --vars LIST          print named game variables (comma list, or "all")
@@ -252,22 +255,180 @@ static void record_close(unsigned last_frame)
 
 /* --- PPM (P6) frame dump -------------------------------------------------- */
 
-static int write_ppm(const char *path, const uint16_t *fb)
+/* RGB565 -> 8-bit per channel. One expansion, shared by the PPM and the
+ * PNG writer, so the two formats always carry the same bytes. */
+static void px_rgb888(uint16_t p, uint8_t out[3])
+{
+    out[0] = (uint8_t)(((p >> 11) & 31u) * 255u / 31u);   /* R */
+    out[1] = (uint8_t)(((p >> 5) & 63u) * 255u / 63u);    /* G */
+    out[2] = (uint8_t)((p & 31u) * 255u / 31u);           /* B */
+}
+
+/* Nearest-neighbour upscale: output pixel (x, y) is framebuffer pixel
+ * (x / scale, y / scale). scale 1 reproduces the framebuffer exactly. */
+static int write_ppm(const char *path, const uint16_t *fb, unsigned scale)
 {
     FILE *f = fopen(path, "wb");
     if (!f) {
         fprintf(stderr, "arcade1: cannot write '%s'\n", path);
         return -1;
     }
-    fprintf(f, "P6\n%d %d\n255\n", ARCADE1_WIDTH, ARCADE1_HEIGHT);
-    for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++) {
-        const uint16_t p = fb[i];
-        fputc((int)(((p >> 11) & 31u) * 255u / 31u), f);   /* R */
-        fputc((int)(((p >> 5) & 63u) * 255u / 63u), f);    /* G */
-        fputc((int)((p & 31u) * 255u / 31u), f);           /* B */
+    fprintf(f, "P6\n%u %u\n255\n", (unsigned)ARCADE1_WIDTH * scale,
+            (unsigned)ARCADE1_HEIGHT * scale);
+    for (unsigned y = 0; y < (unsigned)ARCADE1_HEIGHT * scale; y++) {
+        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_WIDTH;
+        for (unsigned x = 0; x < (unsigned)ARCADE1_WIDTH * scale; x++) {
+            uint8_t rgb[3];
+            px_rgb888(row[x / scale], rgb);
+            if (fwrite(rgb, 1, 3, f) != 3) {
+                fclose(f);
+                return -1;
+            }
+        }
     }
-    fclose(f);
-    return 0;
+    return fclose(f) == 0 ? 0 : -1;
+}
+
+/* --- PNG capture (ROADMAP_V3 card A3) -------------------------------------
+ * A dependency-free PNG writer: 8-bit RGB (colour type 2), filter byte 0
+ * per row, one zlib stream of stored (uncompressed) deflate blocks, and
+ * Adler-32 / CRC-32 computed here. No zlib, no libpng. */
+
+/* IEEE CRC-32 (poly 0xEDB88320, reflected) fed incrementally: the same
+ * checksum as arcade1_crc32(), applied without copying chunk type+body
+ * into one buffer. Caller inits to 0xFFFFFFFF and xors the result once. */
+static uint32_t crc32_run(uint32_t crc, const uint8_t *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        crc ^= data[i];
+        for (int b = 0; b < 8; b++)
+            crc = (crc >> 1) ^ (0xEDB88320u & (uint32_t)(-(int)(crc & 1u)));
+    }
+    return crc;
+}
+
+/* Adler-32 over the raw deflate data (RFC 1950). */
+static uint32_t adler32_run(const uint8_t *data, size_t len)
+{
+    uint32_t a = 1, b = 0;
+
+    for (size_t i = 0; i < len; i++) {
+        a = (a + data[i]) % 65521u;
+        b = (b + a) % 65521u;
+    }
+    return (b << 16) | a;
+}
+
+/* One PNG chunk: length, type, body, CRC(type || body), all big-endian. */
+static int png_chunk(FILE *f, const char *type, const uint8_t *data, size_t len)
+{
+    uint8_t  hdr[4];
+    uint32_t crc = 0xFFFFFFFFu;
+
+    hdr[0] = (uint8_t)(len >> 24); hdr[1] = (uint8_t)(len >> 16);
+    hdr[2] = (uint8_t)(len >> 8);  hdr[3] = (uint8_t)len;
+    crc = crc32_run(crc, (const uint8_t *)type, 4);
+    if (len)
+        crc = crc32_run(crc, data, len);
+    crc ^= 0xFFFFFFFFu;
+
+    if (fwrite(hdr, 1, 4, f) != 4 ||
+        fwrite(type, 1, 4, f) != 4 ||
+        (len && fwrite(data, 1, len, f) != len))
+        return -1;
+    hdr[0] = (uint8_t)(crc >> 24); hdr[1] = (uint8_t)(crc >> 16);
+    hdr[2] = (uint8_t)(crc >> 8);  hdr[3] = (uint8_t)crc;
+    return fwrite(hdr, 1, 4, f) == 4 ? 0 : -1;
+}
+
+static int write_png(const char *path, const uint16_t *fb, unsigned scale)
+{
+    static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
+    const unsigned w = (unsigned)ARCADE1_WIDTH * scale;
+    const unsigned h = (unsigned)ARCADE1_HEIGHT * scale;
+    const size_t   stride = (size_t)w * 3 + 1;        /* filter byte + RGB  */
+    const size_t   raw_len = stride * h;
+    const size_t   nblk = (raw_len + 65534) / 65535;  /* ceil, >= 1         */
+    const size_t   zlen = 2 + raw_len + 5 * nblk + 4;
+    uint8_t  ihdr[13], *raw, *z;
+    uint32_t ad;
+    size_t   pos = 0, off = 0;
+    FILE    *f;
+    int      rc = 0;
+
+    raw = malloc(raw_len);
+    z = malloc(zlen);
+    if (!raw || !z) {
+        free(raw); free(z);
+        fprintf(stderr, "arcade1: out of memory writing '%s'\n", path);
+        return -1;
+    }
+    for (unsigned y = 0; y < h; y++) {
+        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_WIDTH;
+        uint8_t *dst = raw + (size_t)y * stride;
+        dst[0] = 0;                                  /* filter: none */
+        for (unsigned x = 0; x < w; x++)
+            px_rgb888(row[x / scale], dst + 1 + (size_t)x * 3);
+    }
+
+    /* One zlib stream: 2-byte header, stored deflate blocks, Adler-32. */
+    z[pos++] = 0x78;                                 /* CMF: deflate, 32K    */
+    z[pos++] = 0x01;                                 /* FLG: check bits ok   */
+    while (off < raw_len) {
+        size_t n = raw_len - off;
+        if (n > 65535)
+            n = 65535;
+        z[pos++] = (off + n == raw_len) ? 0x01 : 0x00;   /* BFINAL + BTYPE=00 */
+        z[pos++] = (uint8_t)(n & 0xFFu);
+        z[pos++] = (uint8_t)(n >> 8);
+        z[pos++] = (uint8_t)(~n & 0xFFu);
+        z[pos++] = (uint8_t)((~n >> 8) & 0xFFu);
+        memcpy(z + pos, raw + off, n);
+        pos += n;
+        off += n;
+    }
+    ad = adler32_run(raw, raw_len);
+    z[pos++] = (uint8_t)(ad >> 24); z[pos++] = (uint8_t)(ad >> 16);
+    z[pos++] = (uint8_t)(ad >> 8);  z[pos++] = (uint8_t)ad;
+
+    f = fopen(path, "wb");
+    if (!f) {
+        fprintf(stderr, "arcade1: cannot write '%s'\n", path);
+        free(raw); free(z);
+        return -1;
+    }
+    ihdr[0]  = (uint8_t)(w >> 24); ihdr[1]  = (uint8_t)(w >> 16);
+    ihdr[2]  = (uint8_t)(w >> 8);  ihdr[3]  = (uint8_t)w;
+    ihdr[4]  = (uint8_t)(h >> 24); ihdr[5] = (uint8_t)(h >> 16);
+    ihdr[6]  = (uint8_t)(h >> 8);  ihdr[7] = (uint8_t)h;
+    ihdr[8]  = 8;                  /* bit depth          */
+    ihdr[9]  = 2;                  /* colour type: RGB   */
+    ihdr[10] = 0;                  /* compression method */
+    ihdr[11] = 0;                  /* filter method      */
+    ihdr[12] = 0;                  /* interlace          */
+    if (fwrite(sig, 1, sizeof sig, f) != sizeof sig ||
+        png_chunk(f, "IHDR", ihdr, sizeof ihdr) != 0 ||
+        png_chunk(f, "IDAT", z, zlen) != 0 ||
+        png_chunk(f, "IEND", NULL, 0) != 0)
+        rc = -1;
+    if (fclose(f) != 0)
+        rc = -1;
+    free(raw);
+    free(z);
+    if (rc != 0)
+        fprintf(stderr, "arcade1: write failed for '%s'\n", path);
+    return rc;
+}
+
+/* Pick the capture writer by extension: *.png -> PNG, anything else -> PPM
+ * (the historical default, so existing scripts keep their bytes). */
+static int write_capture(const char *path, const uint16_t *fb, unsigned scale)
+{
+    size_t n = strlen(path);
+
+    if (n > 4 && !strcmp(path + n - 4, ".png"))
+        return write_png(path, fb, scale);
+    return write_ppm(path, fb, scale);
 }
 
 /* --- Named game variables --------------------------------------------------
@@ -434,6 +595,8 @@ static int cmd_run(int argc, char **argv)
     const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     unsigned frames = 600, capture_every = 1, var_every = 0;
+    unsigned scale = 1;              /* capture upscale, 1..8 (A3) */
+    int format_png = 0;              /* capture-dir extension: .png? */
     int inspect = 0;    int quiet = 0;    int strict = 0;
     unsigned long long skipped = 0;   /* M29: out-of-window source reads */
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
@@ -451,6 +614,16 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--capture") && i + 1 < argc)  capture = argv[++i];
         else if (!strcmp(a, "--capture-dir") && i + 1 < argc) capture_dir = argv[++i];
         else if (!strcmp(a, "--capture-every") && i + 1 < argc) capture_every = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--format") && i + 1 < argc) {
+            const char *fmt = argv[++i];
+            if (!strcmp(fmt, "png"))       format_png = 1;
+            else if (!strcmp(fmt, "ppm"))  format_png = 0;
+            else {
+                fprintf(stderr, "arcade1 run: --format must be png or ppm (got '%s')\n", fmt);
+                return 2;
+            }
+        }
+        else if (!strcmp(a, "--scale") && i + 1 < argc) scale = (unsigned)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--record") && i + 1 < argc)    record_path = argv[++i];
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
@@ -473,7 +646,8 @@ static int cmd_run(int argc, char **argv)
         fprintf(stderr,
                 "usage: arcade1 run <game.arc1|bin> [--frames N] [--input FILE]\n"
                 "                   [--capture FILE] [--capture-dir DIR]\n"
-                "                   [--capture-every K] [--record FILE]\n"
+                "                   [--capture-every K] [--format png|ppm]\n"
+                "                   [--scale N] [--record FILE]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
                 "                   [--quiet] [--strict]\n"
                 "  --strict exits non-zero if any draw read a source address\n"
@@ -481,7 +655,14 @@ static int cmd_run(int argc, char **argv)
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
                 "  without --syms it auto-loads <image>.syms ('arcade1 build'\n"
                 "  writes it); --var-every requires --vars.\n"
+                "  --capture picks the format by extension (.png or .ppm);\n"
+                "  --format sets --capture-dir's extension (default ppm);\n"
+                "  --scale N upscales captures N x, nearest neighbour (1..8).\n"
                 "  --record writes the applied buttons in the script format.\n");
+        return 2;
+    }
+    if (scale < 1 || scale > 8) {
+        fprintf(stderr, "arcade1 run: --scale must be 1..8 (got %u)\n", scale);
         return 2;
     }
 
@@ -578,8 +759,9 @@ static int cmd_run(int argc, char **argv)
         }
         if (capture_dir && fr % capture_every == 0) {
             char path[512];
-            snprintf(path, sizeof path, "%s/frame_%04u.ppm", capture_dir, fr);
-            if (write_ppm(path, arcade1_framebuffer(&m)) != 0) {
+            snprintf(path, sizeof path, "%s/frame_%04u.%s", capture_dir, fr,
+                     format_png ? "png" : "ppm");
+            if (write_capture(path, arcade1_framebuffer(&m), scale) != 0) {
                 record_close(fr);
                 return 1;
             }
@@ -588,7 +770,7 @@ static int cmd_run(int argc, char **argv)
 
     record_close(frames - 1);
 
-    if (capture && write_ppm(capture, arcade1_framebuffer(&m)) != 0)
+    if (capture && write_capture(capture, arcade1_framebuffer(&m), scale) != 0)
         return 1;
 
     for (unsigned v = 0; v < g_nvars; v++)
@@ -636,7 +818,9 @@ static int cmd_capture(int argc, char **argv)
                 "usage: arcade1 capture <game.arc1|bin> [arcade1 run options]\n"
                 "  runs the game and dumps frames; default destination is\n"
                 "  captures/frame_NNNN.ppm (override with --capture-dir DIR,\n"
-                "  or a single final frame with --capture FILE).\n");
+                "  --format png for .png files, --scale N to upscale; or a\n"
+                "  single final frame with --capture FILE — format by its\n"
+                "  extension).\n");
         return 2;
     }
     for (int i = 0; i < argc; i++) {
