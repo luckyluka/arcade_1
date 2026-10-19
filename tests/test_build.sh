@@ -66,6 +66,11 @@ fail() { echo "test-build: FAILED — $*" >&2; exit 1; }
 [ -e build ]    && fail "build created a build/ dir"
 [ -z "$(ls -A "$TMPDIR")" ] || fail "build left temp files behind: $(ls -A "$TMPDIR")"
 
+# A1: the build writes its symbols beside the image, headered with the
+# image's payload CRC (tests/test_syms.sh pins the full contract).
+[ -f game.syms ] || fail "build did not write game.syms"
+grep -q '^# arc1-syms crc32=0x' game.syms || fail "game.syms has no build header"
+
 # --- 2) the image runs and draws -------------------------------------------
 ./arcade1 run game.arc1 --frames 3 --capture f.ppm --quiet > run.txt || \
     { cat run.txt >&2; fail "arcade1 run failed on the built image"; }

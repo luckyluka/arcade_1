@@ -131,8 +131,19 @@ if [ -f "$SYMS" ]; then
     "$CLI" run "$BREAK" --frames 30 --syms "$SYMS" --vars all --var-every 15 --quiet > "$OUT/v1.txt"
     grep -q '^vars *0 ' "$OUT/v1.txt" || fail "--var-every: no trace line at frame 0"
     grep -q 'score=' "$OUT/v1.txt" || fail "--var-every: trace does not include score"
-    rc=0; "$CLI" run "$BREAK" --vars score --quiet 2>/dev/null || rc=$?
-    [ "$rc" -eq 2 ] || fail "--vars without --syms should exit 2, got $rc"
+    # A1: --vars without --syms auto-loads <image>.syms beside the image
+    # (ROADMAP_V3); an image with no sidecar exits 2 with the build hint.
+    if [ -f "$ROM/breakout.syms" ]; then
+        rc=0; "$CLI" run "$BREAK" --frames 3 --vars score --quiet > "$OUT/vauto.txt" 2>/dev/null || rc=$?
+        [ "$rc" -eq 0 ] || fail "--vars auto-load should exit 0, got $rc"
+        grep -q '^var score = 0$' "$OUT/vauto.txt" ||
+            fail "--vars auto-load: no 'var score = 0' line"
+    fi
+    cp "$BREAK" "$OUT/bare.arc1"
+    rc=0; "$CLI" run "$OUT/bare.arc1" --frames 3 --vars score --quiet 2>"$OUT/bare.err" || rc=$?
+    [ "$rc" -eq 2 ] || fail "--vars with no sidecar should exit 2, got $rc"
+    grep -q "no symbols for $OUT/bare.arc1" "$OUT/bare.err" ||
+        fail "no-sidecar error should carry the build hint: $(cat "$OUT/bare.err")"
     rc=0; "$CLI" run "$BREAK" --syms "$SYMS" --vars nosuch --quiet 2>/dev/null || rc=$?
     [ "$rc" -eq 1 ] || fail "unknown symbol should exit 1, got $rc"
     rc=0; "$CLI" run "$BREAK" --syms "$SYMS" --vars main --quiet 2>/dev/null || rc=$?

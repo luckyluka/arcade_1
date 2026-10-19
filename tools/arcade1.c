@@ -24,7 +24,8 @@
  *     --capture FILE       write the final framebuffer to FILE as a PPM (P6)
  *     --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every
  *     --capture-every K    frame stride for --capture-dir (default 1)
- *     --syms FILE          load an `nm` symbol dump (<game>.syms)
+ *     --syms FILE          load an `nm` symbol dump (<game>.syms); omitted
+ *                          with --vars it auto-loads <image>.syms
  *     --vars LIST          print named game variables (comma list, or "all")
  *     --var-every K        also print the selected variables every K frames
  *     --record FILE         write the applied per-frame buttons to FILE, in the
@@ -32,7 +33,8 @@
  *     --quiet              suppress the per-frame hash lines (summary only)
  *
  * Exit codes: 0 success, 1 runtime error (bad image, unreadable file,
- * unknown/non-RAM variable, ...), 2 usage error.
+ * unknown/non-RAM variable, ...), 2 usage error — also --vars with no
+ * sidecar .syms, or a .syms whose build CRC mismatches the image.
  *
  * NAMED GAME VARIABLES (--vars): reads a game's globals out of guest RAM by
  * name, from an `nm` dump (the same <game>.syms the game tests use). Only
@@ -71,7 +73,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>       /* fork, execvp, unlink, rmdir, mkdtemp */
+#include <unistd.h>       /* fork, execvp, unlink, rmdir, mkdtemp, access */
+#include <fcntl.h>        /* open: capturing nm output in cmd_build */
 #include <sys/stat.h>     /* mkdir: the capture subcommand's directory */
 #include <errno.h>
 #include <sys/wait.h>     /* waitpid */
@@ -288,24 +291,58 @@ static unsigned        g_nsyms;
 static const symbol_t *g_vars[VAR_MAX];    /* the resolved --vars selection    */
 static unsigned        g_nvars;
 
+/* The sidecar symbol file for an image: game.arc1 -> game.syms (anything
+ * else gets ".syms" appended). Written by `arcade1 build`, auto-loaded by
+ * `run`/`test`/`inspect` for --vars when --syms is omitted. */
+static void syms_path_for_image(const char *img, char *buf, size_t buflen)
+{
+    size_t len = strlen(img);
+
+    if (len > 5 && !strcmp(img + len - 5, ".arc1"))
+        snprintf(buf, buflen, "%.*s.syms", (int)(len - 5), img);
+    else
+        snprintf(buf, buflen, "%s.syms", img);
+}
+
+/* Payload CRC from a build-written header line, when the file has one. */
+static uint32_t g_syms_crc;
+static int      g_syms_have_crc;
+
 /* Parse an `nm` dump: "<hexaddr> <type> <name>" per line. Blank lines and nm
- * section headers (which don't match 3 fields) are skipped. 0 ok, -1 error. */
+ * section headers (which don't match 3 fields) are skipped. A file written by
+ * `arcade1 build` starts with "# arc1-syms crc32=0x<image payload CRC>",
+ * remembered for the against-the-image check. Names outside the RAM window
+ * are dropped with one summary warning (only hand-edited dumps hit this; a
+ * build-written file is RAM-only by construction). 0 ok, -1 error. */
 static int load_syms(const char *path)
 {
     FILE *f = fopen(path, "r");
     char line[512];
+    unsigned dropped = 0;
 
     if (!f) {
         fprintf(stderr, "arcade1: cannot open symbol dump '%s'\n", path);
         return -1;
     }
     g_nsyms = 0;
+    g_syms_crc = 0;
+    g_syms_have_crc = 0;
     while (fgets(line, sizeof line, f)) {
         unsigned addr;
         char type, name[64];
 
+        if (sscanf(line, "# arc1-syms crc32=%x", &addr) == 1) {
+            g_syms_crc = (uint32_t)addr;
+            g_syms_have_crc = 1;
+            continue;
+        }
         if (sscanf(line, "%x %c %63s", &addr, &type, name) != 3)
             continue;                        /* blank line or nm header */
+        if (addr < ARCADE1_RAM_BASE ||
+            addr >= ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE) {
+            dropped++;                       /* code / linker marks */
+            continue;
+        }
         if (g_nsyms >= SYM_MAX) {
             fprintf(stderr, "arcade1: %s: too many symbols (max %d)\n",
                     path, SYM_MAX);
@@ -317,6 +354,9 @@ static int load_syms(const char *path)
         g_nsyms++;
     }
     fclose(f);
+    if (dropped)
+        fprintf(stderr, "arcade1: %s: dropped %u symbols outside the RAM window\n",
+                path, dropped);
     if (g_nsyms == 0) {
         fprintf(stderr, "arcade1: %s: no symbols found\n", path);
         return -1;
@@ -429,7 +469,7 @@ static int cmd_run(int argc, char **argv)
         }
     }
     if (!rom_path || frames == 0 || capture_every == 0 ||
-        (var_list && !syms_path) || (var_every && !var_list)) {
+        (var_every && !var_list)) {
         fprintf(stderr,
                 "usage: arcade1 run <game.arc1|bin> [--frames N] [--input FILE]\n"
                 "                   [--capture FILE] [--capture-dir DIR]\n"
@@ -439,9 +479,26 @@ static int cmd_run(int argc, char **argv)
                 "  --strict exits non-zero if any draw read a source address\n"
                 "  outside ROM/RAM (they silently draw nothing); see below.\n"
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
-                "  it requires --syms, and --var-every requires --vars.\n"
+                "  without --syms it auto-loads <image>.syms ('arcade1 build'\n"
+                "  writes it); --var-every requires --vars.\n"
                 "  --record writes the applied buttons in the script format.\n");
         return 2;
+    }
+
+    /* --vars without --syms: auto-load the sidecar `arcade1 build` writes
+     * beside the image (game.arc1 -> game.syms). No sidecar is a clear,
+     * teachable error, not a usage error (ROADMAP_V3 card A1). */
+    if (var_list && !syms_path) {
+        static char side[1024];
+
+        syms_path_for_image(rom_path, side, sizeof side);
+        if (access(side, R_OK) != 0) {
+            fprintf(stderr,
+                    "arcade1: no symbols for %s: build with 'arcade1 build' "
+                    "(writes game.syms) or pass --syms FILE\n", rom_path);
+            return 2;
+        }
+        syms_path = side;
     }
 
     /* Fail fast on an unwritable record file (before running anything). */
@@ -462,6 +519,9 @@ static int cmd_run(int argc, char **argv)
     }
     rom = img;
     rom_size = n;
+    int      img_have_crc = 0;
+    uint32_t img_crc = 0;
+
     if (arcade1_image_recognized(img, n)) {
         arcade1_image_t parsed;
         const arcade1_image_err_t err = arcade1_image_parse(img, n, &parsed);
@@ -472,12 +532,22 @@ static int cmd_run(int argc, char **argv)
         }
         rom = parsed.payload;
         rom_size = parsed.payload_size;
+        img_have_crc = 1;                   /* header bytes 12..15, LE */
+        img_crc = (uint32_t)img[12] | (uint32_t)img[13] << 8 |
+                  (uint32_t)img[14] << 16 | (uint32_t)img[15] << 24;
     }
 
     if (input_path && load_input(input_path) != 0)
         return 1;
     if (syms_path && load_syms(syms_path) != 0)
         return 1;
+    if (syms_path && g_syms_have_crc && img_have_crc && g_syms_crc != img_crc) {
+        fprintf(stderr,
+                "arcade1: syms file belongs to a different build "
+                "(syms crc 0x%08x vs image 0x%08x); "
+                "rebuild or pass the matching file\n", g_syms_crc, img_crc);
+        return 2;
+    }
     if (var_list && resolve_vars(var_list) != 0)
         return 1;
 
@@ -807,10 +877,83 @@ static int run_cmd(char *const argv[])
     return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 }
 
+/* Run one command with stdout redirected to `out_path`. Returns the exit
+ * status — 127 when the tool could not be exec'd at all (it isn't on PATH),
+ * -1 on fork/wait trouble. */
+static int run_cmd_capture(char *const argv[], const char *out_path)
+{
+    pid_t pid = fork();
+    int   status = 0;
+
+    if (pid < 0)
+        return -1;
+    if (pid == 0) {
+        int fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0 || dup2(fd, 1) < 0)
+            _exit(126);
+        close(fd);
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    if (waitpid(pid, &status, 0) < 0)
+        return -1;
+    if (!WIFEXITED(status))
+        return -1;
+    return WEXITSTATUS(status);
+}
+
+/* Write <image>.syms from an nm dump: the build header line first, then the
+ * RAM-window names in nm's own "<hexaddr> <type> <name>" format. Warnings on
+ * stderr, never a failure — the image is already built (ROADMAP_V3 card A1). */
+static void write_syms_file(const char *nmout_path, const char *syms_path,
+                            uint32_t img_crc)
+{
+    FILE    *in = fopen(nmout_path, "r");
+    FILE    *outf;
+    char     line[512];
+    unsigned kept = 0;
+
+    if (!in) {
+        fprintf(stderr, "arcade1: warning: cannot read nm output, "
+                        "no .syms written\n");
+        return;
+    }
+    outf = fopen(syms_path, "w");
+    if (!outf) {
+        fprintf(stderr, "arcade1: warning: cannot write %s, no .syms written\n",
+                syms_path);
+        fclose(in);
+        return;
+    }
+    fprintf(outf, "# arc1-syms crc32=0x%08x\n", img_crc);
+    while (fgets(line, sizeof line, in)) {
+        unsigned addr;
+        char     type, name[64];
+
+        if (sscanf(line, "%x %c %63s", &addr, &type, name) != 3)
+            continue;
+        if (addr < ARCADE1_RAM_BASE ||
+            addr >= ARCADE1_RAM_BASE + ARCADE1_RAM_SIZE)
+            continue;                        /* code / linker marks */
+        fprintf(outf, "%08x %c %s\n", addr, type, name);
+        kept++;
+    }
+    fclose(in);
+    fclose(outf);
+    if (kept == 0) {
+        unlink(syms_path);
+        fprintf(stderr, "arcade1: warning: nm reported no RAM symbols, "
+                        "no .syms written\n");
+    }
+}
+
 /* Pack a flat guest binary into an .arc1 image, in process. Uses the same
  * header writer and CRC as the VM itself (src/arcade1/rom.c), so the CLI
- * cannot produce an image the machine would reject. 0 on success. */
-static int pack_image(const char *bin_path, const char *out_path)
+ * cannot produce an image the machine would reject. 0 on success; on success
+ * stores the payload CRC in *crc_out (when non-NULL) — the value the
+ * <output>.syms header records. */
+static int pack_image(const char *bin_path, const char *out_path,
+                      uint32_t *crc_out)
 {
     static uint8_t image[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     FILE          *f;
@@ -830,8 +973,13 @@ static int pack_image(const char *bin_path, const char *out_path)
                 bin_path, ARCADE1_ROM_SIZE);
         return -1;
     }
-    arcade1_image_header(image, (uint32_t)n,
-                         arcade1_crc32(image + ARCADE1_IMAGE_HEADER_SIZE, n));
+    {
+        const uint32_t crc =
+            arcade1_crc32(image + ARCADE1_IMAGE_HEADER_SIZE, n);
+        arcade1_image_header(image, (uint32_t)n, crc);
+        if (crc_out)
+            *crc_out = crc;
+    }
 
     f = fopen(out_path, "wb");
     if (!f) {
@@ -932,15 +1080,36 @@ static int cmd_build(int argc, char **argv)
         return 1;
     }
 
-    int rc = pack_image(bin, out) == 0 ? 0 : 1;
+    uint32_t img_crc = 0;
+    int      rc = pack_image(bin, out, &img_crc) == 0 ? 0 : 1;
 
-    /* elf + bin on top of the SDK files. */
-    char *tmpfiles[7];
+    /* Symbols beside the image (ROADMAP_V3 card A1): the same toolchain's
+     * nm, filtered to the RAM window, headered with the image's payload CRC
+     * so a later run can reject a .syms from a different build. A missing or
+     * failing nm never fails the build — it warns. */
+    char syms[1200], nmout[1200];
+    syms_path_for_image(out, syms, sizeof syms);
+    snprintf(nmout, sizeof nmout, "%s/nm.out", dir);
+    {
+        char *const nm_argv[] = { (char *)"riscv64-unknown-elf-nm", elf, NULL };
+        const int   nm_rc = run_cmd_capture(nm_argv, nmout);
+
+        if (nm_rc == 127)
+            fprintf(stderr, "arcade1: warning: nm not found, no .syms written\n");
+        else if (nm_rc != 0)
+            fprintf(stderr, "arcade1: warning: nm failed, no .syms written\n");
+        else if (rc == 0)
+            write_syms_file(nmout, syms, img_crc);
+    }
+
+    /* elf + bin + nm output on top of the SDK files. */
+    char *tmpfiles[8];
     for (size_t i = 0; i < nsdk; i++)
         tmpfiles[i] = sdk_names[i];
     tmpfiles[nsdk]     = (char *)"program.elf";
     tmpfiles[nsdk + 1] = (char *)"program.bin";
-    cleanup_sdk_dir(dir, tmpfiles, nsdk + 2);
+    tmpfiles[nsdk + 2] = (char *)"nm.out";
+    cleanup_sdk_dir(dir, tmpfiles, nsdk + 3);
 
     if (rc == 0)
         printf("arcade1: built %s\n", out);

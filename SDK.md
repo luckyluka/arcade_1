@@ -24,7 +24,8 @@ arcade1 run <game.arc1|bin> [options]
   --capture FILE       write the final framebuffer to FILE as a PPM (P6)
   --capture-dir DIR    write frame_NNNN.ppm into DIR every --capture-every frames
   --capture-every K    frame stride for --capture-dir (default 1)
-  --syms FILE          load an `nm` symbol dump (<game>.syms)
+  --syms FILE          load an `nm` symbol dump (<game>.syms); for --vars it
+                       is optional — <image>.syms is auto-loaded if omitted
   --vars LIST          print named game variables (comma list, or "all")
   --var-every K        also print the selected variables every K frames
   --record FILE         write the applied per-frame buttons to FILE, in the
@@ -47,7 +48,8 @@ size, CRC-32) or a raw flat `.bin` (like the tests). Exit codes:
 | 0    | success                                             |
 | 1    | runtime error (missing file, bad/oversized image),  |
 |      | or `--strict` tripped on an out-of-window draw      |
-| 2    | usage error (unknown command/option, missing ROM)   |
+| 2    | usage error (unknown command/option, missing ROM), |
+|      | or `--vars` with a missing/mismatched `.syms`      |
 
 Build it with `make build/arcade1` (or as a prerequisite of `make test-run`).
 
@@ -132,15 +134,22 @@ var lives = 3
 
 * `--syms FILE` loads the dump (`<hexaddr> <type> <name>` per line, as `nm`
   prints it). Only RAM-resident data/bss symbols (`B/b/D/d` types inside the
-  RAM window) count as variables — code and linker marks are rejected.
+  RAM window) count as variables — names outside the RAM window are dropped
+  with one summary warning on stderr. A dump written by `arcade1 build`
+  starts with `# arc1-syms crc32=0x…`, the image's payload CRC.
 * `--vars LIST` selects what to print: a comma list of names, or `all` for
   every RAM variable in the dump (linker internals like `_sbss` skipped).
+  Without `--syms` it auto-loads `<image>.syms` beside the image — what
+  `arcade1 build` writes.
 * Each variable is read as one 32-bit word — the guest's `int`, printed
   signed — exactly how the game tests read `score`/`lives`/`state`.
 * `--var-every K` additionally prints a `vars <frame> <name>=<value> ...`
   trace line every K frames, for watching a variable move.
-* Errors: `--vars` without `--syms` is a usage error (exit 2); an unknown
-  name or a non-RAM symbol is a runtime error (exit 1).
+* Errors: no sidecar for `--vars` is exit 2 with a build hint, and a
+  headered `.syms` whose CRC differs from the image is exit 2
+  (`syms file belongs to a different build`); an unknown name or a
+  non-RAM symbol is a runtime error (exit 1). Header-less dumps (the
+  committed `tests/roms/*.syms`) skip the CRC check.
 
 `make test-run` checks the named reads (`breakout`'s `score = 0`,
 `lives = 3` after 30 idle frames), the `--var-every` trace, and both error
@@ -194,7 +203,11 @@ arcade1 build <program.c> [output.arc1]
     script and the SDK headers are carried inside the CLI and the image is
     packed in process, so it works in any directory with no checkout and
     no build/ tree — only riscv64-unknown-elf-gcc (and objcopy) on PATH.
-    The .arc1 header layout is in CHEATSHEET.md.
+    Beside the image it writes <output>.syms (the RAM-window half of the
+    same toolchain's `nm` dump, first line `# arc1-syms crc32=0x…` = the
+    image's payload CRC) for --vars to auto-load; without riscv64-unknown-elf-nm
+    the build still succeeds and prints "arcade1: warning: nm not found,
+    no .syms written". The .arc1 header layout is in CHEATSHEET.md.
 
 arcade1 inspect <game.arc1|bin> [arcade1 run options]
     alias for `arcade1 run --inspect`.

@@ -36,10 +36,13 @@ One command, from any directory, with nothing but the CLI and your source:
 
 `arcade1 build` is self-contained: the startup code, the linker script and
 the SDK headers travel inside the CLI, and the image is packed in process.
-It needs only `riscv64-unknown-elf-gcc` (and `objcopy`) on PATH, leaves
-nothing behind except the image you named, and uses the same flags as the
-Makefile path below. The image format is the 16-byte `.arc1` header
-documented in CHEATSHEET.md.
+It needs `riscv64-unknown-elf-gcc` (and `objcopy`) on PATH — plus `nm` to
+write the symbol file (without it the build still succeeds and prints a
+warning) — and writes exactly two files: the image you named and its
+`<image>.syms`. It uses the same flags as the Makefile path below. The
+image format is the 16-byte `.arc1` header documented in CHEATSHEET.md.
+Because the `.syms` sits beside the image, `--vars` needs no `--syms`:
+`arcade1 run game.arc1 --vars score` just works after a build.
 
 Inside this checkout the same guests are built by the Makefile: add the
 program to `programs/` and to `GUEST_PROGS`, then `make program` →

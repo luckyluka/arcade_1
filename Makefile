@@ -107,7 +107,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
-        test-m29game
+        test-m29game test-syms
 
 all: $(TARGET)
 
@@ -698,6 +698,13 @@ test-tetris: $(ARC1_ROM_DIR)/tetris.arc1
 # and runs the result.
 test-build: $(CLI_BIN)
 	sh tests/test_build.sh $(CLI_BIN)
+
+# ROADMAP_V3 A1: `arcade1 build` writes <image>.syms beside the image;
+# run/test/inspect auto-load it for --vars (build-id CRC check, header-less
+# dumps still accepted). Standard three test arguments; only the CLI is
+# used — the test builds in its own temp directory.
+test-syms: $(CLI_BIN)
+	sh tests/test_syms.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # M29: draws whose source address falls outside ROM/RAM silently paint
 # nothing on the device. The host counts them (arcade1_video_stats_t's
