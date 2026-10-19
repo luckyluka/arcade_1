@@ -18,12 +18,18 @@ Two rules make games testable:
 
 1. **Observable state is a file-scope global** (score, lives, state,
    length, camera position, ...). The tools read those out of guest RAM
-   by name via `--vars`; locals are invisible to them.
+   by name via `--vars`; locals are invisible to them. The address comes
+   from `game.syms`, never from declaration order — don't assume
+   `score` sits at any particular offset.
 2. **Everything is deterministic**: no wall-clock, no unseeded random.
    The same image + the same input script always replays bit-identically,
    which is what makes the golden regression and `--record`/`--input`
    meaningful. (See `arcade1_rng` in arcade1.h for a seeded LCG and
-   SPEC.md section 10 for the full determinism contract.)
+   SPEC.md section 10 for the full determinism contract. It is consumed
+   strictly in program order — re-balancing when a branch draws random
+   numbers re-routes the stream for every later caller — and its low bits
+   are weak; for gameplay randomness use `arcade1_rand(n)`, which reads
+   the high bits.)
 
 The three `programs/example_*.c` games are the reference implementations
 of this shape — start by reading one.
@@ -64,11 +70,14 @@ behave differently.
 
 Per-frame hash lines are diffable against `tests/golden/<game>.txt`
 (`--quiet` hides them) — `arcade1 test --golden` does that comparison for
-you. `--capture` dumps a PPM frame; `arcade1 capture` dumps every frame
-into `captures/`; `--vars` reads your game's globals by name; `--input`
-plays a scripted session; `--record` writes one. `--strict` fails the run
-if any draw read a source address outside ROM/RAM (see SDK.md for the
-full flag reference).
+you. `--capture` dumps a frame (`.png` or `.ppm` by extension; it holds
+the frame after `--frames N`, i.e. `N-1`'s screen); `arcade1 capture`
+dumps every frame into `captures/` (`--format png`, `--scale N`);
+`--vars` reads your game's globals by name; `--input` plays a scripted
+session; `--record` writes one. `arcade1 inspect` runs the game, then
+dumps the final PC, all 32 registers and the instruction count.
+`--strict` fails the run if any draw read a source address outside
+ROM/RAM (see SDK.md for the full flag reference).
 
 ## Test and golden-lock it
 

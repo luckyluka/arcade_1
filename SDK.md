@@ -150,6 +150,8 @@ var lives = 3
   writes.
 * Each variable is read as one 32-bit word — the guest's `int`, printed
   signed — exactly how the game tests read `score`/`lives`/`state`.
+  State you want to observe must be a file-scope global: its address
+  comes from the `.syms`, never from declaration order.
 * `--var-every K` additionally prints a `vars <frame> <name>=<value> ...`
   trace line every K frames, for watching a variable move.
 * Errors: no sidecar for `--vars` is exit 2 with a build hint, and a
@@ -200,7 +202,8 @@ arcade1 capture <game.arc1|bin> [arcade1 run options]
     (--capture-dir DIR), or writes one final frame with --capture FILE.
     --format png|ppm picks the capture-dir extension (default ppm, PNG
     is also chosen automatically for --capture *.png), and --scale N
-    upscales every written frame.
+    upscales every written frame. Both forms write the framebuffer as it
+    stands after the last frame that ran: --frames N captures frame N-1.
 
 arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
     smoke run: the exit status propagates. --golden FILE compares the

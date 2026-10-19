@@ -38,6 +38,8 @@ int main(void)
 ## Commands (GFX_REG_CMD values)
 clear 1, set_pixel 2, present 3, fill 4, sprite 5, tilemap 6, sprite4 7, tilemap4 8.
 Everything clips to the 480x270 screen; w/h <= 0, zero sizes or a zero tile index draw nothing.
+The screen is always 480x270 — there is no scaling or video-mode register.
+For a larger image upscale a capture: `--capture f.png --scale 4` gives 1920x1080.
 
 ## The device reads RAM: SDK helpers are barriers
 Sprite images, tilemap cells and tile data live in guest RAM, and the device
