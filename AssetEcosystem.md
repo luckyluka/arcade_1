@@ -82,7 +82,9 @@ Rules:
 Each resource type ships with a canonical check — dimensions, palette
 usage, byte cost, and where applicable a reference rendering — compared
 through the existing `arcade1 test --golden` (per-frame hash lines vs a
-golden file). This is what makes tool-assisted or AI-assisted asset
+golden file, **reproduced under the golden's run conditions** — input
+script included; a golden records hashes, not the conditions, so the
+harness must re-supply them exactly, as `make test-golden` does). This is what makes tool-assisted or AI-assisted asset
 generation *safe*: structured input, deterministic output, machine-checkable
 result. The verification infrastructure already exists; the ecosystem's
 job is to make every asset flow through it.
@@ -173,9 +175,10 @@ deduplication is the single biggest ROM saver this machine offers, and it
 belongs in `arc1-assetc`, not in the artist's head.
 
 Validator rules: `tile_w` must be even; and the importer must warn about
-the undocumented trap the M29 test hit — **maps below roughly 6×6 cells
-can draw nothing at all** (the device's tilemap walker has a minimum
-geometry; 10×3 passes, 4×3 silently draws zero pixels).
+the undocumented trap the M29 test measured — **small maps can silently
+draw nothing**: the minimum COLS for ROWS 1..9 is 6,6,6,6,5,3,2,2,1, so
+`COLS >= 6` with any `ROWS >= 1` is always safe (10×3 draws its field;
+4×3 draws zero pixels). Exact table: `docs/m29/M29_LOG.md`.
 
 ## 7. Palette Studio
 
@@ -234,7 +237,7 @@ native ARCADE-1 resources  — byte-deterministic, versioned, checked in
 ```
 
 The walkdemo experiment is the existence proof for Phase 1: a
-230-line dependency-free generator rendered a 40×56 4-bit 7-frame sheet
+225-line dependency-free generator rendered a 40×56 4-bit 7-frame sheet
 (7 840 B = 3.0 % of ROM) with a ROM-cost report and caught two silent
 colour corruptions by validating against independent expectations.
 `arc1-assetc` is that, generalised.
