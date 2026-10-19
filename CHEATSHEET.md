@@ -98,7 +98,13 @@ of guest RAM by name; locals are invisible to them.
 ## arcade1 helpers (programs/arcade1.h)
 `#include "arcade1.h"` (pulls in gfx.h + the memory map): arcade1_pad,
 clear, rect, present, pal, cam, flags, sprite, sprite4, tilemap,
-tilemap4, rng, fp_mul — thin wrappers over the gfx.h commands. Build a
+tilemap4, rng, fp_mul, pixel, rand — thin wrappers over the gfx.h
+commands. `arcade1_pixel(x, y, color)` plots one screen-space pixel (never
+scrolled, HUD-safe); `arcade1_rand(n)` is `[0, n)` from the LCG's *high*
+bits — its low bits are weak, and each call consumes one `arcade1_rng()`
+step, so re-balancing re-routes the stream for every later caller. The
+5x7 text font is opt-in: `#include "text.h"` for `text_draw`/`text_u32`
+(a game that does not include it pays no ROM). Build a
 guest: add it to programs/ + GUEST_PROGS in the Makefile, `make program`
 → programs/build/<name>.arc1 (needs riscv64-unknown-elf-gcc on PATH).
 
@@ -219,5 +225,18 @@ void ex_barrier_poke(unsigned int *cells, unsigned int *tiles) {
     GFX_BARRIER();
     GFX_REG_CMD       = GFX_CMD_TILEMAP4;
     GFX_BARRIER();
+}
+```
+```c
+#include "arcade1.h"
+#include "text.h"                /* opt-in 5x7 font: text_draw / text_u32 */
+void ex_text_hud(int score) {
+    arcade1_cam(0, 0);           /* SPRITE is world space: pin for a HUD */
+    arcade1_clear(0x0000);
+    text_draw(8, 8, "SCORE", 0xFFFF);
+    text_u32(8, 16, (unsigned)score, 4, 0xFFFF);   /* zero-padded field */
+    arcade1_pixel(0, 269, 0xF800);                 /* one red pixel */
+    (void)arcade1_rand(3);                         /* [0, 3), high bits */
+    arcade1_present();
 }
 ```

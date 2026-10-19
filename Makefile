@@ -107,7 +107,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-video-tilemap4 test-color test-run test-golden \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
-        test-m29game test-syms test-capture-png
+        test-m29game test-syms test-capture-png test-text
 
 all: $(TARGET)
 
@@ -254,6 +254,19 @@ $(GUEST_BUILD)/probe_%.bin: $(PROBE_DIR)/probe_%.c programs/gfx.h programs/crt0.
 # count the painted pixels (tests/test_barrier.c).
 test-barrier: $(TESTDIR)/test_barrier $(PROBE_BINS) | $(TESTDIR)
 	$(TESTDIR)/test_barrier $(GUEST_BUILD)
+
+# ROADMAP_V3 A6: the 5x7 text-font probe — the test checks glyph pixels
+# against a hand-written oracle (never derived from text.h) and the
+# arcade1_rand(3) histogram. Built exactly like the other probes.
+$(GUEST_BUILD)/text_probe.bin: $(PROBE_DIR)/text_probe.c programs/text.h \
+        programs/arcade1.h programs/gfx.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $(GUEST_BUILD)/text_probe.elf programs/crt0.S $<
+	$(RISCV_OBJCOPY) -O binary $(GUEST_BUILD)/text_probe.elf $@
+
+test-text: $(CLI_BIN) $(GUEST_BUILD)/text_probe.bin
+	sh tests/test_text.sh $(CLI_BIN) $(GUEST_BUILD)/text_probe.bin $(GOLDEN_DIR)
 
 $(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
         src/arcade1/video.c src/arcade1/timer.c src/arcade1/audio.c \
