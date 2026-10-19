@@ -144,6 +144,38 @@ inherit the old carry. A worked example: `programs/experimental/
 walkdemo.c` plays the emitted idle/walk tables from its assetc-compiled
 sheet (`make test-walkdemo` pins the behaviour).
 
+`"maps"` imports a level grid over a tileset sprite (the sprite is ONE
+frame spanning the whole tileset image). The map file is an ASCII grid
+of legend characters — or `{"rows": [...]}` JSON:
+
+    "maps": [
+      { "name": "level1", "file": "level1.txt", "tileset": "tiles",
+        "tile_w": 16, "tile_h": 16,
+        "legend": { ".": null, "#": 0, "q": { "tile": 0, "flipX": true } } }
+    ]
+
+`tile_w × tile_h` splits the tileset image into tiles in scan order;
+the legend maps each character to a tile — `null` is an empty cell, an
+integer is a tile, and the object form adds `flipX`/`flipY` (the device
+mirrors within the tile, so one tile serves both directions).
+Identical tiles **dedup** at build time: the M29 game's whole 10×3
+brick field was one tile in ROM, and the importer derives that
+automatically. Each map emits `NAME_COLS`, `NAME_ROWS`,
+`NAME_TILE_W/H`, `NAME_TILES`, a packed `NAME_tiles` blob and a
+`NAME_cells` array in gfx.h's encoding (`[15:0]` tile index — 0 =
+empty, `[19:16]` palette bank, `[20]` flipX, `[21]` flipY):
+
+    arcade1_tilemap4(x, y, level1_cells, level1_tiles,
+                     LEVEL1_COLS, LEVEL1_ROWS,
+                     LEVEL1_TILE_W, LEVEL1_TILE_H);
+
+Validators are the machine's real rules: even `tile_w` (the 4-bit blit
+rejects odd widths, `src/arcade1/video.c`), a tileset that splits into
+whole tiles, a complete legend, a non-empty map. There is **no minimum
+map size** — that "rule" was a pre-barrier compiler artifact, retracted
+in `docs/experiments/tilemap-minsize-retraction.md`; 4×3 and 5×1 maps
+draw, pinned by `make test-mapdemo` (inside `make check`).
+
 ## Build
 
 One command, from any directory, with nothing but the CLI and your source:

@@ -239,3 +239,102 @@ python3 tools/arc1_assetc.py --assets programs/experimental/walkdemo_sheet.json 
 make test-walkdemo
 make test-arc1assetc
 ```
+
+---
+
+# Wave 4 — map import (ROADMAP_CREATION_FLOW §8 + V3 §4.3 amendment)
+
+Status: shipped. `assets.json` gains a top-level `"maps"` array
+(`{name, file, tileset, tile_w, tile_h, legend}`): the map file is an
+ASCII grid of legend characters or `{"rows": [...]}` JSON; `tile_w ×
+tile_h` splits the tileset SPRITE (one frame over the whole image)
+into tiles in scan order; the legend maps each character to a tile
+(`null` = empty, int = tile, object adds `flipX`/`flipY`); identical
+tiles **dedup exactly** (first occurrence wins), and the emitted
+`NAME_cells` carries gfx.h's encoding — `[15:0]` 1-based dedup index
+(0 = empty), `[19:16]` palette bank, `[20]` flipX, `[21]` flipY —
+plus a packed `NAME_tiles` blob and `NAME_COLS/ROWS/TILE_W/TILE_H/
+TILES` defines. `tests/test_arc1assetc.sh` grew a Wave 4 section
+(134 → 185 checks).
+
+## Validators are the retraction's survivors only (V3 §4.3)
+
+Kept: even `tile_w` (the 4-bit blit rejects odd widths,
+`src/arcade1/video.c`), whole-tile splitting, complete legend, non-empty
+map, name-namespace rules. **Removed/not built**: the min-geometry
+validator — its `COLS < 6 && ROWS ≤ 4` rule was the pre-barrier
+compiler artifact retracted in `tilemap-minsize-retraction.md`. Its
+replacement evidence now lives IN `make check`: `test-mapdemo` (see
+below) asserts a 4×3 and a 5×1 map *draw*, pixel-count style of
+`tests/test_barrier.c`. A draw-proof that only runs by hand pins
+nothing — the one deliberate difference from walkdemo/asset_demo.
+
+## Proof — map_demo (IN make check)
+
+`tools/gen_map_tiles.py` renders the tileset art (64×16 PNG, four
+16×16 tiles: brick / marker / stripe / brick-again); the manifest and
+three ASCII maps are hand-authored committed files. Tiles: 0 solid
+brick (the M29 field tile), 1 an ASYMMETRIC 2 px column over
+transparency (so flipX is visible), 2 solid stripe, 3 byte-identical
+to 0 (dedup target). `programs/experimental/map_demo.c` draws:
+
+- **small43** (4×3) and **small51** (5×1) — the retraction's fixtures,
+  both draw;
+- **field** (10×3) — `bbbbbbsbob` rows whose 28 brick-ish cells (incl.
+  the 4 corners naming duplicate tile 3) ALL resolve to ONE blob entry:
+  the M29 brick lesson, automated.
+
+`tests/test_mapdemo.sh` (14 checks, in `make check`) pins exact
+counts: field brick 7168 px (28 tiles), stripe 256, marker 32 at
+pinned columns, and small51's flipped `q` at screen x 62..63 —
+tile-local cols 15..14, the mirror of the unflipped 48..49. Totals:
+8704 brick + 768 stripe + 64 marker + 120064 sky, no strays.
+
+## Measured facts
+
+| Fact | Value |
+|---|---|
+| ROM cost (mapdemo) | sheet 512 + palette 32 + maps (304 + 404 + 504) = 1756 B; field's 10×3 = 384 B tiles + 120 B cells |
+| Dedup | field: 4 scan tiles → 3 blob entries (tile 3 == tile 0); 28 cells share index 1 |
+| Device RGB565 expansion | floor(v·255/max): (24,12,6)→(197,48,49), (6,60,10)→(49,242,82), (8,24,30)→(65,97,246) |
+| Test checks | assetc 134 → 185 (15 validator errors, defines/banners, 4-map oracle, compile-proof, determinism); mapdemo 14 (in make check) |
+| map_demo payload | 1660 B |
+
+## Findings
+
+1. **A tileset must be `frames: 1`.** My first manifest declared the
+   64×16 tileset as `frames: 4` — but a sprite's `w` is its FRAME
+   width, so the tool saw a 16 px sprite with one tile and refused
+   with its own teaching error ("holds 1 tiles (1 x 1 grid)"). The
+   error message diagnosed the mis-declaration in one read; the fix
+   was one field. Lesson: sprite strips and tileset images are
+   different shapes — the tileset is ONE frame.
+2. **The include-order banner earned its keep on its own demo.** I
+   wrote `map_demo.c` including `mapdemo_tiles.h` first and the build
+   failed on `sprite4_ref` — exactly what the banner line ("include
+   programs/asset.h first") exists to prevent; one line fixed it.
+3. **Exit-code split documented by iteration:** an unreadable image is
+   exit 2 (`ImageError`, distinct from validation's exit 1). The first
+   draft of the error fixtures tripped it (mutated manifests in the
+   temp dir couldn't resolve the PNG beside them) — the fix was to
+   copy the tileset next to the fixtures, not to touch the tool.
+4. **The oracle reuses only Wave-1-pinned ground truth.** F3's
+   independent computation reads the emitted `tiles_sheet` bytes (its
+   packing pinned since card 1.3) and recomputes split → dedup →
+   encoding from first principles in the test — the Wave-4 logic is
+   never imported, so emitter and oracle cannot share a bug.
+5. **Test-iteration messages:** three assertion mismatches in a row
+   (quoted vs unquoted names, resolved vs bare paths, file vs map
+   name in the empty-map message) were all cases where the assertion
+   guessed instead of reading the tool's actual teaching text; each
+   fix pinned what the tool prints, and the quoting of the tileset
+   name was normalized for consistency with its siblings.
+
+## Reproduce (Wave 4)
+
+```
+python3 tools/gen_map_tiles.py
+python3 tools/arc1_assetc.py --assets programs/experimental/mapdemo_tiles.json --out-dir programs/experimental
+make test-mapdemo
+make test-arc1assetc
+```

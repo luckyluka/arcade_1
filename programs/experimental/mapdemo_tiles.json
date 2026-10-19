@@ -1,0 +1,44 @@
+{
+  "format": 1,
+  "palettes": {
+    "mapdemo": {
+      "bank": 5,
+      "colors": ["#000000", "#C63031", "#31F352", "#4261F7"]
+    }
+  },
+  "sprites": [
+    {
+      "name": "tiles",
+      "file": "mapdemo_tiles.png",
+      "palette": "mapdemo",
+      "quantize": "exact",
+      "frames": 1
+    }
+  ],
+  "maps": [
+    {
+      "name": "small43",
+      "file": "mapdemo_small43.txt",
+      "tileset": "tiles",
+      "tile_w": 16,
+      "tile_h": 16,
+      "legend": { ".": null, "o": 0, "s": 2, "#": 3 }
+    },
+    {
+      "name": "small51",
+      "file": "mapdemo_small51.txt",
+      "tileset": "tiles",
+      "tile_w": 16,
+      "tile_h": 16,
+      "legend": { "o": 0, "s": 2, ".": null, "q": { "tile": 1, "flipX": true } }
+    },
+    {
+      "name": "field",
+      "file": "mapdemo_field.txt",
+      "tileset": "tiles",
+      "tile_w": 16,
+      "tile_h": 16,
+      "legend": { "b": 0, "c": 3, "o": 1, "s": 2 }
+    }
+  ]
+}

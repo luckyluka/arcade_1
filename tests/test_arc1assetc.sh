@@ -1,5 +1,6 @@
 #!/bin/sh
-# ROADMAP Wave 1 cards 1.1-1.5 + Wave 2 refs/metadata + Wave 3 animations:
+# ROADMAP Wave 1 cards 1.1-1.5 + Wave 2 refs/metadata + Wave 3 animations
+# + Wave 4 maps (incl. the minsize-retraction fixtures):
 # arc1-assetc harness.
 #
 # Fixture images are BUILT IN-TEST by the embedded python mini-PNG-writer
@@ -777,6 +778,248 @@ cmp "$OUT/det5/run.h" "$OUT/det6/run.h" || \
 CHECKS=$((CHECKS + 2))
 echo "  ok: animation headers byte-identical across two runs"
 
+# --- 12) maps + the minsize retraction (Wave 4) ------------------------------
+# The committed mapdemo manifest is the happy fixture: one 64x16 tileset
+# sprite (4 scan tiles; tile 3 byte-identical to tile 0), three maps — the
+# retraction's 4x3 and 5x1 draw fixtures plus the 10x3 M29-shape field.
+MAPMAN="$ROOT/programs/experimental/mapdemo_tiles.json"
+# the mutated manifests below live in $OUT and resolve the tileset PNG
+# relative to themselves — copy it alongside (a missing image is a
+# distinct exit 2, not the validation path these fixtures exercise)
+cp "$ROOT/programs/experimental/mapdemo_tiles.png" "$OUT/"
+
+# mapman <path> <maps-json>: the mapdemo manifest with a new "maps" array.
+mapman() {
+    python3 - "$MAPMAN" "$1" "$2" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+doc["maps"] = json.loads(sys.argv[3])
+json.dump(doc, open(sys.argv[2], "w"))
+PY
+}
+
+echo '{"format":1,"palettes":{},"sprites":[],"maps":{}}' > "$OUT/mapshape.json"
+expect 1 '"maps" must be an array' \
+    python3 "$TOOL" --assets "$OUT/mapshape.json" --out-dir "$OUT/gen"
+assert_has '"maps" must be an array' "maps container error"
+
+# a clean one-cell map the duplicate fixture can hold in its first slot
+printf 'x\n' > "$OUT/lvl.txt"
+BASEMAP='{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0}}'
+mapman "$OUT/mapobj.json" '[42]'
+expect 1 "a non-object map is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapobj.json" --out-dir "$OUT/gen"
+assert_has "each map must be an object" "map object error"
+
+mapman "$OUT/mapname.json" '[{"name":"lvl!","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{}}]'
+expect 1 "a non-identifier map name is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapname.json" --out-dir "$OUT/gen"
+assert_has 'missing or invalid "name"' "map name error"
+
+mapman "$OUT/mapdup.json" "[$BASEMAP,$BASEMAP]"
+expect 1 "a duplicate map name is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapdup.json" --out-dir "$OUT/gen"
+assert_has "duplicate map name" "duplicate map error"
+
+mapman "$OUT/mapclash.json" '[{"name":"tiles","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{}}]'
+expect 1 "a map named like its tileset sprite is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapclash.json" --out-dir "$OUT/gen"
+assert_has 'clashes with sprite "tiles"' "map/sprite clash error"
+
+mapman "$OUT/mapnospr.json" '[{"name":"lvl","file":"lvl.txt","tileset":"nope","tile_w":16,"tile_h":16,"legend":{}}]'
+expect 1 "an undefined tileset is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapnospr.json" --out-dir "$OUT/gen"
+assert_has 'tileset "nope" not defined' "undefined tileset error"
+
+mapman "$OUT/mapodd.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":15,"tile_h":16,"legend":{}}]'
+expect 1 "an odd tile_w is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapodd.json" --out-dir "$OUT/gen"
+assert_has "tile_w 15 must be a positive even integer — the 4-bit blit rejects odd widths (src/arcade1/video.c)" "odd tile_w error"
+
+mapman "$OUT/mapdiv.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":10,"tile_h":16,"legend":{}}]'
+expect 1 "a tile_w that does not divide the tileset is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapdiv.json" --out-dir "$OUT/gen"
+assert_has 'tile_w 10 does not tile sprite "tiles" (64 px wide)' "tile_w divisor error"
+
+mapman "$OUT/mapdivh.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":6,"legend":{}}]'
+expect 1 "a tile_h that does not divide the tileset is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapdivh.json" --out-dir "$OUT/gen"
+assert_has 'tile_h 6 does not tile sprite "tiles" (16 px tall)' "tile_h divisor error"
+
+mapman "$OUT/mapnofile.json" '[{"name":"lvl","file":"nope.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{}}]'
+expect 1 "a missing map file is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapnofile.json" --out-dir "$OUT/gen"
+assert_has "nope.txt not found — paths are relative to assets.json" "missing map file error"
+
+: > "$OUT/empty.txt"
+mapman "$OUT/mapempty.json" '[{"name":"lvl","file":"empty.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{}}]'
+expect 1 "an empty map is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapempty.json" --out-dir "$OUT/gen"
+assert_has "map empty.txt is empty — a map needs at least one row of at least one column" "empty map error"
+
+printf 'ab\nabc\n' > "$OUT/rag.txt"
+mapman "$OUT/maprag.json" '[{"name":"lvl","file":"rag.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"a":0,"b":0,"c":0}}]'
+expect 1 "ragged rows are a validation error" \
+    python3 "$TOOL" --assets "$OUT/maprag.json" --out-dir "$OUT/gen"
+assert_has "row 2 of rag.txt is 3 columns wide, row 1 is 2 — all rows must match" "ragged rows error"
+
+printf 'x.\n' > "$OUT/char.txt"
+mapman "$OUT/mapchar.json" '[{"name":"lvl","file":"char.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{".":null}}]'
+expect 1 "a character without a legend entry is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapchar.json" --out-dir "$OUT/gen"
+assert_has "character \"x\" at row 1, column 1 has no legend entry" "legend completeness error"
+
+mapman "$OUT/mapoob.json" '[{"name":"lvl","file":"char.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":9,".":null}}]'
+expect 1 "an out-of-range legend tile is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapoob.json" --out-dir "$OUT/gen"
+assert_has "legend \"x\" tile 9 out of range — sprite tiles holds 4 tiles (4 x 1 grid)" "legend range error"
+
+mapman "$OUT/mapkey.json" '[{"name":"lvl","file":"char.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"ab":0,".":null}}]'
+expect 1 "a multi-character legend key is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapkey.json" --out-dir "$OUT/gen"
+assert_has 'legend key "ab" must be exactly one character' "legend key error"
+
+# happy path: the committed mapdemo fixture (the retraction's 4x3 + 5x1
+# draw fixtures and the 10x3 field; ROM total 512 sheet + 32 palette +
+# 304 + 404 + 504 map bytes = 1756)
+expect 0 "the mapdemo manifest compiles" \
+    python3 "$TOOL" --assets "$MAPMAN" --out-dir "$OUT/mapdemo" --report
+H="$OUT/mapdemo/mapdemo_tiles.h"
+for wantdef in "#define SMALL43_COLS 4" "#define SMALL43_ROWS 3" \
+               "#define SMALL43_TILES 2" "#define SMALL51_COLS 5" \
+               "#define SMALL51_ROWS 1" "#define SMALL51_TILES 3" \
+               "#define FIELD_COLS 10" "#define FIELD_ROWS 3" \
+               "#define FIELD_TILES 3"; do
+    grep -Fq "$wantdef" "$H" || fail "map header missing: $wantdef"
+    CHECKS=$((CHECKS + 1))
+done
+# dedup proof: 4 scan tiles, tile 3 byte-identical to tile 0 -> 3 blobs
+grep -Fq "map field of tiles: 10x3 cells, tile 16x16, 3 unique tiles, bank 5" \
+    "$H" || fail "field banner must report 3 unique tiles — $(grep 'map field' "$H")"
+CHECKS=$((CHECKS + 2))
+echo "  ok: map defines + banners (4x3/5x1 fixtures, field dedup 4->3)"
+
+assert_has "MAP field of tiles: 10x3 cells, 3 tiles = 504 B" "field report line"
+assert_has "MAP small43 of tiles: 4x3 cells, 2 tiles = 304 B" "small43 report line"
+assert_has "MAP small51 of tiles: 5x1 cells, 3 tiles = 404 B" "small51 report line"
+assert_has "ROM assets 1756 / 262144 (0.7 %)" "ROM total counts the maps"
+
+# F3 oracle rule: recompute every map's dedup + cell encoding INDEPENDENTLY
+# in python (split the emitted sheet bytes yourself, dedup first-occurrence,
+# pack [15:0]|[19:16]|[20]|[21]) and byte-compare with the header arrays.
+# A JSON map file ({\"rows\": [...]}) rides along as a fourth map.
+printf '{"rows": ["x.", ".x"]}' > "$OUT/jmap.json"
+mapman "$OUT/mapjson.json" "[{\"name\":\"jmap\",\"file\":\"jmap.json\",\"tileset\":\"tiles\",\"tile_w\":16,\"tile_h\":16,\"legend\":{\"x\":{\"tile\":1,\"flipY\":true},\".\":null}}]"
+expect 0 "a JSON map file compiles" \
+    python3 "$TOOL" --assets "$OUT/mapjson.json" --out-dir "$OUT/mapjson"
+python3 - "$H" "$MAPMAN" "$ROOT/programs/experimental" \
+          "$OUT/mapjson/mapjson.h" "$OUT/mapjson.json" "$OUT" <<'PY'
+import json, os, re, sys
+
+sprites = None
+fails = []
+checked = 0
+for trip in range(0, len(sys.argv) - 1, 3):
+    header = open(sys.argv[1 + trip]).read()
+    manifest = json.load(open(sys.argv[2 + trip]))
+    basedir = sys.argv[3 + trip]
+
+    def arr(name, cast):
+        m = re.search(re.escape(name) + r"\[[^\]]*\] = \{(.*?)\};", header, re.S)
+        if not m:
+            sys.exit("header lacks array %s" % name)
+        return [cast(t) for t in re.findall(r"0x([0-9A-Fa-f]+)", m.group(1))]
+
+    sheet = arr("tiles_sheet", lambda h: int(h, 16))
+    W = int(re.search(r"#define TILES_W (\d+)", header).group(1))
+    HT = int(re.search(r"#define TILES_H (\d+)", header).group(1))
+    sprites = {s["name"]: s for s in manifest["sprites"]}
+
+    for mdoc in manifest["maps"]:
+        name = mdoc["name"]
+        tw, th = mdoc["tile_w"], mdoc["tile_h"]
+        stride = W // 2
+
+        def tile(i):                   # independent split, 2 px/byte
+            tx, ty = i % (W // tw), i // (W // tw)
+            out = []
+            for y in range(ty * th, (ty + 1) * th):
+                row = sheet[y * stride:(y + 1) * stride]
+                out += row[tx * tw // 2:(tx + 1) * tw // 2]
+            return bytes(out)
+
+        leg = {}
+        for ch, spec in mdoc.get("legend", {}).items():
+            if spec is None:
+                leg[ch] = (0, 0, 0)
+            elif isinstance(spec, int):
+                leg[ch] = (spec + 1, 0, 0)
+            else:
+                leg[ch] = (spec["tile"] + 1,
+                           1 if spec.get("flipX") else 0,
+                           1 if spec.get("flipY") else 0)
+        path = os.path.join(basedir, mdoc["file"])
+        if mdoc["file"].endswith(".json"):
+            rows = json.load(open(path))["rows"]
+        else:
+            rows = [l.rstrip("\r\n") for l in open(path)]
+        bank = manifest["palettes"][sprites[mdoc["tileset"]]["palette"]]["bank"]
+        seen, tiles, cells = {}, [], []
+        for r in rows:
+            for ch in r:
+                idx, fx, fy = leg[ch]
+                if idx == 0:
+                    cells.append(0)
+                    continue
+                b = tile(idx - 1)
+                if b not in seen:      # first-occurrence dedup
+                    seen[b] = len(tiles) + 1
+                    tiles.append(b)
+                cells.append(seen[b] | bank << 16 | fx << 20 | fy << 21)
+        if arr(name + "_cells", lambda h: int(h, 16)) != cells:
+            fails.append("%s: cells differ from the oracle" % name)
+        if arr(name + "_tiles", lambda h: int(h, 16)) != \
+                [v for b in tiles for v in b]:
+            fails.append("%s: tile blob differs from the oracle" % name)
+        checked += 1
+if fails:
+    sys.exit("oracle mismatch: " + "; ".join(fails))
+print("oracle: %d maps match the independent encoding" % checked)
+PY
+CHECKS=$((CHECKS + 1))
+echo "  ok: cells + tiles match the independent oracle (F3), incl. flips + dedup + JSON rows"
+
+# the emitted arrays must COMPILE against the real SDK — arcade1_tilemap4's
+# argument types cannot drift from the emitter's arrays
+cat > "$OUT/map_check.c" <<'EOF'
+#include "asset.h"
+#include "mapdemo/mapdemo_tiles.h"
+static void probe(void)
+{
+    arcade1_tilemap4(0, 0, field_cells, field_tiles,
+                     FIELD_COLS, FIELD_ROWS, FIELD_TILE_W, FIELD_TILE_H);
+}
+EOF
+CC=${CC:-cc}
+if "$CC" -fsyntax-only -Wall -Wextra -Wno-unused -Wno-pointer-to-int-cast \
+        -I"$ROOT/programs" -I"$OUT" "$OUT/map_check.c" 2> "$OUT/map_err.txt"; then
+    CHECKS=$((CHECKS + 1))
+    echo "  ok: emitted cells/tiles compile against the real arcade1_tilemap4"
+else
+    cat "$OUT/map_err.txt" >&2
+    fail "emitted map arrays do not compile"
+fi
+
+# determinism holds with maps in play (two processes, byte-identical)
+python3 "$TOOL" --assets "$MAPMAN" --out-dir "$OUT/mapdet1" 2>/dev/null || \
+    fail "map determinism run 1"
+python3 "$TOOL" --assets "$MAPMAN" --out-dir "$OUT/mapdet2" 2>/dev/null || \
+    fail "map determinism run 2"
+cmp "$OUT/mapdet1/mapdemo_tiles.h" "$OUT/mapdet2/mapdemo_tiles.h" || \
+    fail "map headers differ between two runs"
+CHECKS=$((CHECKS + 2))
+echo "  ok: map headers byte-identical across two runs"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -785,4 +1028,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5 + Wave 2 refs/metadata + Wave 3 animations)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5 + Waves 2-4 assetc)"

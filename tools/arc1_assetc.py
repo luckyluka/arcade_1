@@ -46,6 +46,32 @@ of refs into that sprite's frames. Games play a table with anim_tick()
 from programs/asset.h (modes loop / ping-pong / once), timed by the
 frame timer — never host time.
 
+Maps (Wave 4) are a top-level "maps" array importing a level grid over
+a tileset SPRITE:
+
+    "maps": [ { "name": "level1", "file": "level1.txt",
+                "tileset": "tiles", "tile_w": 16, "tile_h": 16,
+                "legend": { ".": null, "#": 0,
+                            "q": {"tile": 0, "flipX": true} } } ]
+
+The map file is an ASCII grid of legend characters, or {"rows": [...]}
+JSON. tile_w x tile_h splits the tileset image into tiles in scan
+order; the legend maps each character to a tile (null = empty,
+optional flipX/flipY); identical tiles DEDUP exactly — one tile serves
+a whole field (the M29 brick lesson). Each map emits NAME_COLS,
+NAME_ROWS, NAME_TILE_W/H, NAME_TILES, the packed tile blob and a
+cells array in gfx.h's encoding:
+
+    [15:0] tile index (1-based, 0 = empty), [19:16] palette bank,
+    [20] flip X, [21] flip Y
+
+Validators are machine-real rules only: tile_w even (the 4-bit blit
+rejects odd widths), the tileset must split into whole tiles, every
+map character must have a legend entry, and the map must not be
+empty. There is NO minimum map size — that "rule" was a pre-barrier
+compiler artifact, retracted in
+docs/experiments/tilemap-minsize-retraction.md.
+
 Palette semantics (card 1.2): a palette fills one device bank — colors[i]
 lands at PALETTE[bank*16 + i], at most 16 colors, bank 0..15. The device
 never DRAWS nibble 0 (transparent), so colors[0] is the declared key /
@@ -401,6 +427,8 @@ def validate_document(doc):
         fail_asset("assets.json", '"sprites" must be an array')
     if not isinstance(doc.get("animations", []), list):
         fail_asset("assets.json", '"animations" must be an array')
+    if not isinstance(doc.get("maps", []), list):
+        fail_asset("assets.json", '"maps" must be an array')
 
 
 def parse_palettes(doc):
@@ -747,6 +775,221 @@ def compile_animations(doc, sprites):
     return anims
 
 
+def map_label(index, m):
+    """How a map is addressed in errors: by name, else by position."""
+    if isinstance(m, dict) and isinstance(m.get("name"), str) and m["name"]:
+        return m["name"]
+    return "#%d" % (index + 1)
+
+
+def load_map_rows(where, path):
+    """Read a map file (Wave 4): ASCII lines, or — when the name ends in
+    .json — {"rows": ["....", ...]}. Returns the row strings, or None
+    after a teaching error."""
+    if not os.path.isfile(path):
+        fail_asset(where,
+                   "map file %s not found — paths are relative to "
+                   "assets.json" % path)
+        return None
+    if path.endswith(".json"):
+        try:
+            with open(path) as f:
+                doc = json.load(f)
+        except ValueError as e:
+            fail_asset(where, "map file %s is not valid JSON: %s" % (path, e))
+            return None
+        rows = doc.get("rows") if isinstance(doc, dict) else None
+        if not isinstance(rows, list) or \
+                not all(isinstance(r, str) for r in rows):
+            fail_asset(where,
+                       'JSON map file %s needs a "rows" array of strings'
+                       % path)
+            return None
+        return rows
+    with open(path) as f:
+        return [line.rstrip("\r\n") for line in f]
+
+
+def tile_bytes(spr, index, tw, th):
+    """One tile's packed bytes: split the sprite's quantized indices at
+    scan position `index` (left-to-right, top-to-bottom), 2 px per byte,
+    high nibble first — the same convention as the sheet itself."""
+    tiles_x = spr["w"] // tw
+    tx, ty = index % tiles_x, index // tiles_x
+    stride = spr["w"] // 2
+    out = bytearray()
+    for y in range(ty * th, (ty + 1) * th):
+        row = spr["data"][y * stride:(y + 1) * stride]
+        out += row[tx * tw // 2:(tx + 1) * tw // 2]
+    return bytes(out)
+
+
+def compile_maps(doc, sprites, anims, palettes, base_dir):
+    """Validate "maps" (Wave 4) and return
+    {name: {cols, rows, tw, th, tiles, cells, sprite, bank}} for the valid
+    ones. A map names a tileset SPRITE; tile_w x tile_h splits it into
+    tiles in scan order; the legend maps each map character to a tile
+    (null = empty, optional flipX/flipY); identical tiles dedup exactly,
+    and the emitted cells carry gfx.h's encoding: [15:0] 1-based dedup
+    index (0 = empty), [19:16] palette bank, [20] fx, [21] fy. Real
+    machine rules only — tile_w even (the 4-bit blit rejects odd widths,
+    src/arcade1/video.c) and a non-empty map; there is NO minimum map
+    size (docs/experiments/tilemap-minsize-retraction.md)."""
+    maps = {}
+    for i, m in enumerate(doc.get("maps", [])):
+        where = map_label(i, m)
+        if not isinstance(m, dict):
+            fail_asset("map %s" % where, "each map must be an object")
+            continue
+        name = m.get("name")
+        if not isinstance(name, str) or not _c_ident(name):
+            fail_asset(where,
+                       'missing or invalid "name" — the header needs a C '
+                       "identifier (letters, digits, _)")
+            continue
+        where = name
+        if name in maps:
+            fail_asset(where, "duplicate map name — each map needs its own "
+                              "name")
+            continue
+        if name in sprites or name in anims:
+            other = "sprite" if name in sprites else "animation"
+            fail_asset(where,
+                       'clashes with %s "%s" — maps, sprites and animations '
+                       "share one namespace of emitted symbols"
+                       % (other, name))
+            continue
+        tname = m.get("tileset")
+        if not isinstance(tname, str) or tname not in sprites:
+            fail_asset(where,
+                       "tileset %s not defined — name a sprite from "
+                       '"sprites"' % json.dumps(tname))
+            continue
+        spr = sprites[tname]
+        tw, th = m.get("tile_w"), m.get("tile_h")
+        if not isinstance(tw, int) or isinstance(tw, bool) or \
+                tw <= 0 or tw % 2 != 0:
+            fail_asset(where,
+                       "tile_w %s must be a positive even integer — the "
+                       "4-bit blit rejects odd widths (src/arcade1/video.c)"
+                       % json.dumps(tw))
+            continue
+        if not isinstance(th, int) or isinstance(th, bool) or th <= 0:
+            fail_asset(where, "tile_h %s must be a positive integer"
+                       % json.dumps(th))
+            continue
+        if tw > spr["w"] or spr["w"] % tw != 0:
+            fail_asset(where,
+                       "tile_w %d does not tile sprite %s (%d px wide) — "
+                       "the tileset must split into whole %d-px columns"
+                       % (tw, json.dumps(tname), spr["w"], tw))
+            continue
+        if th > spr["h"] or spr["h"] % th != 0:
+            fail_asset(where,
+                       "tile_h %d does not tile sprite %s (%d px tall) — "
+                       "the tileset must split into whole %d-px rows"
+                       % (th, json.dumps(tname), spr["h"], th))
+            continue
+        mfile = m.get("file")
+        if not isinstance(mfile, str) or not mfile:
+            fail_asset(where,
+                       '"file" must name the map file — an ASCII grid of '
+                       'legend characters, or {"rows": [...]} JSON')
+            continue
+        rows = load_map_rows(where, os.path.join(base_dir, mfile))
+        if rows is None:
+            continue
+        if not rows or not rows[0]:
+            fail_asset(where,
+                       "map %s is empty — a map needs at least one row of "
+                       "at least one column" % mfile)
+            continue
+        w = len(rows[0])
+        for r in range(len(rows)):
+            if len(rows[r]) != w:
+                fail_asset(where,
+                           "row %d of %s is %d columns wide, row 1 is %d — "
+                           "all rows must match"
+                           % (r + 1, mfile, len(rows[r]), w))
+                break
+        else:
+            legend = m.get("legend", {})
+            if not isinstance(legend, dict):
+                fail_asset(where,
+                           '"legend" must be an object mapping each map '
+                           "character to a tile (null = empty)")
+                continue
+            n_tiles = (spr["w"] // tw) * (spr["h"] // th)
+            leg = {}
+            broken = False
+            for ch, spec in legend.items():
+                if not isinstance(ch, str) or len(ch) != 1:
+                    fail_asset(where,
+                               "legend key %s must be exactly one character"
+                               % json.dumps(ch))
+                    broken = True
+                    break
+                fx = fy = 0
+                if spec is None:
+                    leg[ch] = (0, 0, 0)
+                    continue
+                if isinstance(spec, int) and not isinstance(spec, bool):
+                    idx = spec
+                elif isinstance(spec, dict):
+                    idx = spec.get("tile")
+                    fx = 1 if spec.get("flipX") else 0
+                    fy = 1 if spec.get("flipY") else 0
+                else:
+                    fail_asset(where,
+                               "legend %s must be null (empty), a tile "
+                               "index, or {\"tile\": i, \"flipX\": bool, "
+                               "\"flipY\": bool}" % json.dumps(ch))
+                    broken = True
+                    break
+                if not isinstance(idx, int) or isinstance(idx, bool) or \
+                        not 0 <= idx < n_tiles:
+                    fail_asset(where,
+                               "legend %s tile %s out of range — sprite %s "
+                               "holds %d tiles (%d x %d grid)"
+                               % (json.dumps(ch), json.dumps(idx), tname,
+                                  n_tiles, spr["w"] // tw, spr["h"] // th))
+                    broken = True
+                    break
+                leg[ch] = (idx + 1, fx, fy)
+            if broken:
+                continue
+            bank = palettes[spr["palette"]]["bank"]
+            seen = {}
+            tiles = []
+            cells = []
+            for r, row in enumerate(rows):
+                for c, ch in enumerate(row):
+                    if ch not in leg:
+                        fail_asset(where,
+                                   "character %s at row %d, column %d has "
+                                   'no legend entry — add it to "legend"'
+                                   % (json.dumps(ch), r + 1, c + 1))
+                        broken = True
+                        break
+                    idx, fx, fy = leg[ch]
+                    if idx == 0:
+                        cells.append(0)
+                        continue
+                    b = tile_bytes(spr, idx - 1, tw, th)
+                    if b not in seen:
+                        seen[b] = len(tiles) + 1
+                        tiles.append(b)
+                    cells.append(seen[b] | bank << 16 | fx << 20 | fy << 21)
+                if broken:
+                    break
+            if broken:
+                continue
+            maps[name] = {"cols": w, "rows": len(rows), "tw": tw, "th": th,
+                          "tiles": tiles, "cells": cells, "sprite": tname,
+                          "bank": bank}
+    return maps
+
+
 def _expand565(v):
     """RGB565 -> #RRGGBB the way the device expands it on scanout."""
     er, eg, eb = (v >> 11) & 31, (v >> 5) & 63, v & 31
@@ -774,13 +1017,13 @@ def check_banks(palettes, autos):
             owner[b] = name
 
 
-def emit_header(sprites, anims, palettes, out_path):
+def emit_header(sprites, anims, maps, palettes, out_path):
     """Write the generated header (card 1.4 contract, extended by Waves
-    2-3): one banner comment listing every sprite with its palette,
-    geometry and metadata plus every animation, #defines per sprite
-    (sorted), sheet arrays, the per-frame sprite4_ref arrays, the
-    animation frame tables, then palette arrays — 16 hex values per line,
-    no timestamps, ever."""
+    2-4): one banner comment listing every sprite with its palette,
+    geometry and metadata, every animation and every map, #defines per
+    sprite (sorted), sheet arrays, the per-frame sprite4_ref arrays, the
+    animation frame tables, the map tile blobs + cells arrays, then
+    palette arrays — no timestamps, ever."""
     banner = ["/* generated by tools/arc1_assetc.py (format 1) — DO NOT EDIT."]
     for name in sorted(sprites):
         s = sprites[name]
@@ -796,7 +1039,13 @@ def emit_header(sprites, anims, palettes, out_path):
         a = anims[name]
         banner.append(" * anim %s of %s: %d steps, %d ms"
                       % (name, a["sprite"], len(a["steps"]), a["ms"]))
-    if sprites or anims:
+    for name in sorted(maps):
+        m = maps[name]
+        banner.append(" * map %s of %s: %dx%d cells, tile %dx%d, %d unique "
+                      "tiles, bank %d"
+                      % (name, m["sprite"], m["cols"], m["rows"],
+                         m["tw"], m["th"], len(m["tiles"]), m["bank"]))
+    if sprites or anims or maps:
         banner.append(" * the NAME_frames refs need programs/asset.h"
                       " (sprite4_ref) — include it first")
         banner.append(" */")
@@ -842,6 +1091,33 @@ def emit_header(sprites, anims, palettes, out_path):
             text += "    &%s_frames[%d],\n" % (a["sprite"], f)
         text += "};\n\n"
 
+    for name in sorted(maps):
+        m = maps[name]
+        macro = name.upper()
+        text += "#define %s_COLS %d\n" % (macro, m["cols"])
+        text += "#define %s_ROWS %d\n" % (macro, m["rows"])
+        text += "#define %s_TILE_W %d\n" % (macro, m["tw"])
+        text += "#define %s_TILE_H %d\n" % (macro, m["th"])
+        text += "#define %s_TILES %d        /* deduped, in %s_tiles */\n" % (
+            macro, len(m["tiles"]), name)
+        if m["tiles"]:
+            text += ("static const unsigned char %s_tiles[%s_TILES * "
+                     "(%s_TILE_W / 2) * %s_TILE_H] = {\n"
+                     % (name, macro, macro, macro))
+            for b in m["tiles"]:
+                hexs = ["0x%02x" % v for v in b]
+                for k in range(0, len(hexs), 16):
+                    text += "    " + ", ".join(hexs[k:k + 16]) + ",\n"
+            text += "};\n\n"
+        text += ("/* cells: [15:0] tile index (0 = empty), [19:16] bank, "
+                 "[20] flipX, [21] flipY */\n")
+        text += ("static const unsigned int %s_cells[%s_COLS * %s_ROWS] = {\n"
+                 % (name, macro, macro))
+        for k in range(0, len(m["cells"]), 8):
+            vals = ["0x%05X," % v for v in m["cells"][k:k + 8]]
+            text += "    " + " ".join(vals) + "\n"
+        text += "};\n\n"
+
     for name in sorted(palettes):
         p = palettes[name]
         text += "static const unsigned short %s_palette[16] = {\n" % name
@@ -876,6 +1152,13 @@ def print_report(result):
         total += n
         print("ANIM %s of %s: %d steps, %d ms = %d B"
               % (name, a["sprite"], len(a["steps"]), a["ms"], n))
+    for name in sorted(result.get("maps", {})):
+        m = result["maps"][name]
+        n = len(m["tiles"]) * (m["tw"] // 2) * m["th"] + 4 * len(m["cells"])
+        total += n
+        print("MAP %s of %s: %dx%d cells, %d tiles = %d B"
+              % (name, m["sprite"], m["cols"], m["rows"],
+                 len(m["tiles"]), n))
     for name in sorted(palettes):
         total += 32
         print("PALETTE %s bank %d = 32 B" % (name, palettes[name]["bank"]))
@@ -903,19 +1186,26 @@ def compile_assets(doc, out_dir, report, base_dir, stem):
     check_banks(all_pals, {})
     if errors:
         return None
-    # An animation's frame table costs one rv32 pointer per step (4 B).
+    maps = compile_maps(doc, sprites, anims, all_pals, base_dir)
+    if errors:
+        return None
+    # An animation's frame table costs one rv32 pointer per step (4 B); a
+    # map costs its deduped tile blob plus one word (4 B) per cell.
     total = sum(len(s["data"]) for s in sprites.values()) + \
         32 * len(all_pals) + \
-        4 * sum(len(a["steps"]) for a in anims.values())
+        4 * sum(len(a["steps"]) for a in anims.values()) + \
+        sum(len(m["tiles"]) * (m["tw"] // 2) * m["th"] +
+            4 * len(m["cells"]) for m in maps.values())
     if total > ROM_BUDGET:
         fail_asset("assets.json",
                    "ROM assets %d / %d — over budget: reduce the art "
                    "(fewer frames or colours) or split the manifest"
                    % (total, ROM_BUDGET))
         return None
-    emit_header(sprites, anims, all_pals, os.path.join(out_dir, stem + ".h"))
+    emit_header(sprites, anims, maps, all_pals,
+                os.path.join(out_dir, stem + ".h"))
     return {"sprites": sprites, "palettes": all_pals, "anims": anims,
-            "total": total}
+            "maps": maps, "total": total}
 
 
 def main(argv=None):
