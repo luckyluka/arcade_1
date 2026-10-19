@@ -1,10 +1,11 @@
 #!/bin/sh
-# ROADMAP Wave 1 card 1.1: arc1-assetc skeleton + contract harness.
+# ROADMAP Wave 1 cards 1.1-1.5 + Wave 2 metadata/refs: arc1-assetc harness.
 #
 # Fixture images are BUILT IN-TEST by the embedded python mini-PNG-writer
 # (struct + zlib, non-interlaced 8-bit RGB) — no binary fixtures in git.
 # Every case pins the exit code (0 compiled / 1 validation / 2 usage-IO);
-# later cards extend this same script with more cases.
+# later cards extend this same script with more cases. (The Wave-2 DEMO
+# guest keeps its art committed beside it: programs/experimental/.)
 #
 # Usage: test_arc1assetc.sh <arcade1-cli> <rom-dir> <golden-dir>
 #   The three standard test args are accepted for uniformity; arc1-assetc is
@@ -40,7 +41,7 @@ expect() {
 }
 
 assert_has() {
-    echo "$OUTV" | grep -q "$1" || fail "$2: no '$1' in output — $OUTV"
+    echo "$OUTV" | grep -Fq "$1" || fail "$2: no '$1' in output — $OUTV"
     CHECKS=$((CHECKS + 1))
 }
 
@@ -467,6 +468,120 @@ cmp "$OUT/det1.report" "$OUT/det2.report" || \
 CHECKS=$((CHECKS + 2))
 echo "  ok: delete + regenerate byte-identical (header + report)"
 
+# --- 10) metadata + per-frame refs (Wave 2) ---------------------------------
+# game.json's sprite is a 4x4 2-frame strip; a variant adds origin [4, 4]
+# (the bottom-right EDGE — allowed, [w/2, h] is the feet-anchor idiom) and
+# collision [0, 1, 3, 3] (fits: 0+3 <= 4, 1+3 <= 4).
+python3 - "$OUT/game.json" "$OUT/meta.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+doc["sprites"][0]["origin"] = [4, 4]
+doc["sprites"][0]["collision"] = [0, 1, 3, 3]
+json.dump(doc, open(sys.argv[2], "w"))
+PY
+expect 0 "origin + collision compile into frame refs" \
+    python3 "$TOOL" --assets "$OUT/meta.json" --out-dir "$OUT/gen"
+H="$OUT/gen/meta.h"
+for wantdef in \
+    "static const sprite4_ref player_frames[PLAYER_FRAMES] = {" \
+    "    { player_sheet + 0 * PLAYER_STRIDE, PLAYER_W, PLAYER_H, 0, 4, 4, 0, 1, 3, 3 }," \
+    "    { player_sheet + 1 * PLAYER_STRIDE, PLAYER_W, PLAYER_H, 0, 4, 4, 0, 1, 3, 3 }," \
+    "origin (4, 4), collision (0, 1 3x3)" \
+    "the NAME_frames refs need programs/asset.h"; do
+    grep -Fq "$wantdef" "$H" || fail "refs header missing: $wantdef — $(cat "$H")"
+    CHECKS=$((CHECKS + 1))
+done
+echo "  ok: refs header (array, both frames, banner metadata, include-order note)"
+
+# sprites without the optional fields still compile, refs default to
+# origin (0, 0) and no collision box.
+expect 0 "sprites without metadata still compile" \
+    python3 "$TOOL" --assets "$OUT/game.json" --out-dir "$OUT/gen"
+grep -Fq "    { player_sheet + 0 * PLAYER_STRIDE, PLAYER_W, PLAYER_H, 0, 0, 0, 0, 0, 0, 0 }," \
+    "$OUT/gen/game.h" || fail "default ref must be all zeros — $(cat "$OUT/gen/game.h")"
+grep -Fq "origin (0, 0), collision (0, 0 0x0)" "$OUT/gen/game.h" || \
+    fail "default banner metadata missing — $(cat "$OUT/gen/game.h")"
+CHECKS=$((CHECKS + 2))
+echo "  ok: absent metadata defaults to origin (0, 0), no collision box"
+
+# shape errors teach the exact field format
+manifest "$OUT/badorigin.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"origin":[4]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "one-element origin is a validation error" \
+    python3 "$TOOL" --assets "$OUT/badorigin.json" --out-dir "$OUT/gen"
+assert_has '"origin" must be [x, y] — two integers' "origin shape error teaches the format"
+
+manifest "$OUT/badcoll.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"collision":[0,0,4]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "three-element collision is a validation error" \
+    python3 "$TOOL" --assets "$OUT/badcoll.json" --out-dir "$OUT/gen"
+assert_has '"collision" must be [x, y, w, h] — four integers' "collision shape error teaches the format"
+
+manifest "$OUT/strorigin.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"origin":[4,"2"]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "non-integer origin member is a validation error" \
+    python3 "$TOOL" --assets "$OUT/strorigin.json" --out-dir "$OUT/gen"
+assert_has '"origin" must be [x, y] — two integers' "non-integer origin member"
+
+# geometry errors name both the metadata and the frame
+manifest "$OUT/ooborigin.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"origin":[5,0]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "origin outside the frame is a validation error" \
+    python3 "$TOOL" --assets "$OUT/ooborigin.json" --out-dir "$OUT/gen"
+assert_has "origin [5, 0] outside frame 4x4 — the anchor stays inside" "origin geometry error"
+
+manifest "$OUT/oobcoll.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"collision":[2,2,3,3]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "collision outside the frame is a validation error" \
+    python3 "$TOOL" --assets "$OUT/oobcoll.json" --out-dir "$OUT/gen"
+assert_has "collision [2, 2, 3, 3] does not fit frame 4x4" "collision geometry error"
+
+manifest "$OUT/halfcoll.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"collision":[1,1,0,3]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "a half-zero collision box is a validation error" \
+    python3 "$TOOL" --assets "$OUT/halfcoll.json" --out-dir "$OUT/gen"
+assert_has 'box sits inside the sprite' "half-zero box error teaches the fix"
+
+manifest "$OUT/nobox.json" \
+    '{"name":"player","file":"ok.png","palette":"world","frames":2,"collision":[0,0,0,0]}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 0 'collision [0, 0, 0, 0] compiles (exactly like omitting it)' \
+    python3 "$TOOL" --assets "$OUT/nobox.json" --out-dir "$OUT/gen"
+
+# the emitted refs must COMPILE against the real programs/asset.h (the
+# struct order in the emitter and in the SDK header cannot drift apart
+# without failing make check right here)
+cat > "$OUT/refs_check.c" <<'EOF'
+#include "asset.h"
+#include "gen/meta.h"
+int ref_probe(void) { return player_frames[1].w + player_frames[0].ox; }
+EOF
+CC=${CC:-cc}
+if "$CC" -fsyntax-only -Wall -Wextra -Wno-unused -Wno-pointer-to-int-cast \
+        -I"$ROOT/programs" -I"$OUT" "$OUT/refs_check.c" 2> "$OUT/refs_err.txt"; then
+    CHECKS=$((CHECKS + 1))
+    echo "  ok: emitted refs compile against the real programs/asset.h"
+else
+    cat "$OUT/refs_err.txt" >&2
+    fail "emitted refs do not compile"
+fi
+
+# determinism holds with metadata in play (two processes, byte-identical)
+python3 "$TOOL" --assets "$OUT/meta.json" --out-dir "$OUT/det3" 2>/dev/null || \
+    fail "metadata determinism run 1"
+python3 "$TOOL" --assets "$OUT/meta.json" --out-dir "$OUT/det4" 2>/dev/null || \
+    fail "metadata determinism run 2"
+cmp "$OUT/det3/meta.h" "$OUT/det4/meta.h" || \
+    fail "metadata headers differ between two runs"
+CHECKS=$((CHECKS + 2))
+echo "  ok: metadata headers byte-identical across two runs"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -475,4 +590,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5 + Wave 2 refs/metadata)"

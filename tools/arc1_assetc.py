@@ -20,6 +20,18 @@ The output header is byte-deterministic (no timestamps, fixed
 16-bytes-per-line hex, names emitted in sorted order). The committed header
 is the build truth and this tool is the master: regenerate, never hand-edit.
 
+Gameplay metadata (Wave 2) is optional per sprite: "origin": [x, y] is the
+anchor inside the frame ([0, 0] default = top-left; the edge is allowed, so
+[w/2, h] is a feet anchor) and "collision": [x, y, w, h] is a box inside the
+frame (omit it for none). Both land in the emitted per-frame ref array
+
+    static const sprite4_ref player_frames[PLAYER_FRAMES] = {…};
+
+whose sprite4_ref type lives in programs/asset.h — the generated header
+names it, so games include asset.h FIRST. asset_sprite4(ref, x, y, flags)
+in that header wraps arcade1_sprite4; names resolve at build time only,
+never by strcmp on the target (AssetEcosystem.md 13).
+
 Palette semantics (card 1.2): a palette fills one device bank — colors[i]
 lands at PALETTE[bank*16 + i], at most 16 colors, bank 0..15. The device
 never DRAWS nibble 0 (transparent), so colors[0] is the declared key /
@@ -458,6 +470,55 @@ def _nearest_index(pal, r, g, b):
     return best, bestd
 
 
+def _meta_shape(where, sprite):
+    """Optional gameplay metadata (Wave 2): normalize "origin" [x, y] and
+    "collision" [x, y, w, h] to ((ox, oy), (cx, cy, cw, ch)) with [0, 0] /
+    no-box defaults, or None on a shape error (one teaching line)."""
+    origin = sprite.get("origin")
+    if origin is not None:
+        if not (isinstance(origin, list) and len(origin) == 2 and
+                all(isinstance(v, int) and not isinstance(v, bool)
+                    for v in origin)):
+            fail_asset(where,
+                       '"origin" must be [x, y] — two integers, the anchor '
+                       'inside the frame (default [0, 0])')
+            return None
+    collision = sprite.get("collision")
+    if collision is not None:
+        if not (isinstance(collision, list) and len(collision) == 4 and
+                all(isinstance(v, int) and not isinstance(v, bool)
+                    for v in collision)):
+            fail_asset(where,
+                       '"collision" must be [x, y, w, h] — four integers, a '
+                       'box inside the frame (omit it for none)')
+            return None
+    return (tuple(origin) if origin is not None else (0, 0),
+            tuple(collision) if collision is not None else (0, 0, 0, 0))
+
+
+def _meta_geometry(where, meta, fw, fh):
+    """Metadata vs the loaded frame's geometry: the anchor stays inside the
+    frame (the edge allowed — [w/2, h] is the feet anchor), the box sits
+    inside it. Returns False on a teaching error."""
+    (ox, oy), (cx, cy, cw, ch) = meta
+    if not (0 <= ox <= fw and 0 <= oy <= fh):
+        fail_asset(where,
+                   "origin [%d, %d] outside frame %dx%d — the anchor stays "
+                   "inside (0..%d, 0..%d, the edge allowed)"
+                   % (ox, oy, fw, fh, fw, fh))
+        return False
+    if cw == 0 and ch == 0:
+        return True                        # no box, exactly like omitting it
+    if cx < 0 or cy < 0 or cw <= 0 or ch <= 0 or \
+            cx + cw > fw or cy + ch > fh:
+        fail_asset(where,
+                   "collision [%d, %d, %d, %d] does not fit frame %dx%d — a "
+                   "box sits inside the sprite (x+w <= %d, y+h <= %d); omit "
+                   '"collision" for none' % (cx, cy, cw, ch, fw, fh, fw, fh))
+        return False
+    return True
+
+
 def compile_sprites(doc, palettes, base_dir):
     """Load every sprite image, quantize it, slice it into frames.
     Returns (sprites, auto_palettes); errors go through fail_asset."""
@@ -490,6 +551,9 @@ def compile_sprites(doc, palettes, base_dir):
         if frames < 1:
             fail_asset(where, "frames %d — a strip needs at least 1 frame" % frames)
             continue
+        meta = _meta_shape(where, sprite)
+        if meta is None:
+            continue
 
         full = path if os.path.isabs(path) else os.path.join(base_dir, path)
         try:
@@ -515,6 +579,8 @@ def compile_sprites(doc, palettes, base_dir):
                        "frame width %d is odd (image %d / %d frames) — the "
                        "4-bit blit needs an even width, odd draws nothing; "
                        "pad every frame by one pixel" % (fw, w, frames))
+            continue
+        if not _meta_geometry(where, meta, fw, h):
             continue
 
         # Resolve the palette (schema was validated by card 1.2).
@@ -590,7 +656,8 @@ def compile_sprites(doc, palettes, base_dir):
         sprites[name] = {"w": fw, "h": h, "frames": frames,
                          "stride": stride, "data": bytes(data),
                          "palette": pal_ref, "quantize": mode,
-                         "maxerr": maxerr, "npix": npix}
+                         "maxerr": maxerr, "npix": npix,
+                         "origin": meta[0], "collision": meta[1]}
     return sprites, autos
 
 
@@ -622,18 +689,25 @@ def check_banks(palettes, autos):
 
 
 def emit_header(sprites, palettes, out_path):
-    """Write the generated header (card 1.4 contract): one banner comment
-    listing every sprite with its palette, #defines per sprite (sorted),
-    sheet arrays, then palette arrays — 16 hex values per line, no
+    """Write the generated header (card 1.4 contract, extended by Wave 2):
+    one banner comment listing every sprite with its palette, geometry and
+    metadata, #defines per sprite (sorted), sheet arrays, the per-frame
+    sprite4_ref arrays, then palette arrays — 16 hex values per line, no
     timestamps, ever."""
     banner = ["/* generated by tools/arc1_assetc.py (format 1) — DO NOT EDIT."]
     for name in sorted(sprites):
         s = sprites[name]
         pal = palettes[s["palette"]]
-        banner.append(" * %s: %dx%d x%d frames, 4-bit; palette %s (bank %d)"
+        banner.append(" * %s: %dx%d x%d frames, 4-bit; palette %s (bank %d), "
+                      "origin (%d, %d), collision (%d, %d %dx%d)"
                       % (name, s["w"], s["h"], s["frames"],
-                         s["palette"], pal["bank"]))
+                         s["palette"], pal["bank"],
+                         s["origin"][0], s["origin"][1],
+                         s["collision"][0], s["collision"][1],
+                         s["collision"][2], s["collision"][3]))
     if sprites:
+        banner.append(" * the NAME_frames refs need programs/asset.h"
+                      " (sprite4_ref) — include it first")
         banner.append(" */")
         text = "\n".join(banner) + "\n\n"
     else:
@@ -652,6 +726,17 @@ def emit_header(sprites, palettes, out_path):
         hexs = ["0x%02x" % b for b in s["data"]]
         for k in range(0, len(hexs), 16):
             text += "    " + ", ".join(hexs[k:k + 16]) + ",\n"
+        text += "};\n\n"
+        ox, oy = s["origin"]
+        cx, cy, cw, ch = s["collision"]
+        bank = palettes[s["palette"]]["bank"]
+        text += "static const sprite4_ref %s_frames[%s_FRAMES] = {\n" % (
+            name, macro)
+        for f in range(s["frames"]):
+            text += ("    { %s_sheet + %d * %s_STRIDE, %s_W, %s_H, %d, "
+                     "%d, %d, %d, %d, %d, %d },\n"
+                     % (name, f, macro, macro, macro,
+                        bank, ox, oy, cx, cy, cw, ch))
         text += "};\n\n"
 
     for name in sorted(palettes):

@@ -58,9 +58,9 @@ per bank:
   },
   "sprites": [
     { "name": "player", "file": "art/player.png", "palette": "world",
-      "frames": 6, "quantize": "nearest" },
+      "frames": 6, "quantize": "nearest", "origin": [16, 40] },
     { "name": "spark",  "file": "art/spark.png",  "palette": "auto",
-      "bank": 7, "frames": 4 }
+      "bank": 7, "frames": 4, "collision": [2, 2, 12, 12] }
   ]
 }
 ```
@@ -68,7 +68,13 @@ per bank:
 `"palette": "auto"` collects the sheet's distinct colours into `bank`
 for you; `"quantize": "nearest"` maps off-palette pixels to the closest
 palette entry instead of failing (the default `"exact"` fails loudly
-with the pixel, the nearest colour and the distance). `--report` prints
+with the pixel, the nearest colour and the distance). Two optional
+gameplay fields travel with each sprite: `"origin": [x, y]` is the
+anchor INSIDE the frame (default `[0, 0]` = top-left; the edge is
+allowed, so `[w/2, h]` is the classic feet anchor) and
+`"collision": [x, y, w, h]` is a box inside the frame (omit it for
+none). Both are validated against the frame's geometry, so a misplaced
+anchor fails the build, not the boss fight. `--report` prints
 what each asset cost and how far the quantizer strayed — real output of
 the manifest above:
 
@@ -86,6 +92,26 @@ per-sprite defines (`PLAYER_W`, `PLAYER_H`, `PLAYER_FRAMES`,
 tool re-derives byte-identical output from the same inputs (asserted in
 `tests/test_arc1assetc.sh`), so after any art change regenerate the
 header — nothing else re-checks it for you.
+
+Each sprite also emits a per-frame ref array,
+`static const sprite4_ref player_frames[PLAYER_FRAMES]`, whose type and
+draw wrapper live in `programs/asset.h` — include that header FIRST,
+the generated one names its type. A ref carries the frame's pixels,
+size, palette bank and the origin/collision metadata, so game code
+addresses art by frame and draws it with one call that repeats nothing:
+
+    #include "asset.h"        // sprite4_ref + asset_sprite4
+    #include "assets.h"       // the generated header
+
+    asset_sprite4(&player_frames[3], x, y, flags);   // flags bit0 = flip X
+
+Placement by the ref's own anchor is then just
+`asset_sprite4(&player_frames[f], x - player_frames[f].ox,
+                                  y - player_frames[f].oy, flip)` —
+no stride arithmetic anywhere (names resolve at build time; nothing on
+the target looks art up by string). A working end-to-end example:
+`programs/experimental/asset_demo.c`, built by `make experimental` and
+pinned pixel-for-pixel by `make test-assetdemo`.
 
 ## Build
 

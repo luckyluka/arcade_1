@@ -94,3 +94,66 @@ image, unwritable output.
 python3 tools/arc1_assetc.py --assets assets.json --out-dir gen --report
 make test-arc1assetc
 ```
+
+---
+
+# Wave 2 — metadata + typed accessors (ROADMAP_CREATION_FLOW §6)
+
+Status: shipped in the same tool, header and SDK. New files:
+`programs/asset.h` (`sprite4_ref` + `asset_sprite4`), the demo guest
+`programs/experimental/asset_demo.c` with committed art
+(`asset_demo_hero.png`, 109 B) and manifest (`asset_demo_sheet.json`),
+its committed generated header (`asset_demo_sheet.h`, regenerate with
+`make asset-demo-sheet`), and `tests/test_assetdemo.sh`
+(`make test-assetdemo`, by hand like walkdemo — not in `make check`).
+`tests/test_arc1assetc.sh` grew a Wave-2 section (79 → 104 checks).
+
+## What the emitter gained
+
+- Optional per sprite: `"origin": [x, y]`, `"collision": [x, y, w, h]`,
+  validated for shape (two/four integers) and geometry (anchor inside
+  the frame, edge allowed; box inside the frame; `[0,0,0,0]` ==
+  omitting). Defaults `[0, 0]` / none.
+- Per-frame refs: `static const sprite4_ref NAME_frames[NAME_FRAMES]`,
+  one initializer per frame: `{ sheet + f * STRIDE, W, H, bank, ox, oy,
+  cx, cy, cw, ch }`. Field order = struct order in `programs/asset.h`;
+  `tests/test_arc1assetc.sh` COMPILES an emitted header against the real
+  asset.h under host `cc -fsyntax-only`, so the two cannot drift.
+- The banner now prints each sprite's metadata and a one-line include
+  contract: the generated header names `sprite4_ref`, so `asset.h` must
+  be included first. Nothing else in the header needs a type from it.
+
+## Measured facts
+
+| Fact | Value |
+|---|---|
+| Demo ROM payload | 1276 B (hero sheet 512 B + palette 32 B + 4 refs × 40 B = 160 B) |
+| Ref cost vs sheet | 160/512 B = 31 % on the 16×16 demo; 280/7840 B = 3.6 % at walkdemo scale (7×40×56) |
+| `sprite4_ref` | pointer + 9 ints = 40 B/frame on rv32 |
+| Test checks | assetc 79 → 104; demo 15 (metadata, placement, flip, feet origin, collision box, no-stray-pixels) |
+| Pixels pinned by the demo test | red 32 (two 16-px clusters, one mirrored), green 16, blue 192 = 12-bar + 180-box, white 16 |
+
+## Findings
+
+1. **The Wave-1 validator ate its own dog food on day one.** The first
+   hand-run of the new geometry check failed exactly as designed — my
+   demo-art generator emitted a VERTICAL strip (16×64); assetc answered
+   `origin [8, 16] outside frame 4x64 — the anchor stays inside (0..4,
+   0..64, the edge allowed)` and exit 1. The art was fixed to the
+   horizontal-strip contract; the tool was right.
+2. **`grep -q` vs teaching messages with `[x, y]`.** The test harness's
+   `assert_has` used regex `grep`, so the new shape errors (`must be
+   [x, y]`) were swallowed as character classes. `assert_has` now uses
+   `grep -F` (fixed string) — correct for asserting exact teaching text;
+   all older patterns were literal and unaffected.
+3. **Design choices the card left open** (stated, not improvised):
+   `int` fields in `sprite4_ref` (a 40000-px-wide frame fits the ROM
+   budget with h=1, so shorts would need a validator to be correct —
+   ints need none); refs emitted for EVERY sprite, even `frames: 1`
+   (uniform contract); metadata duplicated per frame of a sprite (a
+   strip has uniform frame geometry, and refs stay self-contained for
+   `asset_sprite4`).
+4. **Parked:** `programs/asset.h` is NOT in the CLI's embedded
+   `SDK_FILES` (`arcade1 build`'s self-contained SDK), matching the
+   card's text — add it when a self-contained build wants asset support.
+   The GDG gained no new ```c fences, so `test-cheatsheet` is untouched.

@@ -314,7 +314,13 @@ $(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
 test-walkdemo: $(CLI_BIN) $(GUEST_BUILD)/walkdemo.arc1
 	sh tests/test_walkdemo.sh $(CLI_BIN) $(GUEST_BUILD)
 
-experimental: $(GUEST_BUILD)/asteroid_run.arc1 $(GUEST_BUILD)/walkdemo.arc1
+# asset_demo is the Wave-2 typed-accessor experiment (docs/experiments/
+# arc1-assetc.md), likewise run by hand with `make test-assetdemo`.
+test-assetdemo: $(CLI_BIN) $(GUEST_BUILD)/asset_demo.arc1
+	sh tests/test_assetdemo.sh $(CLI_BIN) $(GUEST_BUILD)
+
+experimental: $(GUEST_BUILD)/asteroid_run.arc1 $(GUEST_BUILD)/walkdemo.arc1 \
+              $(GUEST_BUILD)/asset_demo.arc1
 	@echo "experimental: built $^ (NOT covered by make check)"
 
 $(GUEST_BUILD)/asteroid_run.elf: programs/experimental/asteroid_run.c programs/arcade1.h programs/crt0.S programs/link.ld
@@ -341,6 +347,26 @@ $(GUEST_BUILD)/walkdemo.bin: $(GUEST_BUILD)/walkdemo.elf
 	$(RISCV_OBJCOPY) -O binary $< $@
 
 $(GUEST_BUILD)/walkdemo.arc1: $(GUEST_BUILD)/walkdemo.bin $(TESTDIR)/packarc1
+	$(TESTDIR)/packarc1 $< $@
+
+# asset_demo: the typed-accessor experiment (ROADMAP_CREATION_FLOW Wave 2 —
+# programs/asset.h refs + arc1-assetc origin/collision metadata). Like
+# walkdemo, its generated sheet header is checked in (regenerate with
+# `make asset-demo-sheet`, which needs python3), so building the guest
+# itself needs no python.
+asset-demo-sheet: programs/experimental/asset_demo_sheet.h
+
+programs/experimental/asset_demo_sheet.h: programs/experimental/asset_demo_sheet.json programs/experimental/asset_demo_hero.png tools/arc1_assetc.py
+	python3 tools/arc1_assetc.py --assets programs/experimental/asset_demo_sheet.json --out-dir programs/experimental
+
+$(GUEST_BUILD)/asset_demo.elf: programs/experimental/asset_demo.c programs/experimental/asset_demo_sheet.h programs/asset.h programs/arcade1.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld -o $@ programs/crt0.S $<
+
+$(GUEST_BUILD)/asset_demo.bin: $(GUEST_BUILD)/asset_demo.elf
+	$(RISCV_OBJCOPY) -O binary $< $@
+
+$(GUEST_BUILD)/asset_demo.arc1: $(GUEST_BUILD)/asset_demo.bin $(TESTDIR)/packarc1
 	$(TESTDIR)/packarc1 $< $@
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
