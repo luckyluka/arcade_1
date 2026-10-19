@@ -377,6 +377,68 @@ expect 1 "two palettes on one bank is a validation error" \
     python3 "$TOOL" --assets "$OUT/clash.json" --out-dir "$OUT/gen"
 assert_has 'bank 3 is already used by "a"' "bank clash names both palettes"
 
+# --- 8) emitter contract + report (card 1.4) --------------------------------
+expect 0 "--report prints greppable KEY lines" \
+    python3 "$TOOL" --assets "$OUT/game.json" --out-dir "$OUT/gen" --report
+assert_has "SPRITE player 4x4 x2 = 16 B" \
+    "SPRITE line matches the independent (w/2)*h*frames count"
+assert_has "PALETTE world bank 0 = 32 B" "PALETTE line names the bank"
+assert_has "ROM assets 48 / 262144 (0.0 %)" "ROM line totals sheets + palettes"
+
+H="$OUT/gen/game.h"
+for wantdef in "#define PLAYER_W 4" \
+               "#define PLAYER_H 4" \
+               "#define PLAYER_FRAMES 2" \
+               "#define PLAYER_STRIDE 8        /* (w/2)*h bytes per frame */" \
+               "world_palette[16]" \
+               "; palette world (bank 0)"; do
+    grep -Fq "$wantdef" "$H" || \
+        fail "header contract missing: $wantdef — $(cat "$H")"
+    CHECKS=$((CHECKS + 1))
+done
+echo "  ok: header contract (4 defines, palette array, banner palette clause)"
+
+# nearest sprites report QUANT with independent maxerr (10-0)^2*3 = 300
+expect 0 "nearest sprites report QUANT" \
+    python3 "$TOOL" --assets "$OUT/near.json" --out-dir "$OUT/gen" --report
+assert_has "QUANT player maxerr=300 pixels=2" "QUANT line (independent d, all opaque pixels)"
+
+# budget: 4096x130 solid strip = 266240 B + 32 B palette > 262144
+python3 - "$OUT/big.png" <<'PY'
+import struct, sys, zlib
+def chunk(tag, data):
+    return (struct.pack(">I", len(data)) + tag + data +
+            struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF))
+w, h = 4096, 130
+raw = b"".join([b"\x00" + b"\xff\xff\xff" * w] * h)
+open(sys.argv[1], "wb").write(b"\x89PNG\r\n\x1a\n" +
+    chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) +
+    chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+PY
+manifest "$OUT/big.json" \
+    '{"name":"huge","file":"big.png","palette":"world","frames":1}' \
+    '{"world":{"bank":0,"colors":["#000000","#FFFFFF"]}}'
+expect 1 "over-budget assets fail before writing" \
+    python3 "$TOOL" --assets "$OUT/big.json" --out-dir "$OUT/gen"
+assert_has "over budget" "budget error teaches the fix"
+
+# emission order is sorted by name, not manifest order
+cat > "$OUT/two.json" <<EOF
+{ "format": 1,
+  "palettes": {"world": {"bank": 0, "colors": ["#000000", "#FFFFFF"]}},
+  "sprites": [
+    {"name": "zeta", "file": "ok.png", "palette": "world", "frames": 2},
+    {"name": "alpha", "file": "ok.png", "palette": "world", "frames": 2} ] }
+EOF
+expect 0 "two sprites compile" \
+    python3 "$TOOL" --assets "$OUT/two.json" --out-dir "$OUT/gen"
+line2=$(sed -n '2p' "$OUT/gen/two.h")
+case "$line2" in
+    *"alpha:"*) CHECKS=$((CHECKS + 1))
+        echo "  ok: banner lists sprites sorted (alpha before zeta)" ;;
+    *) fail "banner not sorted: $line2" ;;
+esac
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -385,4 +447,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.3)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.4)"
