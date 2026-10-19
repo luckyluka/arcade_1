@@ -439,6 +439,34 @@ case "$line2" in
     *) fail "banner not sorted: $line2" ;;
 esac
 
+# --- 9) determinism proof (card 1.5) ----------------------------------------
+# Two independent processes over one fixture -> byte-identical header AND
+# report; then delete + regenerate -> identical again (the committed
+# output is the build truth and the tool is the master).
+python3 "$TOOL" --assets "$OUT/two.json" --out-dir "$OUT/det1" --report \
+    > "$OUT/det1.report" 2> "$OUT/det1.err" || \
+    fail "determinism run 1: $(cat "$OUT/det1.err")"
+python3 "$TOOL" --assets "$OUT/two.json" --out-dir "$OUT/det2" --report \
+    > "$OUT/det2.report" 2> "$OUT/det2.err" || \
+    fail "determinism run 2: $(cat "$OUT/det2.err")"
+cmp "$OUT/det1/two.h" "$OUT/det2/two.h" || \
+    fail "two runs differ byte-for-byte in the header"
+cmp "$OUT/det1.report" "$OUT/det2.report" || \
+    fail "two runs differ byte-for-byte in the report"
+CHECKS=$((CHECKS + 2))
+echo "  ok: two runs byte-identical (header + report)"
+
+rm -rf "$OUT/det1"
+python3 "$TOOL" --assets "$OUT/two.json" --out-dir "$OUT/det1" --report \
+    > "$OUT/det1.report" 2> "$OUT/det1.err" || \
+    fail "regeneration: $(cat "$OUT/det1.err")"
+cmp "$OUT/det1/two.h" "$OUT/det2/two.h" || \
+    fail "regenerated header differs from the original"
+cmp "$OUT/det1.report" "$OUT/det2.report" || \
+    fail "regenerated report differs from the original"
+CHECKS=$((CHECKS + 2))
+echo "  ok: delete + regenerate byte-identical (header + report)"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -447,4 +475,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.4)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.5)"
