@@ -100,6 +100,92 @@ expect 1 "sprites must be an array" \
     python3 "$TOOL" --assets "$OUT/spr.json" --out-dir "$OUT/gen"
 assert_has '"sprites" must be an array' "sprites type error names the field"
 
+# --- 4) palette module (card 1.2) -------------------------------------------
+pal17() {  # pal17 <path> — a palette with 17 distinct colors
+    python3 - "$1" <<'PY'
+import json, sys
+json.dump({"format": 1,
+           "palettes": {"world": {"bank": 3,
+                                  "colors": ["#%06X" % i for i in range(17)]}},
+           "sprites": []}, open(sys.argv[1], "w"))
+PY
+}
+pal17 "$OUT/pal17.json"
+expect 1 "17-color palette is a validation error" \
+    python3 "$TOOL" --assets "$OUT/pal17.json" --out-dir "$OUT/gen"
+assert_has 'palette world: 17 colors (max 16) — merge colors or add a second bank' \
+    "17-color error teaches the fix"
+
+echo '{"format":1,"palettes":{"world":{"bank":16,"colors":["#000000"]}},"sprites":[]}' \
+    > "$OUT/bank16.json"
+expect 1 "bank 16 is out of range" \
+    python3 "$TOOL" --assets "$OUT/bank16.json" --out-dir "$OUT/gen"
+assert_has 'palette world: bank 16 out of range 0..15' "bank error text"
+
+echo '{"format":1,"palettes":{"world":{"bank":0,"colors":["#000000","#111111","#222222","#000000"]}},"sprites":[]}' \
+    > "$OUT/dup.json"
+expect 1 "duplicate palette color is a validation error" \
+    python3 "$TOOL" --assets "$OUT/dup.json" --out-dir "$OUT/gen"
+assert_has 'duplicate color #000000 at indices 0 and 3' "duplicate names both indices"
+
+echo '{"format":1,"palettes":{"world":{"bank":0,"colors":["#FFF"]}},"sprites":[]}' \
+    > "$OUT/badhex.json"
+expect 1 "malformed hex color is a validation error" \
+    python3 "$TOOL" --assets "$OUT/badhex.json" --out-dir "$OUT/gen"
+assert_has 'bad color "#FFF" — use #RRGGBB' "hex error teaches the format"
+
+# --- 5) sprite palette side: auto/bank pairing + references (V3 4.2) --------
+echo '{"format":1,"palettes":{},"sprites":[{"name":"player","file":"x.png","palette":"auto"}]}' \
+    > "$OUT/autonobank.json"
+expect 1 '"palette": "auto" without "bank" is a validation error' \
+    python3 "$TOOL" --assets "$OUT/autonobank.json" --out-dir "$OUT/gen"
+assert_has '"palette": "auto" requires "bank"' "auto requires bank"
+
+echo '{"format":1,"palettes":{"world":{"bank":0,"colors":["#000000"]}},"sprites":[{"name":"player","file":"x.png","palette":"world","frames":1,"bank":2}]}' \
+    > "$OUT/bankonnamed.json"
+expect 1 '"bank" on a named palette is a validation error' \
+    python3 "$TOOL" --assets "$OUT/bankonnamed.json" --out-dir "$OUT/gen"
+assert_has '"bank" is only valid with "palette": "auto"' "bank-on-named error"
+
+echo '{"format":1,"palettes":{},"sprites":[{"name":"player","file":"x.png","palette":"world","frames":1}]}' \
+    > "$OUT/noref.json"
+expect 1 "undefined palette reference is a validation error" \
+    python3 "$TOOL" --assets "$OUT/noref.json" --out-dir "$OUT/gen"
+assert_has 'palette "world" not defined' "undefined reference teaches the fix"
+
+echo '{"format":1,"palettes":{"world":{"bank":3,"colors":["#000000","#F8D8A8"]}},"sprites":[]}' \
+    > "$OUT/palok.json"
+expect 0 "a valid named palette compiles" \
+    python3 "$TOOL" --assets "$OUT/palok.json" --out-dir "$OUT/gen"
+
+# --- 6) module units: rgb565 + auto palette (ROADMAP_V3 4.2) ----------------
+python3 - "$ROOT" <<'PY' || fail "module units"
+import sys
+sys.path.insert(1, sys.argv[1] + "/tools")
+import arc1_assetc as m
+
+# Device upload semantics: #F8D8A8 -> 0xFED5.
+assert m.rgb565(0xF8, 0xD8, 0xA8) == 0xFED5, hex(m.rgb565(0xF8, 0xD8, 0xA8))
+assert m.parse_hex_color("#fed5ab") == (0xFE, 0xD5, 0xAB)
+assert m.parse_hex_color("#FED5") is None and m.parse_hex_color("FED5AB") is None
+
+# Auto palette: <=15 distinct -> 16 slots, key at 0, first appearance order.
+pal = m.collect_auto("player", [0x1234, None, 0x5678, 0x1234, 0x9ABC])
+assert pal["entries"] == [0, 0x1234, 0x5678, 0x9ABC] + [0] * 12, pal
+
+# >15 distinct -> ROADMAP_V3's exact teaching error (19 colours counted).
+try:
+    m.collect_auto("player", [i + 1 for i in range(19)])
+except m.AutoPaletteError as e:
+    assert str(e) == ('sprite player: 19 colours (max 15 + transparent) — '
+                      'reduce colours, use "quantize": "nearest" with an '
+                      'explicit palette, or split the sheet'), str(e)
+else:
+    raise SystemExit("19 distinct colours did not raise AutoPaletteError")
+PY
+CHECKS=$((CHECKS + 4))
+echo "  ok: rgb565 + auto-palette module units (4 asserts)"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
@@ -108,4 +194,4 @@ write_png_rgb "$OUT/fixture.png" 4 2 \
 CHECKS=$((CHECKS + 1))
 echo "  ok: mini-PNG-writer emits a real PNG (signature check)"
 
-echo "test-arc1assetc: ok ($CHECKS checks, card 1.1 skeleton)"
+echo "test-arc1assetc: ok ($CHECKS checks, cards 1.1-1.2)"
