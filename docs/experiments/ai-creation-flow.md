@@ -110,9 +110,11 @@ source:
 
 - odd 4-bit width draws nothing — `src/arcade1/video.c:303-304`
   (shared blit; tilemap4 too, `:460`)
-- TILEMAP4 minimum geometry: measured `minCOLS = 6,6,6,6,5,3,2,2,1` for
-  `ROWS 1..9`; `COLS ≥ 6` with any `ROWS ≥ 1` always safe; 4×3 → zero
-  pixels, 10×3 → full field — `docs/m29/M29_LOG.md:173-182`
+- TILEMAP4 small-map draw rule — **RETRACTED**: the once-measured size table
+  was read as a machine minimum, but it came from pre-barrier builds where
+  the compiler deleted the guest's cell fills; every geometry draws with
+  `2d29b79` + `tests/test_barrier.c` pinning it. See
+  `docs/experiments/tilemap-minsize-retraction.md`
 - palette index is **bank-relative**: `PALETTE[bank*16 + v]` —
   `CHEATSHEET.md:66,76`, `programs/arcade1.h:42`
 - `.arc1` payload ≤ 262 144 B = ROM size — `CHEATSHEET.md:109`
@@ -190,7 +192,7 @@ or the harness supplying them — §2.2 was amended accordingly.
 | 9 goldens match at HEAD; older 8 untouched since `f92bbc6` | VERIFIED | `make check`; git log |
 | ROM 256 KiB / RAM 64 KiB | VERIFIED | `CHEATSHEET.md:3,109` |
 | odd 4-bit width → draws nothing | VERIFIED | `src/arcade1/video.c:303-304` |
-| TILEMAP4 min-geometry table | VERIFIED | `docs/m29/M29_LOG.md:173-182` |
+| TILEMAP4 small-map draw rule | **RETRACTED** | pre-barrier build artifact — `docs/experiments/tilemap-minsize-retraction.md` |
 | `PALETTE[bank*16+v]` | VERIFIED | `CHEATSHEET.md:66` |
 | walkdemo numbers (7 840 B, x 20→100, pupil 23↔16, 1 fb-hash idle) | VERIFIED | `tests/test_walkdemo.sh:78-130`; `walkdemo.md` |
 | generator = 225 lines, deterministic regeneration | VERIFIED | `wc -l`; `walkdemo.md` |
@@ -218,9 +220,9 @@ build/arcade1 test tests/roms/m29game.arc1 \
 ## 7. Corrections this audit forced on `AssetEcosystem.md`
 
 1. "230-line generator" → **225** (`wc -l`).
-2. Tilemap trap rewritten from "below roughly 6×6" (contradicted by its
-   own "10×3 passes") to the measured `minCOLS` table from
-   `docs/m29/M29_LOG.md:173-182`.
+2. Tilemap trap rewritten to the then-measured size table
+   (`docs/m29/M29_LOG.md:173-182`) — **the rule behind this was retracted
+   entirely; see `docs/experiments/tilemap-minsize-retraction.md`**.
 3. §2.2 amended: `--golden` comparison happens **under the golden's run
    conditions** (F9).
 

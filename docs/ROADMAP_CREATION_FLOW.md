@@ -58,7 +58,7 @@
 | **1** | `arc1-assetc` v0: PNG/PPM → SPRITE4 + PALETTE, deterministic, reported | the asset pain point from walkdemo disappears |
 | **2** | Asset metadata + generated typed accessors (§13) | game code addresses art by name, zero stride math |
 | **3** | Animation resources + timing (§4); walkdemo migrates | `anim_play` beats hand-rolled tick code |
-| **4** | Map import: auto-tile, dedup, min-geometry validation (§6/F4) | a whole level is a data file, not a C array |
+| **4** | Map import: auto-tile, dedup, even-tile + empty-map validation (§6/F4; small-map rule retracted — ROADMAP_V3 §4.3) | a whole level is a data file, not a C array |
 | **5** | **Game #1** built end-to-end through the flow | the roadmap's own tenth-game metric moves |
 | **∥** | Play window (`--live`, keyboard→pad, R records) | human taste enters the loop (F6) — any time after Wave 1 |
 
@@ -316,9 +316,11 @@ truth, the tool is the master**).
   the source image, dedups identical cells exactly (the M29 brick lesson: 10×3
   field from ONE tile), emits tiles + cells (`[15:0]` index, `[19:16]` bank,
   `[20]` flipX, `[21]` flipY — `gfx.h`).
-- **Validators (F4)**: even `tile_w`; **min-geometry**: `COLS < 6` with
-  `ROWS ≤ 4` → error citing the measured rule (`docs/m29/M29_LOG.md:173-182`:
-  minCOLS 6,6,6,6,5,3,2,2,1 for ROWS 1..9); empty map → error.
+- **Validators (F4)**: even `tile_w`; empty map → error. The former
+  small-map size error is **retracted** (ROADMAP_V3 §4.3): fixtures must
+  instead assert that a 4×3 and a 5×1 map *draw* (pixel-count style of
+  `tests/test_barrier.c`) — see
+  `docs/experiments/tilemap-minsize-retraction.md`.
 - **Acceptance**: fixture map; test computes the expected cells array
   **independently** and `cmp`s (F3 oracle rule); tiny-map fixture fails with
   the measured-rule message.

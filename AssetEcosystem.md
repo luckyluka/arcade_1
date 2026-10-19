@@ -174,11 +174,11 @@ device's tilemap walker makes that free at runtime. Image → tiles → map
 deduplication is the single biggest ROM saver this machine offers, and it
 belongs in `arc1-assetc`, not in the artist's head.
 
-Validator rules: `tile_w` must be even; and the importer must warn about
-the undocumented trap the M29 test measured — **small maps can silently
-draw nothing**: the minimum COLS for ROWS 1..9 is 6,6,6,6,5,3,2,2,1, so
-`COLS >= 6` with any `ROWS >= 1` is always safe (10×3 draws its field;
-4×3 draws zero pixels). Exact table: `docs/m29/M29_LOG.md`.
+Validator rules: `tile_w` must be even (the 4-bit blit rejects odd widths,
+`src/arcade1/video.c`), an empty map is an error, and **no minimum map size
+exists** — the small-map draw trap once documented here was a pre-barrier
+compiler artifact of deleted cell-filling stores, retracted in
+`docs/experiments/tilemap-minsize-retraction.md`.
 
 ## 7. Palette Studio
 
