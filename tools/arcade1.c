@@ -927,6 +927,14 @@ static int golden_compare(const char *run_path, const char *golden_path)
                     "arcade1 test: frame line %u differs\n"
                     "  ran     %s"
                     "  golden  %s", n, la, lb);
+            /* A hash diff alone doesn't say WHY — point at the recorded
+             * conditions (ROADMAP_V3 4.1: card 0.2's hint, merged here). */
+            fprintf(stderr,
+                    "arcade1 test: goldens record hashes only — reproduce "
+                    "the golden's run\n"
+                    "arcade1 test: conditions (frames, input script, ROM). "
+                    "See\n"
+                    "arcade1 test: tests/golden/conditions.txt\n");
         }
     }
     fclose(a);
@@ -939,12 +947,15 @@ static int golden_compare(const char *run_path, const char *golden_path)
                 golden_path);
         return 1;
     }
-    if (n < total)
+    if (n < total) {
+        /* Partial coverage used to exit 0 — a short run passed silently
+         * (F9). Keep the note, but it is a FAILURE (ROADMAP_V3 4.1 0.3). */
         printf("arcade1 test: %u of %u golden frame lines match %s\n"
                "  (the run was shorter than the golden's first pass; "
                "--frames %u covers it)\n", n, total, golden_path, total);
-    else
-        printf("arcade1 test: %u frame lines match %s\n", n, golden_path);
+        return 1;
+    }
+    printf("arcade1 test: %u frame lines match %s\n", n, golden_path);
     return 0;
 }
 
