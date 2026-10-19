@@ -1,0 +1,30 @@
+# game  first_frames  rom  input  repro
+#
+# Reproduction conditions for every golden in tests/golden/ (ROADMAP_V3
+# 4.1, card 0.1). `arcade1 test --golden` records hashes only — this file
+# records the conditions those hashes were made under.
+#
+#   input : path | none | generated:<script> | harness:<test source>
+#   repro : cli     -> reproduce with
+#             arcade1 test <rom> --golden tests/golden/<game>.txt \
+#                  --frames <first_frames> [--input <input>]
+#           harness -> in-process C harness; only `make test-<game>`
+#           (test-golden re-runs `make test-<game>`, so harness entries
+#           reproduce through that path and cannot be replayed on the CLI)
+#
+# first_frames = length of the golden's FIRST frame pass (some files carry
+# a reset-replay second pass; golden_compare compares pass 1 only).
+# Derived with the card's awk over the frame-line sequence:
+#   awk '/^frame /{f=$2+0; if(h&&f!=p+1){print c; exit} p=f;h=1;c++}
+#        END{if(!found) print c}' tests/golden/<game>.txt
+# rom from the Makefile golden_rom mapping; conditions from each test recipe.
+# Re-verified 2026-10-19 (Wave 0 card 0.1 acceptance): all nine match.
+breakout       595  tests/roms/breakout.arc1        harness:tests/test_breakout.c    harness
+color          120  tests/roms/color_demo.arc1      none                            cli
+example-color  100  tests/roms/example_color.arc1   none                            cli
+m29game       1800  tests/roms/m29game.arc1         docs/m29/scripts/restart.txt    cli
+platformer     308  tests/roms/platformer.arc1      harness:tests/test_platformer.c harness
+pong          2400  tests/roms/example_pong.arc1    generated:tests/test_pong.sh     cli
+scroll         120  tests/roms/scroll_demo.arc1     harness:tests/test_scroll.c      harness
+snake           60  tests/roms/example_snake.arc1   none                            cli
+tetris         300  tests/roms/tetris.arc1          harness:tests/test_tetris.c      harness
