@@ -30,7 +30,7 @@ test-sprite test-tilemap test-scroll test-platformer test-breakout \
 test-tetris test-bench test-terrain test-ray test-sandbox test-systems \
 test-persist test-frame-rules test-video-worst test-video-palette \
 test-video-sprite4 test-video-tilemap4 test-color test-run \
-test-barrier test-m29game: | $(TESTDIR)
+test-barrier test-m29game test-info: | $(TESTDIR)
 
 $(TESTDIR):
 	@mkdir -p $(TESTDIR)
@@ -93,7 +93,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
-        test-run
+        test-run test-info
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -140,7 +140,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-barrier test-build test-oob \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
         test-mapdemo test-asteroid_run test-flappy \
-        test-golden-conditions test-inspect test-inspect-commands
+        test-golden-conditions test-inspect test-inspect-commands test-info
 
 all: $(TARGET)
 
@@ -318,6 +318,17 @@ test-mapdemo: $(CLI_BIN) $(GUEST_BUILD)/map_demo.arc1
 test-inspect: $(CLI_BIN) tests/test_inspect.sh
 	sh tests/test_inspect.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
+# ROADMAP_V4 card 4.1: `arcade1 info` — one source of truth for the
+# machine's constants. The C test compiles against the SAME headers the VM
+# uses (src/arcade1) and against the embedded SDK set (build/sdk_data.c), so
+# "the JSON equals the macros" is a compile-time-checked claim, not a
+# hand-copied expectation.
+$(TESTDIR)/test_info: tests/test_info.c $(SDK_DATA) | $(TESTDIR)
+	$(CC) $(CFLAGS) -Isrc/arcade1 -Itools -o $@ tests/test_info.c $(SDK_DATA)
+
+test-info: $(CLI_BIN) $(TESTDIR)/test_info tests/test_info.sh
+	sh tests/test_info.sh $(CLI_BIN) $(TESTDIR)/test_info
+
 # Wave B card B2 (ROADMAP_V3 §5): inspect command records + pixel
 # provenance. tests/guests/probe_cmds.c draws a sprite, then a FILL
 # covering it, paced by the timer tick; the .elf survives so the test can
@@ -471,14 +482,24 @@ $(GUEST_BUILD)/map_demo.arc1: $(GUEST_BUILD)/map_demo.bin $(TESTDIR)/packarc1
 SDK_FILES  := crt0.S link.ld arcade1.h gfx.h arcade1_map.h asset.h text.h
 SDK_DATA   := $(TESTDIR)/sdk_data.c
 
-$(SDK_DATA): $(addprefix programs/,$(SDK_FILES)) tools/gen_sdk_data.awk | $(TESTDIR)
+$(SDK_DATA): $(addprefix programs/,$(SDK_FILES)) tools/gen_sdk_data.awk \
+        tools/sdk_data.h | $(TESTDIR)
 	@{ echo "/* GENERATED from programs/ by tools/gen_sdk_data.awk — do not edit. */"; \
 	   echo '#include "sdk_data.h"'; \
 	   for f in $(SDK_FILES); do \
 	     echo "const char sdk_$$(printf '%s' $$f | tr . _ )[] ="; \
 	     awk -f tools/gen_sdk_data.awk programs/$$f; \
 	     echo '    ;'; \
-	   done; } > $@.tmp && mv $@.tmp $@
+	   done; \
+	   echo '/* The embedded set, in embed order — `arcade1 info` lists it. */'; \
+	   echo 'const arcade1_sdk_file_t sdk_files[] = {'; \
+	   for f in $(SDK_FILES); do \
+	     echo "    { \"$$f\", sdk_$$(printf '%s' $$f | tr . _ ) },"; \
+	   done; \
+	   echo '};'; \
+	   echo 'const unsigned sdk_file_count ='; \
+	   echo '    (unsigned)(sizeof sdk_files / sizeof sdk_files[0]);'; \
+	 } > $@.tmp && mv $@.tmp $@
 
 $(CLI_BIN): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
 	$(CC) $(CFLAGS) $(PLAY_CFLAGS) -Itests -Itools -o $@ $(CLI_SRC) $(SDK_DATA) $(PLAY_LIBS)

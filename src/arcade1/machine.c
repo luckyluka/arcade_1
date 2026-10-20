@@ -27,8 +27,9 @@
 
 /* Safety cap: guest instructions executed per frame while firmware is
  * attached (docs.md M15). A well-behaved guest presents its frame long
- * before this; the cap only prevents a runaway guest from hanging the host. */
-#define FRAME_STEP_CAP 1000000u
+ * before this; the cap only prevents a runaway guest from hanging the host.
+ * The value lives in machine.h (ARCADE1_FRAME_STEP_CAP) so the CLI's
+ * `arcade1 info` reports the very same constant the VM runs with. */
 
 /* --- Pixel helpers ------------------------------------------------------- */
 
@@ -297,7 +298,7 @@ static void run_firmware(arcade1_machine_t *m)
     uint32_t prev_pc = 0xFFFFFFFFu;   /* != any PC: first step always runs */
     uint32_t steps   = 0;
 
-    while (m->cpu.pc != prev_pc && steps < FRAME_STEP_CAP) {
+    while (m->cpu.pc != prev_pc && steps < ARCADE1_FRAME_STEP_CAP) {
         prev_pc = m->cpu.pc;
         arcade1_cpu_step(&m->cpu, &m->bus);
         steps++;

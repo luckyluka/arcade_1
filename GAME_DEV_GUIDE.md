@@ -8,6 +8,26 @@ document — it deliberately contains no API or CLI reference:
 - **SPEC.md** — the machine contract (memory map, devices, determinism).
 - **PROGRESS.md** — what is actually done and how to verify it.
 
+## The trust rule
+
+> **If a brief, a tutorial, a README or a model disagrees with
+> `arcade1 info`, `arcade1 info` is right.**
+
+`arcade1 info` prints the machine's constants from the *same macros the VM
+is compiled with* — screen size, framebuffer format, memory map, instruction
+cap, tick rate, and the SDK headers the CLI carries:
+
+```sh
+arcade1 info          # human-readable
+arcade1 info --json   # the same facts, machine-readable
+```
+
+Screen resolution, ROM/RAM sizes and the instruction cap have changed
+during development (a brief once said 320x180, the repo said 480x270).
+Documents drift; the CLI does not. If a number you were given disagrees
+with `arcade1 info`, the CLI is the current truth and the document is
+stale — say so, do not work around it.
+
 ## The shape of a game
 
 A guest program is freestanding C for RV32IM: `#include "arcade1.h"`, a

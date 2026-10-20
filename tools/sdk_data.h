@@ -20,4 +20,16 @@ extern const char sdk_arcade1_map_h[];/* programs/arcade1_map.h */
 extern const char sdk_asset_h[];      /* programs/asset.h      */
 extern const char sdk_text_h[];       /* programs/text.h       */
 
+/* The embedded set itself, in the order the Makefile embeds it. Generated
+ * from the same list that produces the arrays above, so `arcade1 info` can
+ * report the SDK headers the CLI really carries without hand-typing them
+ * (ROADMAP_V4 card 4.1). */
+typedef struct arcade1_sdk_file {
+    const char *name;   /* e.g. "arcade1.h" — the file name inside the image */
+    const char *text;   /* the file, verbatim */
+} arcade1_sdk_file_t;
+
+extern const arcade1_sdk_file_t sdk_files[];
+extern const unsigned sdk_file_count;
+
 #endif /* ARCADE1_SDK_DATA_H */

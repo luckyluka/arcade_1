@@ -2003,6 +2003,111 @@ static int cmd_inspect(int argc, char **argv)
     return 0;
 }
 
+/* --- `arcade1 info` (ROADMAP_V4 card 4.1) ----------------------------------
+ *
+ * One source of truth for the machine's constants. Every number comes from
+ * the SAME macros the VM is compiled with (the headers under src/arcade1),
+ * and the SDK header list is enumerated from the embedded set (sdk_files),
+ * never hand-typed. Trust rule (GAME_DEV_GUIDE.md, CHEATSHEET.md): if a
+ * brief, a tutorial or a model disagrees with `arcade1 info`, `arcade1 info`
+ * is right.
+ */
+
+#define ARCADE1_CLI_VERSION "0.1"
+
+static void info_print_json(void)
+{
+    unsigned i;
+    printf("{\n");
+    printf("  \"cli_version\": \"%s\",\n", ARCADE1_CLI_VERSION);
+    printf("  \"screen_width\": %d,\n", ARCADE1_WIDTH);
+    printf("  \"screen_height\": %d,\n", ARCADE1_HEIGHT);
+    printf("  \"framebuffer_format\": \"RGB565\",\n");
+    printf("  \"framebuffer_pixels\": %d,\n", ARCADE1_FB_PIXELS);
+    printf("  \"fps\": %d,\n", ARCADE1_FPS_INT);
+    printf("  \"sample_rate\": %d,\n", ARCADE1_SAMPLE_RATE_INT);
+    printf("  \"audio_samples_per_frame\": %d,\n", ARCADE1_AUDIO_FRAMES);
+    printf("  \"instruction_cap\": %u,\n", (unsigned)ARCADE1_FRAME_STEP_CAP);
+    printf("  \"rom_base\": %u,\n", (unsigned)ARCADE1_ROM_BASE);
+    printf("  \"rom_size\": %u,\n", (unsigned)ARCADE1_ROM_SIZE);
+    printf("  \"ram_base\": %u,\n", (unsigned)ARCADE1_RAM_BASE);
+    printf("  \"ram_size\": %u,\n", (unsigned)ARCADE1_RAM_SIZE);
+    printf("  \"mmio_base\": %u,\n", (unsigned)ARCADE1_MMIO_BASE);
+    printf("  \"mmio_size\": %u,\n", (unsigned)ARCADE1_MMIO_SIZE);
+    printf("  \"sdk_headers\": [");
+    {
+        int first = 1;
+        for (i = 0; i < sdk_file_count; i++) {
+            const char *name = sdk_files[i].name;
+            size_t n = strlen(name);
+            if (n < 2 || strcmp(name + n - 2, ".h") != 0)
+                continue;                       /* headers only */
+            printf("%s\"%s\"", first ? "" : ", ", name);
+            first = 0;
+        }
+    }
+    printf("],\n");
+    printf("  \"sdk_files\": [");
+    for (i = 0; i < sdk_file_count; i++)
+        printf("%s\"%s\"", i ? ", " : "", sdk_files[i].name);
+    printf("]\n");
+    printf("}\n");
+}
+
+static void info_print_text(void)
+{
+    unsigned i;
+    printf("arcade1 %s — ARCADE-1 developer CLI\n", ARCADE1_CLI_VERSION);
+    printf("machine:\n");
+    printf("  screen            %dx%d (RGB565, %d pixels)\n",
+           ARCADE1_WIDTH, ARCADE1_HEIGHT, ARCADE1_FB_PIXELS);
+    printf("  tick rate        %d fps\n", ARCADE1_FPS_INT);
+    printf("  audio            %d Hz, %d samples per frame (stereo)\n",
+           ARCADE1_SAMPLE_RATE_INT, ARCADE1_AUDIO_FRAMES);
+    printf("  instruction cap  %u per frame\n",
+           (unsigned)ARCADE1_FRAME_STEP_CAP);
+    printf("memory map:\n");
+    printf("  rom              0x%08X  %u bytes\n",
+           (unsigned)ARCADE1_ROM_BASE, (unsigned)ARCADE1_ROM_SIZE);
+    printf("  ram              0x%08X  %u bytes\n",
+           (unsigned)ARCADE1_RAM_BASE, (unsigned)ARCADE1_RAM_SIZE);
+    printf("  mmio             0x%08X  %u bytes\n",
+           (unsigned)ARCADE1_MMIO_BASE, (unsigned)ARCADE1_MMIO_SIZE);
+    printf("embedded sdk headers:\n");
+    for (i = 0; i < sdk_file_count; i++) {
+        const char *name = sdk_files[i].name;
+        size_t n = strlen(name);
+        if (n < 2 || strcmp(name + n - 2, ".h") != 0)
+            continue;
+        printf("  %s\n", name);
+    }
+    printf("embedded sdk files:\n");
+    for (i = 0; i < sdk_file_count; i++)
+        printf("  %s\n", sdk_files[i].name);
+}
+
+static int cmd_info(int argc, char **argv)
+{
+    int json = 0;
+    int i;
+
+    for (i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--json")) {
+            json = 1;
+        } else {
+            fprintf(stderr, "arcade1 info: unknown option '%s'\n"
+                    "usage: arcade1 info [--json]\n", argv[i]);
+            return 2;
+        }
+    }
+
+    if (json)
+        info_print_json();
+    else
+        info_print_text();
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2) {
@@ -2016,7 +2121,9 @@ int main(int argc, char **argv)
                 "  test     smoke run; --golden FILE compares per-frame hashes\n"
                 "  build    compile a guest C program into a .arc1 image\n"
                 "  inspect  structured last-frame report: KEY value lines\n"
-                "           (--json, --regs, --commands, --at X,Y)\n");
+                "           (--json, --regs, --commands, --at X,Y)\n"
+                "  info     the machine's constants, from the compiled-in macros\n"
+                "           (--json)\n");
         return 2;
     }
     if (!strcmp(argv[1], "run"))
@@ -2029,6 +2136,8 @@ int main(int argc, char **argv)
         return cmd_build(argc - 2, argv + 2);
     if (!strcmp(argv[1], "inspect"))
         return cmd_inspect(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "info"))
+        return cmd_info(argc - 2, argv + 2);
 
     fprintf(stderr, "arcade1: unknown command '%s'\n", argv[1]);
     return 2;

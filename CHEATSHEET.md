@@ -4,6 +4,11 @@ Memory map: ROM 256KiB at 0x00000000 (code + const data), RAM 64KiB at
 0x20000000 (data/bss/stack), MMIO 4KiB at 0x40000000. Images and cell
 maps must point into ROM or RAM.
 
+**Trust rule: if a brief, a tutorial, a README or a model disagrees with
+`arcade1 info`, `arcade1 info` is right.** It prints these constants from
+the same macros the VM is compiled with (`arcade1 info --json` for the
+machine-readable form), plus the list of SDK headers the CLI carries.
+
 ## Input
 Pad register 0x40000200: `unsigned p = arcade1_pad();` Bits: up 0x1,
 down 0x2, left 0x4, right 0x8, a 0x10, b 0x20, start 0x40, select 0x80.

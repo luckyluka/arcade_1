@@ -40,6 +40,15 @@
 /* Framebuffer size in pixels (RGB565, 16-bit, row-major). */
 #define ARCADE1_FB_PIXELS (ARCADE1_WIDTH * ARCADE1_HEIGHT)
 
+/* Safety cap: guest instructions executed per frame while firmware is
+ * attached (docs.md M15). A well-behaved guest presents its frame long
+ * before this; the cap only prevents a runaway guest from hanging the host.
+ *
+ * Shared (not private to machine.c) so `arcade1 info` can print the value
+ * the VM is actually compiled with — ROADMAP_V4 card 4.1 ("one source of
+ * truth for machine constants"). Pure move, no behaviour change. */
+#define ARCADE1_FRAME_STEP_CAP 1000000u
+
 /* --- Input device (milestone 15) ----------------------------------------- */
 
 /* INPUT_PAD register bits (docs.md "Firmware and frame protocol, pinned at
