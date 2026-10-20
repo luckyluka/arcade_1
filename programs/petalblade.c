@@ -1,19 +1,25 @@
-/* PETAL BLADE — a samurai platformer for ARCADE-1 (round 5).
+/* PETAL BLADE — a samurai platformer for ARCADE-1 (Game #3).
+ *
+ * Provenance: built in the round-5 art round (round5/, now programs/
+ * petalblade_art/ for the art pipeline) and promoted to a first-class game
+ * with a test, a golden and a committed ROM (ROADMAP_V4 card 4.7). The
+ * code is the round-5 code; the art, the level and the generated headers
+ * live in programs/petalblade_art/ and programs/petalblade_*.h.
  *
  * A Mario-like run-and-jump through a dusk valley: a samurai with a katana
  * crosses a tilemap world, fights oni and kuwagata beetles, collects coins
  * and reaches the torii gate. Everything is drawn with the typed asset API
- * (asset.h) and the assetc-compiled assets.h; the guest is freestanding C
- * for RV32IM — no libc, deterministic (particles are driven by the frame
- * timer / a seeded LCG, never host time).
+ * (asset.h) and the assetc-compiled petalblade_assets.h; the guest is
+ * freestanding C for RV32IM — no libc, deterministic (particles are driven
+ * by the frame timer / a seeded LCG, never host time).
  *
  * Observable globals (read with --vars): state, score, lives, px, py, cam_x.
  *   arcade1 run petalblade.arc1 --vars state,score,lives,px,py,cam_x
  */
 #include "asset.h"
-#include "assets.h"
+#include "petalblade_assets.h"
 #include "text.h"
-#include "level.h"
+#include "petalblade_level.h"
 
 #define SCREEN_W 480
 #define SCREEN_H 270

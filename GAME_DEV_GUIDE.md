@@ -376,3 +376,9 @@ promote it (into `GUEST_PROGS` + a test) only when it is meant to last.
 round-3 fresh-agent exercise (no existing game source was read — see
 docs/experiments/round3-cleanroom.md), and promoted into the same
 first-class set: `make program`, `make check`, golden-locked.
+
+`petalblade` is Game #3: the round-5 samurai platformer, promoted with
+its art pipeline (`programs/petalblade_art/`), its generated headers as
+the build truth, a scripted session that dies, restarts and wins
+(`tests/inputs/petalblade.txt`), and a golden of 1202 frames. See
+`round5/README.md` and `docs/experiments/round5-petalblade.md`.

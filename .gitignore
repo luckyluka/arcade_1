@@ -18,3 +18,20 @@ __pycache__/
 *.swp
 *~
 .DS_Store
+
+# Generated captures and previews. The PNG writer used to store its image
+# data uncompressed, so one 1080p capture was 6.2 MB and the repo carried
+# four of them. The sources stay; the captures do not — regenerate them
+# with `arcade1 run ... --capture frame.png` (compressed now, ~100x
+# smaller) or `make capture-*`.
+captures/
+round*/smoke.png
+round*/final*.png
+round*/out.png
+
+# Art reference sheets: the owner's image-model output, kept OUT of the
+# repository (licence and visibility are the owner's decision — see
+# docs/art/REFERENCES.md). The files live outside the working tree; they
+# remain in the git history.
+round*/Firefly_*.jpg
+Firefly_*.jpg

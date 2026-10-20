@@ -1,0 +1,25 @@
+# petalblade.txt — PETAL BLADE's scripted session (Game #3).
+#
+# Three acts, in one file:
+#
+#   frames 0..199    walk right into the oni (no jump, no slash): three hits
+#                    cost all three lives -> state = 2 (dead)
+#   frames 200..299  dead: the game waits for START
+#   frame  300       START -> the game resets (lives 3, state 0, score 0)
+#   frames 301..1201 the winning run: run right, jump the pits, slash the
+#                    oni, collect the coins, reach the torii -> state = 1
+#
+# The tail is the round-5 in_run.txt session shifted by 301 frames, so the
+# restart plays the same run the art round proved.
+0    199  right
+200  299  none
+300  300  start
+301  310  right b
+311  334  right a b
+335  431  right b
+432  455  right a b
+456  548  right b
+549  572  right a b
+573  729  right b
+730  753  right a b
+754  1201 right a b

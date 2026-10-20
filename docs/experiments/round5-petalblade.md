@@ -74,6 +74,65 @@ at exactly 1920×1080.
     52 520 B (20 %). There is room for more animation frames or a second
     level before any budget pressure.
 
+## Promotion (ROADMAP_V4 card 4.7) — 2026-10-20
+
+Petal Blade was promoted to **Game #3**: `programs/petalblade.c`, the art
+pipeline in `programs/petalblade_art/`, the generated headers
+`programs/petalblade_assets.h` and `programs/petalblade_level.h` as the build
+truth, a script (`tests/inputs/petalblade.txt`), a test inside `make check`
+(`tests/test_petalblade.sh`), a committed ROM + symbols
+(`tests/roms/petalblade.*`) and a golden (`tests/golden/petalblade.txt`,
+1202 frames). The script is the round's `in_run.txt` session preceded by a
+death and a restart, so the story (die → START → win at the torii with 70
+points) is what the test pins.
+
+### Finding 11 — the committed round-5 header was STALE
+
+Regenerating the header from the committed art did **not** reproduce the
+committed one:
+
+```
+old header (round5/assets.h):  map level1 of tiles: 130x17 cells, tile 16x16, 7 unique tiles
+regenerated:                    map level1 of tiles: 130x17 cells, tile 16x16, 6 unique tiles
+```
+
+The evidence that the old header was stale, not the tool wrong:
+
+* the quantized sprite sheet (`tiles_sheet`) is **byte-identical** in both;
+* the old header's tile 0 (`4444…ffff…f2ff2f2f…2222…cc2c…`) is **not any
+  tile of the current sheet** — it is a tile of an earlier version of
+  `art/tiles.png`;
+* no committed version of `tools/arc1_assetc.py` (checked `026b0d6`,
+  `bd1d28a`, `4fb5ae6` and HEAD) produces 7 tiles for the committed art;
+* `gen_art.py` is deterministic: re-running it reproduces the committed
+  PNGs and the committed manifest **byte for byte**.
+
+So the art was regenerated after the header was compiled, and the header
+was never rebuilt — exactly what the repo's rule ("regenerate the header,
+never hand-edit it") exists to prevent, and the reason the promoted game's
+terrain had a tile that no longer existed in its own art.
+
+**Resolution:** the promoted header is regenerated from the committed art
+(6 unique tiles). Gameplay is unchanged — the collision grid comes from
+`petalblade_level.h` (unchanged), the entities and the scoring are fixed
+coordinates, and the scripted session still ends at the torii with 70
+points. Only the terrain's pixels differ from the round-5 build.
+
+**Lesson for the art pipeline (Wave 7):** a generated file that nobody
+regenerates is a file nobody can trust. The promotion now has a rule and a
+Makefile target for it (`make petalblade-art`), and the art pipeline's
+first job in Wave 7 (card 7.2) is to make regeneration a single command
+that proves the committed headers are byte-identical.
+
+### Finding 12 — the repo carried four 6.2 MB captures
+
+`round4/smoke.png`, `round5/final300.png`, `round5/final660.png` and
+`round5/out.png` were 1080p PNGs written by the *uncompressed* PNG writer
+(6 222 418 bytes each, 24.9 MB of the 37 MB working tree). With the
+compressed writer (ROADMAP_V4 card 4.5) the same frame is 62 280 bytes, so
+they are not worth keeping; they are removed, and `.gitignore` now keeps
+`captures/` and the round captures out.
+
 ## Workflow notes
 
 - `gen_art.py` is the single source: it emits the strips, `assets.json`,
