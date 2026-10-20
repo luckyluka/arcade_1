@@ -208,6 +208,34 @@ After Game #1, decide **from its report**, not from imagination: Audio v2 (sever
 4. Whether the play window is wanted now.
 5. When to start Audio v2.
 
+## 9. Status (all waves executed)
+
+Every V3 wave is done. The table is the record: card, the commit that
+carried it, and the day it landed.
+
+| wave / card | what | commit | date |
+|---|---|---|---|
+| Wave 0, card 0.1 | golden conditions manifest (`tests/golden/conditions.txt`) | `a5da266` | 2026-10-20 |
+| Wave 0, card 0.2/0.3 | a partial golden run fails, with the conditions hint | `257b318` | 2026-10-20 |
+| Wave 0, card 0.4 | the conditions test, wired into `make check` | `c636cc1` | 2026-10-20 |
+| Wave A, cards A1-A5 | the SDK friction fixes (see `docs/m29b/M29_LOG.md`) | `e3986c2`, `6ee73d4`, `59a2eaf`, `4fb5ae6`, `bd1d28a` | 2026-10-19/20 |
+| Wave B, card B1 | `arcade1 inspect` v1 — the structured last-frame report | `1da60c2` | 2026-10-20 |
+| Wave B, card B2 | inspect command records + pixel provenance | `c46d6f5` | 2026-10-20 |
+| Wave 4 | arc1-assetc's map import + tile dedup | `026b0d6` | 2026-10-20 |
+| Wave 5 | Game #1 (asteroid_run) through the whole asset flow | `8ffc3d2` | 2026-10-20 |
+| Wave 6 | the play window (`arcade1 run --live`, SDL3) | `2314aea` | 2026-10-20 |
+| Wave 6 | SDL3 replaces SDL2 | `f4df16f` | 2026-10-20 |
+| hardening 1/3 | memcpy/memset/memmove in the guest runtime | `10c6550` | 2026-10-20 |
+| hardening 2/3 | `anim_tick` holds a 0 ms state instead of hanging | `7f074a7` | 2026-10-20 |
+| hardening 3/3 | input-script worked examples for the sharp edges | `704424b` | 2026-10-20 |
+| — | Game #2 (flappy) promoted from the round-3 clean-room build | `5bdba94` | 2026-10-20 |
+| — | the round-3 evidence archived | `57c0368` | 2026-10-20 |
+| — | round 5: Petal Blade's art and game | `711a2e4` | 2026-10-20 |
+
+**Then came V4** (ROADMAP_V4.md): Wave 7a (cards 4.1-4.9) closed the
+round-3 and round-5 findings, promoted Petal Blade to Game #3, and
+re-measured the device work at 480x270.
+
 ## 8. First actions for the implementing AI
 
 1. Read `§0-§2`, then `docs/m29b/M29_LOG.md` (the evidence for Wave A).

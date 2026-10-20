@@ -230,5 +230,38 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 ## 8. First actions for the implementing AI
 
 1. Read §0-§2 and `docs/experiments/round3-cleanroom.md`, `docs/experiments/round5-petalblade.md`.
-2. Execute **4.1 through 4.9** in order. Stop and report.
-3. Wait for the owner's go before Wave 7.
+2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
+   the status table in §9.
+3. Wait for the owner's go before Wave 7 (the AI art pipeline).
+
+## 9. Status
+
+Wave 7a is **done** (cards 4.1-4.9); Wave 7 (the AI art pipeline) waits
+for the owner's go (§8, step 3). The table is the record: card, the commit
+that carried it, and the day it landed.
+
+| card | what | commit | date |
+|---|---|---|---|
+| 4.1 | `arcade1 info` — one source of truth for the machine's constants | `37a6ca5` | 2026-10-20 |
+| 4.2 | `arcade1 golden` — authoring a golden from the CLI | `8f67a37` | 2026-10-20 |
+| 4.3 | the pad trace, and the edge-trigger trap it makes visible | `e5db404` | 2026-10-20 |
+| 4.4 | `arcade1_rgb()`, and colour truncation you can see | `5eafdb2` | 2026-10-20 |
+| 4.5 | real deflate compression in the PNG writer | `db747ce` | 2026-10-20 |
+| 4.6 | a collision layer in the map import | `fa88982` | 2026-10-20 |
+| 4.7 | Petal Blade promoted to Game #3; the repo cleaned | `86a20d6` | 2026-10-20 |
+| 4.8 | the device work re-measured at 480x270 | `22fdb0d` | 2026-10-20 |
+| 4.9 | AGENTS.md, the status tables, the `make check` budget | (this commit) | 2026-10-20 |
+| 7.1-7.8 | the AI art pipeline | — | not started |
+| 8.1-8.3 | audio observability | — | not started |
+| 9 | the freeze-readiness dossier | — | not started |
+
+**Findings along the way** (all in `docs/experiments/`):
+
+* the round-5 asset header was **stale** — it held a terrain tile the
+  committed art no longer contained, and no committed version of
+  arc1-assetc reproduces it (`docs/experiments/round5-petalblade.md`);
+* `make check` is now **faster** than before Wave 7a (82 s against 102 s):
+  the compressed PNG writer stopped the suite writing 6 MB of stored
+  deflate blocks per capture;
+* the roadmap's own claim that Petal Blade paints "2.6-2.7x the screen"
+  per frame is **measured**: 2.59 (`docs/experiments/budget-480x270.csv`).

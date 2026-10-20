@@ -211,6 +211,23 @@ make test-frame-rules # Task B: SPEC §8 frame boundaries, hand-assembled
 
 All builds use `-Wall -Wextra` and must stay warning-free.
 
+### `make check` wall time
+
+`make check` (every test target + the golden regression) has a **budget of
+120 s**. Measured on this machine (2026-10-20, ROADMAP_V4 card 4.9):
+
+| date | commit | `make clean && make check` |
+|---|---|---|
+| 2026-10-20 | card 4.9 | **1 m 28 s** (88 s) |
+| 2026-10-20 | `22fdb0d` (card 4.8) | 1 m 22 s (82 s) |
+| 2026-10-20 | `711a2e4` (before Wave 7a) | 1 m 42 s (102 s) |
+
+The suite got *faster* in Wave 7a: the compressed PNG writer (card 4.5)
+stops the test suite from writing 6 MB of stored deflate blocks per capture.
+If a new test would push the total over 120 s, **report it before adding
+the test** (ROADMAP_V4 card 4.9) — the budget is a promise to whoever
+runs the suite, not a formality.
+
 Test strategy (per `docs.md` testing philosophy): milestone tests link the real
 `.so` and drive it through the frontend callbacks; the machine and memory tests
 link the sources directly with no libretro at all, proving frontend

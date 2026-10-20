@@ -94,7 +94,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
-        test-petalblade
+        test-petalblade test-agents-md
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -142,7 +142,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
-        test-golden-cli test-pad-trace test-color-trunc test-petalblade
+        test-golden-cli test-pad-trace test-color-trunc test-petalblade \
+        test-agents-md
 
 all: $(TARGET)
 
@@ -353,6 +354,12 @@ $(GUEST_BUILD)/probe_trunc_masked.bin: $(PROBE_DIR)/probe_trunc.c programs/gfx.h
 test-color-trunc: $(CLI_BIN) $(GUEST_BUILD)/probe_trunc.bin \
         $(GUEST_BUILD)/probe_trunc_masked.bin tests/test_color_trunc.sh
 	sh tests/test_color_trunc.sh $(CLI_BIN) $(GUEST_BUILD) $(ARC1_ROM_DIR)
+
+# ROADMAP_V4 card 4.9: AGENTS.md — the map for a fresh agent. The test
+# checks that every relative link resolves and that the file stays inside
+# its 80-line budget.
+test-agents-md: tests/test_agents_md.sh
+	sh tests/test_agents_md.sh .
 
 # ROADMAP_V4 card 4.3: the pad trace (`arcade1 run --pad-trace FILE`) and
 # the edge-trigger trap. The probe guest (tests/guests/probe_edge.c) is the
