@@ -52,7 +52,35 @@ behavior.
 
 ## Card 2 — anim_tick: a 0 ms step length holds, never hangs
 
-(see git history of this file for the card-2 section)
+**The trap.** `anim_tick`'s catch-up loop ran `while (sub >= ms * 60)`;
+with `ms == 0` the threshold is 0 and the loop spins forever — the guest
+hangs inside the frame that first ticks such a state. Asteroid Run's own
+comment kept the folklore ("found the hard way — the guest hung inside
+frame 0"), and the external review flagged it as a fresh-agent stopper.
+
+**The fix.** `anim_tick` treats `ms <= 0` as "no step length": it holds
+the current step and drops the carry (a state that was never given a
+duration doesn't advance, and can't hang). Positive-ms playback is
+byte-for-byte the old arithmetic (the loop now uses a hoisted `period`
+local instead of recomputing `ms * 60`). The zero case is pinned by a new
+probe in `test_arc1assetc.sh`'s host-side anim unit test (hold at t=30
+and t=60, carry stays 0).
+
+**The "one affected golden" — and why it is not a behavior change.**
+`asteroid_run` is the only golden game built on asset.h, and its
+committed ROM predates the guard, so it was refreshed deliberately:
+`make experimental`, copy the new `.arc1`, re-`nm` the `.syms`, then
+re-run the golden only for this game. The proof of innocence is in the
+hashes: all **760 `fb=` values are byte-identical** old-vs-new (same
+pixels, same frames — behavior unchanged), while the 760 `hash=` values
+shift, exactly as they must: the state hash covers PC and instret, and
+new codegen moves both. ROM payload grew 11128 → 11300 bytes (the card-1
+trio plus the guard).
+
+**Not touched:** the other 9 goldens (their ROMs don't include asset.h
+and weren't rebuilt), walkdemo/asset_demo/map_demo (experimental, not in
+`make check`), and the assetc emitter (asset.h compiles host-side in the
+probe with `cc` — the guard is plain C99).
 
 ## Card 3 — input scripts: worked examples for the sharp edges
 

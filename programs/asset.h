@@ -69,7 +69,7 @@ static inline void asset_sprite4(const sprite4_ref *ref, int x, int y,
 typedef struct anim_state {
     const sprite4_ref *const *frames;   /* the emitted NAME_frames table */
     int steps;                          /* entries in it */
-    int ms;                             /* ms per animation step */
+    int ms;                             /* ms per step; <= 0 holds the step */
     int mode;                           /* ANIM_LOOP / _PINGPONG / _ONCE */
     unsigned last, sub;                 /* timer reading + 1/60 ms carry */
     int step;                           /* current table index */
@@ -99,17 +99,25 @@ static inline void anim_reset(anim_state *a, unsigned timer)
  * current step's ref. Time is carried in units of 1/60 ms and one frame is
  * exactly 1000 of them, so steps land without drift (80 ms = 4.8 frames =
  * 4800 units). A stall catches up at most 10 s (dt clamp), and the unsigned
- * subtraction keeps the timer's wrap-around safe. */
+ * subtraction keeps the timer's wrap-around safe. A step length of 0 (or
+ * less) ms holds the current step and drops the carry — a state that was
+ * never given a duration used to spin the catch-up loop forever. */
 static inline const sprite4_ref *anim_tick(anim_state *a, unsigned timer)
 {
     unsigned dt = timer - a->last;
+    unsigned period;
 
     a->last = timer;
+    if (a->ms <= 0) {                   /* no step length: hold, never hang */
+        a->sub = 0u;
+        return a->frames[a->step];
+    }
     if (dt > 600u)
         dt = 600u;                       /* 10 s: a stall, not fast-forward */
     a->sub += dt * 1000u;
-    while (a->sub >= (unsigned)a->ms * 60u) {
-        a->sub -= (unsigned)a->ms * 60u;
+    period = (unsigned)a->ms * 60u;
+    while (a->sub >= period) {
+        a->sub -= period;
         if (a->done)
             break;                       /* ANIM_ONCE holds its last step */
         if (a->mode == ANIM_PINGPONG) {

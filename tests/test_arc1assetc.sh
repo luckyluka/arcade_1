@@ -706,6 +706,7 @@ static anim_state a_loop = ANIM(loop3, 50, ANIM_LOOP);
 static anim_state a_pong = ANIM(pong3, 50, ANIM_PINGPONG);
 static anim_state a_once = ANIM(once3, 50, ANIM_ONCE);
 static anim_state a_stall = ANIM(pong3, 60000, ANIM_PINGPONG);
+static anim_state a_zero = ANIM(loop3, 0, ANIM_LOOP);   /* hardening 2 */
 
 static int fails;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %d: %s\n", __LINE__, #c); fails++; } } while (0)
@@ -752,6 +753,13 @@ int main(void)
      * 60 000 ms animation must NOT jump a step */
     anim_reset(&a_stall, 0);
     CHECK(step_of(anim_tick(&a_stall, 100000u)) == 0);
+
+    /* a 0 ms step length holds the current step and drops the carry
+     * (before the SDK hardening this case spun forever) */
+    anim_reset(&a_zero, 0);
+    CHECK(step_of(anim_tick(&a_zero, 30)) == 0);
+    CHECK(a_zero.sub == 0u);
+    CHECK(step_of(anim_tick(&a_zero, 60)) == 0);
 
     if (fails) { printf("anim probe: %d FAILS\n", fails); return 1; }
     printf("anim probe: ok\n");

@@ -102,10 +102,12 @@ static unsigned int g_now;       /* arcade1_timer_count(), once per frame */
 
 /* Animation state per table (Wave 3): the player's three states and one
  * spin per asteroid slot. ANIM() is an INITIALIZER, not decoration: a
- * zeroed anim_state has ms = 0 and anim_tick()'s catch-up loop never
- * terminates (found the hard way — the guest hung inside frame 0). The
- * per-slot spin states are all listed because a struct-copy assignment
- * would make the freestanding build emit memcpy. */
+ * zeroed anim_state has ms = 0 — before the SDK hardening that spun
+ * anim_tick()'s catch-up loop forever (found the hard way — the guest
+ * hung inside frame 0); anim_tick now holds such a state on its current
+ * step instead. The per-slot spin states are all listed because a
+ * struct-copy assignment would make the freestanding build emit memcpy
+ * (crt0 now provides it; the explicit list is kept regardless). */
 static anim_state p_idle   = ANIM(idle_frames, IDLE_MS, ANIM_LOOP);
 static anim_state p_boost  = ANIM(boost_frames, BOOST_MS, ANIM_LOOP);
 static anim_state p_fire   = ANIM(fire_frames, FIRE_MS, ANIM_LOOP);

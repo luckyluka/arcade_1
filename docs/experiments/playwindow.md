@@ -128,3 +128,32 @@ prerequisite step it was silently skipping. (A parallel `make check -j4`
 still has a separate, pre-existing wrinkle — `test-golden`'s sub-makes and
 the parent compete for the same build artifacts — which is outside this
 card and unchanged by it.)
+
+## Addendum 2026-10-20: key injection vs. a busy live desktop
+
+Observed during the SDK-hardening round (card 2), on the owner's actively
+used GNOME/mutter desktop: section 4's XTEST key checks failed three runs
+in a row with the same signature — the recording carries
+`0 <last> none`, i.e. no injected key ever reached the pad. The window
+checks, the dummy-driver idle/replay checks and every other check passed.
+
+Evidence that this is the environment, not the code:
+
+- `xkey` itself reports `focus moved to 0x2600004 after the macro` — the
+  owner's full-screen VS Code (the TUI running this session) re-grabs the
+  keyboard focus, so the XTEST keys land in the editor. xkey's exit-4 path
+  ("could not keep focus for a key") exists for exactly this.
+- A manual reproduction caught the same: during a 3 s Right hold,
+  `_NET_ACTIVE_WINDOW` ends back on the VS Code window, and the keyed
+  run's final state hash is *identical to the no-input run's* — the game
+  saw nothing.
+- The same test, same binary, passed earlier the same morning before the
+  desktop gained a full-screen mail composer and heavier TUI activity.
+
+The live loop, recording and replay logic are still pinned headlessly by
+section 3 (dummy driver), which is why this stays a by-hand test and never
+enters `make check`. If this recurs, two options for a future card: run
+the key section on a quiet desktop / spare X server, or harden `xkey` to
+re-verify focus before each key word (a WM that bounces focus mid-hold
+would then only lose the keys pressed while unfocused, not the whole
+macro).
