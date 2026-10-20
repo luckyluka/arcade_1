@@ -33,11 +33,18 @@
  *     --var-every K        also print the selected variables every K frames
  *     --record FILE         write the applied per-frame buttons to FILE, in the
  *                           input script format (run-length, "none" = idle)
+ *     --live               play window: an SDL3 window shows every frame and
+ *                          live keys drive the pad (arrows/WASD d-pad, Z/X ->
+ *                          A/B, Enter -> START); R ends the session writing
+ *                          --record's script, ESC quits. Plays until R/ESC
+ *                          unless --frames bounds it. Optional: without SDL3
+ *                          or a display, a clean message and exit 3.
  *     --quiet              suppress the per-frame hash lines (summary only)
  *
  * Exit codes: 0 success, 1 runtime error (bad image, unreadable file,
  * unknown/non-RAM variable, ...), 2 usage error — also --vars with no
- * sidecar .syms, or a .syms whose build CRC mismatches the image.
+ * sidecar .syms, or a .syms whose build CRC mismatches the image; 3 the
+ * --live play window is unavailable (built without SDL3, or no display).
  *
  * NAMED GAME VARIABLES (--vars): reads a game's globals out of guest RAM by
  * name, from an `nm` dump (the same <game>.syms the game tests use). Only
@@ -53,6 +60,17 @@
  * frames in the same state merge into one entry, idle stretches record as
  * "none". A recording feeds straight back through --input, so a recorded
  * session replays bit-identically (this is what make test-run asserts).
+ *
+ * PLAY WINDOW (--live): the one path where a human, not a script, drives the
+ * machine (ROADMAP_CREATION_FLOW §10; ROADMAP_V3 §4.5 pins SDL3, optional,
+ * not in make check). It changes exactly two things — the input source (live
+ * keys instead of --input) and the presentation (upload + 60 Hz pacing) — and
+ * adds nothing else: the frame loop, the hashes, the captures and the record
+ * writer are the shared ones, and the script loader's entries are never read
+ * (scripting and --live share no mutable state). A recorded live session
+ * replays bit-identically through --input like any scripted --record. An
+ * open recording is finished on every exit path (R, ESC, window close, end
+ * of --frames), so a live session always leaves a complete script.
  *
  * INPUT SCRIPT FORMAT (plain text, deterministic, AI-friendly):
  *   - one run-length entry per line:  <first_frame> <last_frame> <buttons...>
@@ -76,11 +94,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>       /* UINT_MAX: a live session with no --frames bound */
 #include <unistd.h>       /* fork, execvp, unlink, rmdir, mkdtemp, access */
 #include <fcntl.h>        /* open: capturing nm output in cmd_build */
 #include <sys/stat.h>     /* mkdir: the capture subcommand's directory */
 #include <errno.h>
 #include <sys/wait.h>     /* waitpid */
+
+/* The play window (cmd_run --live): SDL3 is OPTIONAL (ROADMAP_V3 §4.5). The
+ * Makefile defines this only when pkg-config finds sdl3; without it every
+ * other command is identical and --live exits 3 with a clean message. */
+#ifdef ARCADE1_HAVE_SDL3
+#include <SDL3/SDL.h>
+#endif
 
 /* --- Input script --------------------------------------------------------- */
 
@@ -252,6 +278,214 @@ static void record_close(unsigned last_frame)
     fclose(g_record);
     g_record = NULL;
 }
+
+/* --- Play window (--live; ROADMAP_CREATION_FLOW §10, ROADMAP_V3 §4.5) -----
+ * `--live` is the one path where a human, not a script, drives the machine:
+ * an SDL3 window shows every frame and live key state feeds the pad each
+ * frame. It touches only the input source and the presentation; the frame
+ * loop, the hashes, the captures and --record stay the shared, scripted
+ * ones, and the script loader's entries are never read (scripting and
+ * --live share no mutable state, determinism rule 2).
+ *
+ * SDL3 is optional: the Makefile defines ARCADE1_HAVE_SDL3 only when
+ * pkg-config finds it, and without it (or without a display at runtime)
+ * --live prints a clean message and exits 3 — every other command, and all
+ * of `make check`, is unaffected. The window is therefore NOT in
+ * `make check`; tests/test_playwindow.sh (by hand) drives it, including a
+ * real XTEST key session when a display is available.
+ *
+ * Keys (the §10 mapping): arrows or WASD -> d-pad, Z -> A, X -> B,
+ * Enter -> START; R -> end the session (writing --record's script), ESC or
+ * window close -> quit — an open recording is finished on either exit, so a
+ * live session always leaves a complete, replayable script. SELECT has no
+ * binding in the card: reported as a premise gap, not invented here. */
+
+/* record_open's sibling for live sessions: the frame count is only known
+ * when the player ends the session, so the header states what the file is
+ * and the runs carry the length (load_input ignores '#' lines either way;
+ * the last run's end frame + 1 is the session's frame count). */
+static int record_open_live(const char *path)
+{
+    g_record = fopen(path, "w");
+    if (!g_record) {
+        fprintf(stderr, "arcade1: cannot write record file '%s'\n", path);
+        return -1;
+    }
+    fprintf(g_record, "# arcade1 run --live: recorded live session\n");
+    g_run_open = 0;
+    return 0;
+}
+
+#ifdef ARCADE1_HAVE_SDL3
+
+static SDL_Window   *g_window;
+static SDL_Renderer *g_renderer;
+static SDL_Texture  *g_texture;
+static int           g_sdl_up;      /* SDL_Init succeeded (SDL_Quit owed)    */
+static int           g_live_end;    /* 1 = R / ESC / close asked to stop     */
+static uint64_t      g_frame_ns;    /* 60 Hz pacing deadline (SDL_GetTicksNS)*/
+
+/* Held key state: events set it, each frame reads it (level-triggered, so a
+ * key held across frames stays held; R and ESC are edge-triggered above). */
+static int gk_up, gk_down, gk_left, gk_right;
+static int gk_w, gk_a, gk_s, gk_d;
+static int gk_z, gk_x, gk_start;
+
+/* Open window + renderer + texture. Returns 0, or -1 after a clean message
+ * (the caller exits 3: no usable play window). NULL-safe partial setups are
+ * unwound by live_shutdown(). */
+static int live_setup(const char *rom_path, unsigned scale)
+{
+    char title[160];
+    const char *base = strrchr(rom_path, '/');
+
+    base = base ? base + 1 : rom_path;
+    snprintf(title, sizeof title, "ARCADE-1: %.120s", base);
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
+        fprintf(stderr,
+                "arcade1 run --live: no play window: %s\n"
+                "  headless runs are unaffected: use --input/--frames, "
+                "without --live\n", SDL_GetError());
+        return -1;
+    }
+    g_sdl_up = 1;
+    g_window = SDL_CreateWindow(title, (int)(ARCADE1_WIDTH * scale),
+                                (int)(ARCADE1_HEIGHT * scale), 0);
+    if (!g_window) {
+        fprintf(stderr, "arcade1 run --live: cannot open a window: %s\n",
+                SDL_GetError());
+        return -1;
+    }
+    g_renderer = SDL_CreateRenderer(g_window, NULL);
+    if (!g_renderer)                       /* headless X, no GL: software */
+        g_renderer = SDL_CreateRenderer(g_window, "software");
+    if (!g_renderer) {
+        fprintf(stderr, "arcade1 run --live: no renderer: %s\n",
+                SDL_GetError());
+        return -1;
+    }
+    g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGB565,
+                                  SDL_TEXTUREACCESS_STREAMING,
+                                  ARCADE1_WIDTH, ARCADE1_HEIGHT);
+    if (!g_texture) {
+        fprintf(stderr, "arcade1 run --live: no RGB565 texture: %s\n",
+                SDL_GetError());
+        return -1;
+    }
+    /* Pixel art stays pixel art at any window scale (nearest, like captures). */
+    if (!SDL_SetTextureScaleMode(g_texture, SDL_SCALEMODE_NEAREST)) {
+        fprintf(stderr, "arcade1 run --live: no nearest-neighbour scaling: %s\n",
+                SDL_GetError());
+        return -1;
+    }
+    g_live_end = 0;
+    g_frame_ns = SDL_GetTicksNS() + 1000000000ull / 60;
+    return 0;
+}
+
+/* Drain SDL events: track the held keys, note R/ESC/window close. Returns 1
+ * when the session should end (checked at the top of the frame loop, so the
+ * recorded runs and the printed frame lines always cover the same frames). */
+static int live_poll(void)
+{
+    SDL_Event e;
+
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_EVENT_QUIT) {
+            g_live_end = 1;
+        } else if (e.type == SDL_EVENT_KEY_DOWN || e.type == SDL_EVENT_KEY_UP) {
+            const SDL_Scancode sc = e.key.scancode;
+            const int          down = e.key.down;
+
+            if (down && !e.key.repeat &&
+                (sc == SDL_SCANCODE_R || sc == SDL_SCANCODE_ESCAPE))
+                g_live_end = 1;
+            switch (sc) {
+            case SDL_SCANCODE_UP:     gk_up    = down; break;
+            case SDL_SCANCODE_DOWN:   gk_down  = down; break;
+            case SDL_SCANCODE_LEFT:   gk_left  = down; break;
+            case SDL_SCANCODE_RIGHT:  gk_right = down; break;
+            case SDL_SCANCODE_W:      gk_w     = down; break;
+            case SDL_SCANCODE_A:      gk_a     = down; break;
+            case SDL_SCANCODE_S:      gk_s     = down; break;
+            case SDL_SCANCODE_D:      gk_d     = down; break;
+            case SDL_SCANCODE_Z:      gk_z     = down; break;
+            case SDL_SCANCODE_X:      gk_x     = down; break;
+            case SDL_SCANCODE_RETURN: gk_start = down; break;
+            default: break;
+            }
+        }
+    }
+    return g_live_end;
+}
+
+/* Held keys -> this frame's pad state (the §10 mapping; SELECT is unbound —
+ * see the premise note above). */
+static void live_input(arcade1_input_t *out)
+{
+    memset(out, 0, sizeof *out);
+    out->up     = gk_up    || gk_w;
+    out->down   = gk_down  || gk_s;
+    out->left   = gk_left  || gk_a;
+    out->right  = gk_right || gk_d;
+    out->a      = gk_z;
+    out->b      = gk_x;
+    out->start  = gk_start;
+}
+
+/* Upload this frame's framebuffer, show it, and pace to 60 Hz. */
+static void live_present(const arcade1_machine_t *m)
+{
+    const uint64_t period = 1000000000ull / 60;
+    uint64_t       now;
+
+    if (!SDL_UpdateTexture(g_texture, NULL, arcade1_framebuffer(m),
+                           (int)arcade1_framebuffer_pitch(m))) {
+        fprintf(stderr, "arcade1 run --live: texture upload failed: %s\n",
+                SDL_GetError());
+        g_live_end = 1;                  /* end gracefully; the loop closes */
+        return;
+    }
+    SDL_RenderClear(g_renderer);
+    SDL_RenderTexture(g_renderer, g_texture, NULL, NULL);
+    SDL_RenderPresent(g_renderer);
+
+    now = SDL_GetTicksNS();
+    if (g_frame_ns > now)
+        SDL_DelayNS(g_frame_ns - now);
+    g_frame_ns += period;
+    if (g_frame_ns < now)                /* overran: owe no catch-up burst */
+        g_frame_ns = now;
+}
+
+/* Tear the window down; NULL/id-safe, so partial setups unwind too. */
+static void live_shutdown(void)
+{
+    if (g_texture)  { SDL_DestroyTexture(g_texture);   g_texture  = NULL; }
+    if (g_renderer) { SDL_DestroyRenderer(g_renderer); g_renderer = NULL; }
+    if (g_window)   { SDL_DestroyWindow(g_window);     g_window   = NULL; }
+    if (g_sdl_up)   { SDL_Quit();                      g_sdl_up   = 0; }
+}
+
+#else /* !ARCADE1_HAVE_SDL3: no play window — clean message, exit 3 -------- */
+
+static int live_setup(const char *rom_path, unsigned scale)
+{
+    (void)rom_path; (void)scale;
+    fprintf(stderr,
+            "arcade1 run --live: this build has no play window (SDL3 was not "
+            "found at build time)\n"
+            "  install SDL3 (pkg-config sdl3) and rebuild; headless runs "
+            "(--input, --frames) work without it\n");
+    return -1;
+}
+static int  live_poll(void)  { return 1; }
+static void live_input(arcade1_input_t *out) { memset(out, 0, sizeof *out); }
+static void live_present(const arcade1_machine_t *m) { (void)m; }
+static void live_shutdown(void) { }
+
+#endif /* ARCADE1_HAVE_SDL3 */
 
 /* --- PPM (P6) frame dump -------------------------------------------------- */
 
@@ -603,6 +837,8 @@ static int cmd_run(int argc, char **argv)
     unsigned scale = 1;              /* capture upscale, 1..8 (A3) */
     int format_png = 0;              /* capture-dir extension: .png? */
     int inspect = 0;    int quiet = 0;    int strict = 0;
+    int live = 0;                      /* --live: the play window (SDL3)    */
+    int frames_set = 0;                /* did --frames appear on the line?  */
     unsigned long long skipped = 0;   /* M29: out-of-window source reads */
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
@@ -614,7 +850,7 @@ static int cmd_run(int argc, char **argv)
 
     for (int i = 0; i < argc; i++) {
         const char *a = argv[i];
-        if (!strcmp(a, "--frames") && i + 1 < argc)        frames = (unsigned)strtoul(argv[++i], NULL, 10);
+        if (!strcmp(a, "--frames") && i + 1 < argc) {      frames = (unsigned)strtoul(argv[++i], NULL, 10); frames_set = 1; }
         else if (!strcmp(a, "--input") && i + 1 < argc)    input_path = argv[++i];
         else if (!strcmp(a, "--capture") && i + 1 < argc)  capture = argv[++i];
         else if (!strcmp(a, "--capture-dir") && i + 1 < argc) capture_dir = argv[++i];
@@ -630,6 +866,7 @@ static int cmd_run(int argc, char **argv)
         }
         else if (!strcmp(a, "--scale") && i + 1 < argc) scale = (unsigned)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--record") && i + 1 < argc)    record_path = argv[++i];
+        else if (!strcmp(a, "--live"))                      live = 1;
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
@@ -652,7 +889,7 @@ static int cmd_run(int argc, char **argv)
                 "usage: arcade1 run <game.arc1|bin> [--frames N] [--input FILE]\n"
                 "                   [--capture FILE] [--capture-dir DIR]\n"
                 "                   [--capture-every K] [--format png|ppm]\n"
-                "                   [--scale N] [--record FILE]\n"
+                "                   [--scale N] [--record FILE] [--live]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
                 "                   [--quiet] [--strict]\n"
                 "  --strict exits non-zero if any draw read a source address\n"
@@ -663,12 +900,32 @@ static int cmd_run(int argc, char **argv)
                 "  --capture picks the format by extension (.png or .ppm);\n"
                 "  --format sets --capture-dir's extension (default ppm);\n"
                 "  --scale N upscales captures N x, nearest neighbour (1..8).\n"
-                "  --record writes the applied buttons in the script format.\n");
+                "  --record writes the applied buttons in the script format.\n"
+                "  --live opens the play window (SDL3): arrows/WASD d-pad,\n"
+                "  Z -> A, X -> B, Enter -> START, --scale N sets the window\n"
+                "  size; R ends the session writing --record's script, ESC\n"
+                "  quits. Plays until R/ESC unless --frames bounds it, and\n"
+                "  exits 3 (clean message) without SDL3 or a display.\n");
         return 2;
     }
     if (scale < 1 || scale > 8) {
         fprintf(stderr, "arcade1 run: --scale must be 1..8 (got %u)\n", scale);
         return 2;
+    }
+
+    /* --live rules (ROADMAP_CREATION_FLOW §10): live keys and a replayed
+     * script never drive the same run (they must not share mutable state),
+     * and an unbounded live session plays until R/ESC ends it — --frames
+     * bounds it, for tests and for fixed-length recordings. */
+    if (live) {
+        if (input_path) {
+            fprintf(stderr,
+                    "arcade1 run: --live reads live keys and --input replays "
+                    "a script; they must not drive the same run\n");
+            return 2;
+        }
+        if (!frames_set)
+            frames = UINT_MAX;
     }
 
     /* --vars without --syms: auto-load the sidecar `arcade1 build` writes
@@ -687,9 +944,14 @@ static int cmd_run(int argc, char **argv)
         syms_path = side;
     }
 
-    /* Fail fast on an unwritable record file (before running anything). */
-    if (record_path && record_open(record_path, frames) != 0)
-        return 1;
+    /* Fail fast on an unwritable record file (before running anything). A
+     * live session's length is unknown at open, so its header differs. */
+    if (record_path) {
+        const int rec = live ? record_open_live(record_path)
+                             : record_open(record_path, frames);
+        if (rec != 0)
+            return 1;
+    }
 
     /* Load the image (accept a raw flat binary too, like the tests). */
     f = fopen(rom_path, "rb");
@@ -745,11 +1007,36 @@ static int cmd_run(int argc, char **argv)
     }
     arcade1_set_firmware(&m, true);
 
-    for (unsigned fr = 0; fr < frames; fr++) {
-        input_for_frame(fr, &in);
+    /* Open the play window last, before the loop: if it cannot open, exit 3
+     * cleanly and take back a record file this run just created (nothing was
+     * played, so the file would be a header-only stub). */
+    if (live && live_setup(rom_path, scale) != 0) {
+        if (record_path) {
+            record_close(0);
+            unlink(record_path);
+        }
+        live_shutdown();
+        return 3;
+    }
+
+    /* `fr` outlives the loop: it equals `frames` for a scripted run, and the
+     * number actually played when R/ESC ends a live session early. */
+    {
+    unsigned fr = 0;
+
+    for (; fr < frames; fr++) {
+        if (live) {
+            if (live_poll())            /* R / ESC / window close: stop here */
+                break;
+            live_input(&in);
+        } else {
+            input_for_frame(fr, &in);
+        }
         arcade1_set_input(&m, &in);
         record_frame(fr, &in);
         arcade1_run_frame(&m);
+        if (live)
+            live_present(&m);           /* upload + show + pace to 60 Hz */
         skipped += arcade1_video_frame_totals(&m.video)->skipped_ops;
         if (!quiet)
             printf("frame %4u hash=0x%016llX fb=0x%016llX\n", fr,
@@ -768,15 +1055,21 @@ static int cmd_run(int argc, char **argv)
                      format_png ? "png" : "ppm");
             if (write_capture(path, arcade1_framebuffer(&m), scale) != 0) {
                 record_close(fr);
+                if (live)
+                    live_shutdown();
                 return 1;
             }
         }
     }
 
-    record_close(frames - 1);
+    /* The recorded runs always end on the last frame actually played. */
+    record_close(fr ? fr - 1 : 0);
 
-    if (capture && write_capture(capture, arcade1_framebuffer(&m), scale) != 0)
+    if (capture && write_capture(capture, arcade1_framebuffer(&m), scale) != 0) {
+        if (live)
+            live_shutdown();
         return 1;
+    }
 
     for (unsigned v = 0; v < g_nvars; v++)
         printf("var %s = %d\n", g_vars[v]->name,
@@ -787,9 +1080,19 @@ static int cmd_run(int argc, char **argv)
                m.frame_counter, m.cpu.pc, (unsigned long long)m.cpu.instret);
         for (int r = 0; r < 32; r++)
             printf("  x%-2d = 0x%08X\n", r, m.cpu.regs[r]);
-    }    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",           frames,
-           (unsigned long long)state_hash(&m.cpu, &m.bus),
+    }
+    printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",
+           fr, (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
+
+    /* Every live exit path reaches here, so the recording is always finished
+     * (R, ESC, window close and end-of-frames all leave a complete script). */
+    if (live) {
+        live_shutdown();
+        if (record_path)
+            printf("recorded live session -> %s\n", record_path);
+    }
+    }                                       /* scope of fr */
 
     /* M29 diagnostics: the device reads guest memory through the integer
      * addresses the guest hands it; anything outside ROM/RAM reads back as
@@ -1707,7 +2010,8 @@ int main(int argc, char **argv)
                 "arcade1 — ARCADE-1 developer CLI (M28 foundation)\n"
                 "usage: arcade1 <command> [args]\n"
                 "commands:\n"
-                "  run      run a game headlessly: scripted input, hashes, captures\n"
+                "  run      run a game: scripted input, hashes, captures; --live\n"
+                "           opens the play window (SDL3) driven by your keyboard\n"
                 "  capture  run + dump frames (default dir: captures/)\n"
                 "  test     smoke run; --golden FILE compares per-frame hashes\n"
                 "  build    compile a guest C program into a .arc1 image\n"

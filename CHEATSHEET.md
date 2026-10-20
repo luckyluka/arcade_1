@@ -125,7 +125,8 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
 `build/packarc1` helper alike, so they cannot drift apart.
 
 ## CLI (arcade1)
-    arcade1 run     <game.arc1|bin> [options]   headless run (options below)
+    arcade1 run     <game.arc1|bin> [options]   headless run; --live opens
+                                                the play window (options below)
     arcade1 capture <game.arc1|bin> [options]   run + dump frames; creates and
                                                 uses captures/ by default
                                                 (--capture-dir DIR, or a single
@@ -155,6 +156,10 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
       --frames N / --input FILE / --record FILE / --capture FILE
       --capture-dir DIR / --capture-every K / --syms FILE
       --vars LIST / --var-every K / --quiet
+      --live      play window (SDL3): arrows/WASD d-pad, Z -> A, X -> B,
+                  Enter -> START, --scale N sets the window size; R ends
+                  the session writing --record's script, ESC quits;
+                  built without SDL3 or no display -> exit 3
       --inspect    print the final frame, pc, instruction count and all
                    32 registers (the `inspect` subcommand is the
                    structured form of this)
@@ -169,7 +174,8 @@ and CRC before the payload is mapped. `arcade1 run` also accepts a raw
                    ROM/RAM — those draws silently paint nothing. Without
                    --strict the run still prints one warning line on stderr
                    (stdout stays machine-readable).
-Exit codes: 0 ok, 1 runtime error (or --strict tripped), 2 usage error.
+Exit codes: 0 ok, 1 runtime error (or --strict tripped), 2 usage error,
+3 `--live` without a play window (built without SDL3, or no display).
 Input script: `<first> <last> <buttons...>` per line, inclusive frames,
 later lines win, `none` holds nothing, `#` comments. A recording feeds
 straight back through --input.

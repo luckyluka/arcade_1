@@ -21,6 +21,10 @@ cheat sheet lives in CHEATSHEET.md. The full `arcade1` command set
 arcade1 run <game.arc1|bin> [options]
   --frames N           run N frames (default 600)
   --input FILE         scripted input (see Input script format)
+  --live               play window: an SDL3 window shows every frame and
+                       live keys drive the pad (arrows/WASD d-pad, Z -> A,
+                       X -> B, Enter -> START); mutually exclusive with
+                       --input. Plays until R/ESC unless --frames bounds it
   --capture FILE       write the final framebuffer to FILE — format by
                        extension (.png or .ppm); the file holds the frame
                        after `--frames N`, i.e. the screen of frame N-1
@@ -56,6 +60,17 @@ size, CRC-32) or a raw flat `.bin` (like the tests). Exit codes:
 |      | or `--strict` tripped on an out-of-window draw      |
 | 2    | usage error (unknown command/option, missing ROM), |
 |      | or `--vars` with a missing/mismatched `.syms`      |
+| 3    | `--live` requested but the play window is          |
+|      | unavailable (built without SDL3, or no display)    |
+
+`--live` needs SDL3 and a display; a build or a machine without them exits 3
+with a clean message, and every other mode (headless, input scripts,
+captures) is unaffected — SDL3 is an optional dependency of the CLI only.
+Inside the window, R ends the session and, with `--record FILE`, writes the
+keys you pressed as a normal input script — every live session replays
+bit-identically; ESC quits (finishing an open recording the same way), and
+closing the window quits too. `--scale N` sets the window size (N x
+480x270).
 
 Build it with `make build/arcade1` (or as a prerequisite of `make test-run`).
 

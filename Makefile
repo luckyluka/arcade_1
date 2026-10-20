@@ -95,6 +95,37 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run
 
+# --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
+# The variables live up here, NOT beside their build rules further down:
+# prereq lists expand when make READS the rule, so $(CLI_BIN)/$(CLI_NOSDL)
+# used by the test targets below must be defined before the first such rule
+# (a later definition expands to nothing and silently drops the prerequisite
+# — the recipe still expands correctly, which hides the bug).
+# A headless front end to the reference VM for humans and AI agents. Links ONLY
+# src/arcade1 (no Libretro, no RetroArch, no GPU), so it runs identically in CI
+# and in a sandbox. It includes tests/state_hash.h (via -Itests) so the hashes
+# it prints are bit-identical to the golden regression's.
+CLI_BIN    := $(TESTDIR)/arcade1
+CLI_SRC    := tools/arcade1.c src/arcade1/machine.c src/arcade1/memory.c \
+              src/arcade1/cpu.c src/arcade1/exec.c src/arcade1/timer.c \
+              src/arcade1/video.c src/arcade1/audio.c src/arcade1/rom.c
+
+# Play window (`arcade1 run --live`, ROADMAP_V3 §4.5): SDL3 is OPTIONAL.
+# pkg-config decides — with SDL3 present the CLI grows the window; without it
+# the build is byte-for-byte the same surface minus --live, which then exits 3
+# with a clean message. tools/arcade1.c compiles both shapes from one source
+# (ARCADE1_HAVE_SDL3 selects the real window or the stubs), so nothing else,
+# and none of `make check`, depends on SDL3.
+SDL3_CFLAGS := $(shell pkg-config --cflags sdl3 2>/dev/null)
+SDL3_LIBS   := $(shell pkg-config --libs sdl3 2>/dev/null)
+PLAY_CFLAGS := $(if $(strip $(SDL3_LIBS)),-DARCADE1_HAVE_SDL3 $(SDL3_CFLAGS))
+PLAY_LIBS   := $(strip $(SDL3_LIBS))
+
+# The same CLI compiled WITHOUT the play window: the absence path that
+# tests/test-playwindow.sh checks (exit 3, clean message, everything else
+# intact). Built on demand by that test, never part of `make check`.
+CLI_NOSDL   := $(TESTDIR)/arcade1_nosdl
+
 # `make check` = the whole regression: every test target plus the golden
 # per-frame comparison (Task A step 6). This is the command CI/humans should
 # run before pushing.
@@ -321,6 +352,16 @@ $(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
 test-walkdemo: $(CLI_BIN) $(GUEST_BUILD)/walkdemo.arc1
 	sh tests/test_walkdemo.sh $(CLI_BIN) $(GUEST_BUILD)
 
+# The play window (`arcade1 run --live`, ROADMAP_CREATION_FLOW §10) is by
+# hand too, for the same reason plus a stronger one: SDL3 and an X display
+# are optional dependencies (ROADMAP_V3 §4.5 — exit 3 when absent, NOT in
+# `make check`). Run: make test-playwindow
+# It needs the CLI, the same CLI built without SDL3 (the absence path), and
+# walkdemo (the card's acceptance guest); it builds its own XTEST key
+# injector when a display is available and notes a skip when not.
+test-playwindow: $(CLI_BIN) $(CLI_NOSDL) $(GUEST_BUILD)/walkdemo.arc1
+	sh tests/test_playwindow.sh $(CLI_BIN) $(CLI_NOSDL) $(GUEST_BUILD)
+
 # asset_demo is the Wave-2 typed-accessor experiment (docs/experiments/
 # arc1-assetc.md), likewise run by hand with `make test-assetdemo`.
 test-assetdemo: $(CLI_BIN) $(GUEST_BUILD)/asset_demo.arc1
@@ -419,16 +460,6 @@ $(GUEST_BUILD)/map_demo.bin: $(GUEST_BUILD)/map_demo.elf
 $(GUEST_BUILD)/map_demo.arc1: $(GUEST_BUILD)/map_demo.bin $(TESTDIR)/packarc1
 	$(TESTDIR)/packarc1 $< $@
 
-# --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
-# A headless front end to the reference VM for humans and AI agents. Links ONLY
-# src/arcade1 (no Libretro, no RetroArch, no GPU), so it runs identically in CI
-# and in a sandbox. It includes tests/state_hash.h (via -Itests) so the hashes
-# it prints are bit-identical to the golden regression's.
-CLI_BIN    := $(TESTDIR)/arcade1
-CLI_SRC    := tools/arcade1.c src/arcade1/machine.c src/arcade1/memory.c \
-              src/arcade1/cpu.c src/arcade1/exec.c src/arcade1/timer.c \
-              src/arcade1/video.c src/arcade1/audio.c src/arcade1/rom.c
-
 # `arcade1 build` is self-contained: the guest SDK (crt0.S, link.ld and the
 # headers) is compiled into the CLI as string literals in the generated
 # $(SDK_DATA). programs/ stays the single source of truth — this rule
@@ -450,6 +481,12 @@ $(SDK_DATA): $(addprefix programs/,$(SDK_FILES)) tools/gen_sdk_data.awk | $(TEST
 	   done; } > $@.tmp && mv $@.tmp $@
 
 $(CLI_BIN): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) $(PLAY_CFLAGS) -Itests -Itools -o $@ $(CLI_SRC) $(SDK_DATA) $(PLAY_LIBS)
+
+# Identical sources, no -DARCADE1_HAVE_SDL3 and no SDL libs: the CLI as it
+# builds on a machine without SDL3 (used by tests/test-playwindow.sh to
+# prove the --live absence path exits 3 and nothing else changes).
+$(CLI_NOSDL): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
 	$(CC) $(CFLAGS) -Itests -Itools -o $@ $(CLI_SRC) $(SDK_DATA)
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with

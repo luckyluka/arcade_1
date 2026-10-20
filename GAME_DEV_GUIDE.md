@@ -208,6 +208,7 @@ behave differently.
     arcade1 run game.arc1 --frames 120 --capture frame.ppm
     arcade1 run game.arc1 --frames 120 --input script.txt \
         --syms game.syms --vars score,state --var-every 60
+    arcade1 run game.arc1 --live --record session.txt   # play it by hand
     arcade1 test game.arc1 --golden tests/golden/mygame.txt   # hash check
 
 Per-frame hash lines are diffable against `tests/golden/<game>.txt`
@@ -216,7 +217,11 @@ you. `--capture` dumps a frame (`.png` or `.ppm` by extension; it holds
 the frame after `--frames N`, i.e. `N-1`'s screen); `arcade1 capture`
 dumps every frame into `captures/` (`--format png`, `--scale N`);
 `--vars` reads your game's globals by name; `--input` plays a scripted
-session; `--record` writes one. `arcade1 inspect` runs the game, then reports
+session; `--record` writes one; `--live` opens a play window (SDL3) so you
+can play your own game by hand — R ends the session and writes the keys you
+pressed as a normal input script, so a hand-played session replays exactly
+like a scripted one (without SDL3 or a display it exits 3; everything
+headless is unaffected). `arcade1 inspect` runs the game, then reports
 the last frame as greppable `KEY value` lines (video counters, payload
 budget, your `--vars`; `--json` for one object, `--regs` for the
 register dump, `--commands`/`--at X,Y` for command records and pixel
