@@ -272,3 +272,8 @@ guests: built by `make program`, covered by `make check`, golden-locked.
 `experimental/` holds works in progress that are NOT built by default
 and NOT covered by tests — move a program there while it is rough, and
 promote it (into `GUEST_PROGS` + a test) only when it is meant to last.
+
+`flappy` is Game #2: built clean-room from these very docs in the
+round-3 fresh-agent exercise (no existing game source was read — see
+docs/experiments/round3-cleanroom.md), and promoted into the same
+first-class set: `make program`, `make check`, golden-locked.

@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -67,7 +67,7 @@ ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
-                  m29game asteroid_run
+                  m29game asteroid_run flappy
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -139,7 +139,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
-        test-mapdemo test-asteroid_run \
+        test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands
 
 all: $(TARGET)
@@ -895,10 +895,17 @@ test-m29game: $(CLI_BIN) $(ARC1_ROM_DIR)/m29game.arc1 | $(TESTDIR)
 
 # Game #1 (ROADMAP_V3 Wave 5): asteroid_run's narrative — score rises,
 # level clear, restart, game over, restart — through a committed input
-# script; its frame lines are golden game 10's (test-golden greps them
+# script; its frame lines feed one of the goldens (test-golden greps them
 # from this test's stdout).
 test-asteroid_run: $(CLI_BIN) $(ARC1_ROM_DIR)/asteroid_run.arc1 | $(TESTDIR)
 	sh tests/test_asteroid_run.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# Game #2 (the round-3 clean-room build, docs/experiments/round3-cleanroom.md):
+# flappy's scripted three-flight session — determinism, the score/restart/
+# game-over story, record->replay — through tests/inputs/flappy.txt; its
+# frame lines feed the flappy golden the same way.
+test-flappy: $(CLI_BIN) $(ARC1_ROM_DIR)/flappy.arc1 | $(TESTDIR)
+	sh tests/test_flappy.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 test-pong: $(CLI_BIN) $(ARC1_ROM_DIR)/example_pong.arc1 | $(TESTDIR)
 	sh tests/test_pong.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
@@ -974,7 +981,7 @@ golden-update: | $(TESTDIR)
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
 GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
-                  m29game
+                  m29game flappy
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)
