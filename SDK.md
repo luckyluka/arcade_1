@@ -34,6 +34,10 @@ arcade1 run <game.arc1|bin> [options]
   --format F           capture-dir image format: png or ppm (default ppm)
   --scale N            upscale captures N x, nearest neighbour, 1..8
                        (--scale 4 on 480x270 gives exactly 1920x1080)
+  --png-store          write PNGs uncompressed (deflate "stored" blocks —
+                       the historical mode). The default is real deflate
+                       compression (LZ77 + fixed Huffman, no dependencies);
+                       a 1080p capture is ~100x smaller.
   --syms FILE          load an `nm` symbol dump (<game>.syms); for --vars it
                        is optional — <image>.syms is auto-loaded if omitted
   --vars LIST          print named game variables (comma list, or "all")
@@ -357,6 +361,9 @@ arcade1 capture <game.arc1|bin> [arcade1 run options]
     is also chosen automatically for --capture *.png), and --scale N
     upscales every written frame. Both forms write the framebuffer as it
     stands after the last frame that ran: --frames N captures frame N-1.
+    PNGs are written with real deflate compression (LZ77 + fixed Huffman,
+    no dependencies); --png-store keeps the historical uncompressed mode
+    (the tests use it as the oracle).
 
 arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
     smoke run: the exit status propagates. --golden FILE compares the

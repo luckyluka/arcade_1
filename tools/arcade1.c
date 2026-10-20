@@ -590,7 +590,231 @@ static int png_chunk(FILE *f, const char *type, const uint8_t *data, size_t len)
     return fwrite(hdr, 1, 4, f) == 4 ? 0 : -1;
 }
 
-static int write_png(const char *path, const uint16_t *fb, unsigned scale)
+/* --- Deflate: LZ77 + fixed Huffman (RFC 1951) -----------------------------
+ *
+ * The PNG writer used to store its image data uncompressed (deflate
+ * "stored" blocks), which made a 1080p capture 6.2 MB and bloated the
+ * repo (ROADMAP_V4 card 4.5). This is a real compressor, still with NO
+ * dependencies: LZ77 with a 32 KiB window and hash chains, then the fixed
+ * Huffman code of RFC 1951 §3.2.6.
+ *
+ * Deterministic by construction: the chain search always takes the longest
+ * match and, among equal matches, the most recent one; nothing depends on
+ * the clock, the allocator or a hash seed. Two runs produce identical
+ * bytes.
+ */
+
+/* Deflate parameters (the classic zlib ones). */
+#define DEFL_WINDOW    32768u          /* 32 KiB back-reference window     */
+#define DEFL_MIN_MATCH 3u
+#define DEFL_MAX_MATCH 258u
+#define DEFL_HASH_BITS 15u
+#define DEFL_HASH_SIZE (1u << DEFL_HASH_BITS)
+#define DEFL_MAX_CHAIN 128u            /* chain search depth (deterministic) */
+
+/* Bit writer: deflate packs bits LSB-first into bytes; Huffman codes are
+ * written MSB-first (the code writer reverses them). */
+typedef struct {
+    uint8_t *buf;
+    size_t   cap;
+    size_t   len;
+    uint32_t acc;      /* pending bits, LSB first */
+    int      nbits;
+    int      error;
+} bitwriter_t;
+
+static void bw_init(bitwriter_t *w, uint8_t *buf, size_t cap)
+{
+    w->buf = buf; w->cap = cap; w->len = 0;
+    w->acc = 0; w->nbits = 0; w->error = 0;
+}
+
+/* Write the low `n` bits of `value`, least-significant bit first. */
+static void bw_bits(bitwriter_t *w, uint32_t value, int n)
+{
+    if (n <= 0)
+        return;
+    w->acc |= (value & ((1u << n) - 1u)) << w->nbits;
+    w->nbits += n;
+    while (w->nbits >= 8) {
+        if (w->len >= w->cap) { w->error = 1; return; }
+        w->buf[w->len++] = (uint8_t)(w->acc & 0xFFu);
+        w->acc >>= 8;
+        w->nbits -= 8;
+    }
+}
+
+/* Write a Huffman code: most-significant bit first. */
+static void bw_code(bitwriter_t *w, uint32_t code, int n)
+{
+    uint32_t rev = 0;
+    for (int i = 0; i < n; i++)
+        rev |= ((code >> i) & 1u) << (n - 1 - i);
+    bw_bits(w, rev, n);
+}
+
+/* Flush the remaining bits (padded with zeros to a byte boundary). */
+static void bw_flush(bitwriter_t *w)
+{
+    if (w->nbits > 0) {
+        if (w->len >= w->cap) { w->error = 1; return; }
+        w->buf[w->len++] = (uint8_t)(w->acc & 0xFFu);
+        w->acc = 0;
+        w->nbits = 0;
+    }
+}
+
+/* The fixed literal/length code (RFC 1951 §3.2.6). */
+static void fixed_lit_code(int sym, uint32_t *code, int *nbits)
+{
+    if (sym <= 143)      { *code = 0x30u + (uint32_t)sym;         *nbits = 8; }
+    else if (sym <= 255) { *code = 0x190u + (uint32_t)sym - 144u;  *nbits = 9; }
+    else if (sym <= 279) { *code = (uint32_t)sym - 256u;           *nbits = 7; }
+    else                 { *code = 0xC0u + (uint32_t)sym - 280u;   *nbits = 8; }
+}
+
+/* Length and distance codes (RFC 1951 §3.2.5). */
+static const uint16_t deflate_len_base[29] = {
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43,
+    51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258
+};
+static const uint8_t deflate_len_extra[29] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3,
+    3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0
+};
+static const uint16_t deflate_dist_base[30] = {
+    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257,
+    385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385,
+    24577
+};
+static const uint8_t deflate_dist_extra[30] = {
+    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7,
+    8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13
+};
+
+/* The hash: three bytes -> a bucket. Multiplicative, so it spreads well. */
+static uint32_t deflate_hash3(const uint8_t *p)
+{
+    uint32_t v = ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
+    return (v * 2654435761u) >> (32 - DEFL_HASH_BITS);
+}
+
+/* Compress `data` into one fixed-Huffman deflate stream. Returns 0 ok. */
+static int deflate_fixed(const uint8_t *data, size_t len,
+                         uint8_t *out, size_t cap, size_t *out_len)
+{
+    static int32_t head[DEFL_HASH_SIZE];   /* first position of each chain */
+    static int32_t prev[DEFL_WINDOW];       /* previous position, same hash */
+    bitwriter_t w;
+    size_t pos = 0;
+
+    bw_init(&w, out, cap);
+
+    /* One block: BFINAL = 1, BTYPE = 01 (fixed Huffman). */
+    bw_bits(&w, 1u, 1);
+    bw_bits(&w, 1u, 2);
+
+    for (uint32_t i = 0; i < DEFL_HASH_SIZE; i++)
+        head[i] = -1;
+    for (uint32_t i = 0; i < DEFL_WINDOW; i++)
+        prev[i] = -1;
+
+    while (pos < len) {
+        size_t best_len = 0, best_dist = 0;
+
+        /* Find the longest match in the window. */
+        if (pos + DEFL_MIN_MATCH <= len) {
+            uint32_t h = deflate_hash3(data + pos);
+            int32_t cur = head[h];
+            unsigned chain = DEFL_MAX_CHAIN;
+
+            while (cur >= 0 && chain-- > 0) {
+                size_t dist = pos - (size_t)cur;
+                size_t n = 0, maxn = len - pos;
+
+                if (dist == 0 || dist > DEFL_WINDOW)
+                    break;
+                if (maxn > DEFL_MAX_MATCH)
+                    maxn = DEFL_MAX_MATCH;
+                while (n < maxn && data[(size_t)cur + n] == data[pos + n])
+                    n++;
+                if (n > best_len) {          /* strictly longer: the most
+                                             * recent wins a tie */
+                    best_len = n;
+                    best_dist = dist;
+                    if (n == DEFL_MAX_MATCH)
+                        break;
+                }
+                cur = prev[(size_t)cur & (DEFL_WINDOW - 1u)];
+            }
+        }
+
+        if (best_len >= DEFL_MIN_MATCH) {
+            /* Emit the match: length code + extra bits, distance code +
+             * extra bits. */
+            int i = 0;
+            while (i < 28 && deflate_len_base[i + 1] <= best_len)
+                i++;
+            {
+                uint32_t code; int nb;
+                fixed_lit_code(257 + i, &code, &nb);
+                bw_code(&w, code, nb);
+                if (deflate_len_extra[i])
+                    bw_bits(&w, (uint32_t)(best_len - deflate_len_base[i]),
+                            deflate_len_extra[i]);
+            }
+            {
+                int d = 0;
+                while (d < 29 && deflate_dist_base[d + 1] <= best_dist)
+                    d++;
+                bw_code(&w, (uint32_t)d, 5);
+                if (deflate_dist_extra[d])
+                    bw_bits(&w, (uint32_t)(best_dist - deflate_dist_base[d]),
+                            deflate_dist_extra[d]);
+            }
+            /* Insert every covered position into the chains. */
+            for (size_t k = 0; k < best_len; k++) {
+                size_t p = pos + k;
+                if (p + DEFL_MIN_MATCH <= len) {
+                    uint32_t h = deflate_hash3(data + p);
+                    prev[p & (DEFL_WINDOW - 1u)] = head[h];
+                    head[h] = (int32_t)p;
+                }
+            }
+            pos += best_len;
+        } else {
+            uint32_t code; int nb;
+            fixed_lit_code((int)data[pos], &code, &nb);
+            bw_code(&w, code, nb);
+            if (pos + DEFL_MIN_MATCH <= len) {
+                uint32_t h = deflate_hash3(data + pos);
+                prev[pos & (DEFL_WINDOW - 1u)] = head[h];
+                head[h] = (int32_t)pos;
+            }
+            pos++;
+        }
+        if (w.error)
+            return -1;
+    }
+
+    /* End of block (symbol 256). */
+    {
+        uint32_t code; int nb;
+        fixed_lit_code(256, &code, &nb);
+        bw_code(&w, code, nb);
+    }
+    bw_flush(&w);
+    if (w.error)
+        return -1;
+
+    *out_len = w.len;
+    return 0;
+}
+
+/* --- PNG writer ------------------------------------------------------------ */
+
+static int write_png(const char *path, const uint16_t *fb, unsigned scale,
+                     int store)
 {
     static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
     const unsigned w = (unsigned)ARCADE1_WIDTH * scale;
@@ -598,15 +822,18 @@ static int write_png(const char *path, const uint16_t *fb, unsigned scale)
     const size_t   stride = (size_t)w * 3 + 1;        /* filter byte + RGB  */
     const size_t   raw_len = stride * h;
     const size_t   nblk = (raw_len + 65534) / 65535;  /* ceil, >= 1         */
-    const size_t   zlen = 2 + raw_len + 5 * nblk + 4;
+    const size_t   stored_len = 2 + raw_len + 5 * nblk + 4;
+    /* Worst case for fixed Huffman is 9 bits per literal (12.5 % over the
+     * input); the stored path is the exact bound for the other mode. */
+    const size_t   zcap = stored_len + raw_len / 8 + 64;
     uint8_t  ihdr[13], *raw, *z;
     uint32_t ad;
-    size_t   pos = 0, off = 0;
+    size_t   pos = 0, off = 0, zlen = 0;
     FILE    *f;
     int      rc = 0;
 
     raw = malloc(raw_len);
-    z = malloc(zlen);
+    z = malloc(zcap);
     if (!raw || !z) {
         free(raw); free(z);
         fprintf(stderr, "arcade1: out of memory writing '%s'\n", path);
@@ -620,25 +847,39 @@ static int write_png(const char *path, const uint16_t *fb, unsigned scale)
             px_rgb888(row[x / scale], dst + 1 + (size_t)x * 3);
     }
 
-    /* One zlib stream: 2-byte header, stored deflate blocks, Adler-32. */
-    z[pos++] = 0x78;                                 /* CMF: deflate, 32K    */
-    z[pos++] = 0x01;                                 /* FLG: check bits ok   */
-    while (off < raw_len) {
-        size_t n = raw_len - off;
-        if (n > 65535)
-            n = 65535;
-        z[pos++] = (off + n == raw_len) ? 0x01 : 0x00;   /* BFINAL + BTYPE=00 */
-        z[pos++] = (uint8_t)(n & 0xFFu);
-        z[pos++] = (uint8_t)(n >> 8);
-        z[pos++] = (uint8_t)(~n & 0xFFu);
-        z[pos++] = (uint8_t)((~n >> 8) & 0xFFu);
-        memcpy(z + pos, raw + off, n);
-        pos += n;
-        off += n;
+    if (store) {
+        /* The historical mode: one zlib stream of stored deflate blocks. */
+        z[pos++] = 0x78;                             /* CMF: deflate, 32K */
+        z[pos++] = 0x01;                             /* FLG: check bits ok */
+        while (off < raw_len) {
+            size_t n = raw_len - off;
+            if (n > 65535)
+                n = 65535;
+            z[pos++] = (off + n == raw_len) ? 0x01 : 0x00;   /* BFINAL+BTYPE */
+            z[pos++] = (uint8_t)(n & 0xFFu);
+            z[pos++] = (uint8_t)(n >> 8);
+            z[pos++] = (uint8_t)(~n & 0xFFu);
+            z[pos++] = (uint8_t)((~n >> 8) & 0xFFu);
+            memcpy(z + pos, raw + off, n);
+            pos += n;
+            off += n;
+        }
+        zlen = pos;
+    } else {
+        /* Compressed: one zlib stream, fixed-Huffman deflate. */
+        size_t dlen = 0;
+        if (deflate_fixed(raw, raw_len, z + 2, zcap - 6, &dlen) != 0) {
+            free(raw); free(z);
+            fprintf(stderr, "arcade1: compression failed for '%s'\n", path);
+            return -1;
+        }
+        z[0] = 0x78;                                 /* CMF: deflate, 32K */
+        z[1] = 0x01;                                 /* FLG: check bits ok */
+        zlen = 2 + dlen;
     }
     ad = adler32_run(raw, raw_len);
-    z[pos++] = (uint8_t)(ad >> 24); z[pos++] = (uint8_t)(ad >> 16);
-    z[pos++] = (uint8_t)(ad >> 8);  z[pos++] = (uint8_t)ad;
+    z[zlen++] = (uint8_t)(ad >> 24); z[zlen++] = (uint8_t)(ad >> 16);
+    z[zlen++] = (uint8_t)(ad >> 8);  z[zlen++] = (uint8_t)ad;
 
     f = fopen(path, "wb");
     if (!f) {
@@ -669,14 +910,22 @@ static int write_png(const char *path, const uint16_t *fb, unsigned scale)
     return rc;
 }
 
+/* --png-store: write PNGs the historical way (uncompressed deflate blocks).
+ * The compressed mode is the default; this flag keeps the old bytes, and
+ * the tests use it as the oracle (ROADMAP_V4 card 4.5). */
+static int g_png_store = 0;
+
 /* Pick the capture writer by extension: *.png -> PNG, anything else -> PPM
- * (the historical default, so existing scripts keep their bytes). */
+ * (the historical default, so existing scripts keep their bytes).
+ *
+ * `--png-store` keeps the historical uncompressed PNG mode (stored deflate
+ * blocks) — the oracle the compressed mode is checked against. */
 static int write_capture(const char *path, const uint16_t *fb, unsigned scale)
 {
     size_t n = strlen(path);
 
     if (n > 4 && !strcmp(path + n - 4, ".png"))
-        return write_png(path, fb, scale);
+        return write_png(path, fb, scale, g_png_store);
     return write_ppm(path, fb, scale);
 }
 
@@ -883,6 +1132,7 @@ static int cmd_run(int argc, char **argv)
             }
         }
         else if (!strcmp(a, "--scale") && i + 1 < argc) scale = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--png-store"))             g_png_store = 1;
         else if (!strcmp(a, "--record") && i + 1 < argc)    record_path = argv[++i];
         else if (!strcmp(a, "--live"))                      live = 1;
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
@@ -919,6 +1169,8 @@ static int cmd_run(int argc, char **argv)
                 "  --capture picks the format by extension (.png or .ppm);\n"
                 "  --format sets --capture-dir's extension (default ppm);\n"
                 "  --scale N upscales captures N x, nearest neighbour (1..8).\n"
+                "  --png-store writes PNGs uncompressed (the historical mode;\n"
+                "  the default is real deflate compression).\n"
                 "  --record writes the applied buttons in the script format.\n"
                 "  --pad-trace FILE writes one line per frame:\n"
                 "  'frame N pad 0xXX' — the pad the guest actually saw.\n"

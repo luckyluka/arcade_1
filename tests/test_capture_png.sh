@@ -141,4 +141,28 @@ rc=0; "$CLI" run "$BREAK" --frames 2 --capture-every 2 --capture-dir d2 \
 [ "$rc" -eq 2 ] || fail "--format gif should exit 2, got $rc"
 grep -q -- "--format must be png or ppm" e2.txt || fail "missing format message"
 
-echo "test-capture-png: ok — png == ppm pixels, 1920x1080 replication, repeat identical"
+# --- 6) compression (ROADMAP_V4 card 4.5) ---------------------------------
+# The default PNG is really compressed; --png-store keeps the historical
+# uncompressed mode, and both decode to exactly the same pixels.
+"$CLI" run "$BREAK" --frames 30 --capture fs.png --png-store --quiet > /dev/null ||
+    fail "png-store run"
+python3 png2ppm.py fs.png fs_dec.ppm || fail "png-store decode failed"
+cmp -s f.ppm fs_dec.ppm || fail "the stored PNG differs from the PPM pixels"
+sz_c=$(wc -c < f.png)
+sz_s=$(wc -c < fs.png)
+[ "$sz_c" -lt "$sz_s" ] ||
+    fail "the compressed PNG ($sz_c) is not smaller than the stored one ($sz_s)"
+# The stored mode is the oracle: same pixels, more bytes.
+"$CLI" run "$BREAK" --frames 30 --capture f4s.png --scale 4 --png-store \
+    --quiet > /dev/null || fail "scale-4 png-store run"
+"$CLI" run "$BREAK" --frames 30 --capture f4c.png --scale 4 --quiet \
+    > /dev/null || fail "scale-4 compressed run"
+sz4_c=$(wc -c < f4c.png)
+sz4_s=$(wc -c < f4s.png)
+[ "$((sz4_s / sz4_c))" -ge 8 ] ||
+    fail "the compressed 1080p PNG is only $sz4_c bytes (stored: $sz4_s) — expected at least 8x smaller"
+python3 png2ppm.py f4c.png f4c_dec.ppm || fail "scale-4 compressed decode failed"
+cmp -s f4.ppm f4c_dec.ppm || fail "the compressed scale-4 PNG differs from its PPM"
+echo "  compressed: $sz_c bytes (stored: $sz_s) at 480x270, $sz4_c bytes (stored: $sz4_s) at 1920x1080"
+
+echo "test-capture-png: ok — png == ppm pixels, 1920x1080 replication, repeat identical, compressed"
