@@ -78,6 +78,19 @@ power-on camera is (0,0), so early draws are unaffected.
 a cloud came out magenta, HUD text pink. Convert before passing; the
 `arcade1_pal(i, rgb)` helper takes the same RGB565 word.
 
+**Use `arcade1_rgb(r, g, b)`** — it builds the RGB565 word for you:
+
+```c
+#include "arcade1.h"
+void ex_colour(void) {
+    arcade1_clear(arcade1_rgb(0xE8, 0xC0, 0xA0));   /* 0xEE14 — the colour you meant */
+}
+```
+
+The host now counts every colour write that carried bits above 15:
+`arcade1 inspect` reports `VIDEO_COLOR_TRUNC N`, and `arcade1 run` warns
+(and `--strict` fails) when N > 0.
+
 ## Sprites, 1-bit
 `gfx_sprite(x, y, img, w, h, color)`: img is h rows of (w+7)/8 bytes,
 MSB = leftmost pixel; set bits draw `color`, clear bits are transparent.

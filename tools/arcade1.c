@@ -856,6 +856,7 @@ static int cmd_run(int argc, char **argv)
     int live = 0;                      /* --live: the play window (SDL3)    */
     int frames_set = 0;                /* did --frames appear on the line?  */
     unsigned long long skipped = 0;   /* M29: out-of-window source reads */
+    unsigned long long color_trunc = 0; /* V4 4.4: colours cut to 16 bits   */
     static uint8_t img[ARCADE1_IMAGE_HEADER_SIZE + ARCADE1_ROM_SIZE];
     static arcade1_machine_t m;
     size_t n;
@@ -1073,6 +1074,7 @@ static int cmd_run(int argc, char **argv)
         if (live)
             live_present(&m);           /* upload + show + pace to 60 Hz */
         skipped += arcade1_video_frame_totals(&m.video)->skipped_ops;
+        color_trunc += arcade1_video_frame_totals(&m.video)->color_trunc;
         if (!quiet)
             printf("frame %4u hash=0x%016llX fb=0x%016llX\n", fr,
                    (unsigned long long)state_hash(&m.cpu, &m.bus),
@@ -1143,6 +1145,17 @@ static int cmd_run(int argc, char **argv)
                 "arcade1 run: warning: %llu draws read source addresses "
                 "outside ROM/RAM and drew nothing%s\n",
                 skipped, strict ? "" : " (--strict to fail on this)");
+        if (strict)
+            return 1;
+    }
+
+    /* ROADMAP_V4 card 4.4: a colour written with bits above 15 is cut to
+     * RGB565 silently. The draw is unchanged; the mistake is now visible. */
+    if (color_trunc != 0) {
+        fprintf(stderr,
+                "arcade1 run: warning: %llu colour writes carried bits above "
+                "15 and were truncated to RGB565 (use arcade1_rgb())%s\n",
+                color_trunc, strict ? "" : " (--strict to fail on this)");
         if (strict)
             return 1;
     }
@@ -1901,6 +1914,7 @@ static int cmd_inspect(int argc, char **argv)
     FILE    *f;
     arcade1_input_t in;
     unsigned long long oob = 0;              /* run: OOB source draws      */
+    unsigned long long trunc = 0;            /* run: colours cut to 16 bit */
     unsigned long long instret_before_last = 0;
 
     for (int i = 0; i < argc; i++) {
@@ -2071,6 +2085,7 @@ static int cmd_inspect(int argc, char **argv)
         arcade1_set_input(&m, &in);
         arcade1_run_frame(&m);
         oob += arcade1_video_frame_totals(&m.video)->skipped_ops;
+        trunc += arcade1_video_frame_totals(&m.video)->color_trunc;
     }
 
     /* --at: the owner buffer holds the id of the last command that wrote
@@ -2091,6 +2106,7 @@ static int cmd_inspect(int argc, char **argv)
                    "\"TILEMAP\":%u,\"SPRITE4\":%u,\"TILEMAP4\":%u,"
                    "\"PRESENT\":%u},"
                    "\"VIDEO_PIXELS_WRITTEN\":%u,\"VIDEO_OOB_DRAWS\":%llu,"
+                   "\"VIDEO_COLOR_TRUNC\":%llu,"
                    "\"ROM_USED\":{\"used\":%u,\"size\":%u},"
                    "\"STATE_HASH\":\"0x%016llX\",\"FB_HASH\":\"0x%016llX\","
                    "\"VAR\":{",
@@ -2099,7 +2115,7 @@ static int cmd_inspect(int argc, char **argv)
                    m.bus.stray_accesses,
                    ft->cmds_clear, ft->cmds_fill, ft->cmds_sprite,
                    ft->cmds_tilemap, ft->cmds_sprite4, ft->cmds_tilemap4,
-                   ft->cmds_present, ft->pixels_written, oob,
+                   ft->cmds_present, ft->pixels_written, oob, trunc,
                    (unsigned)rom_size, (unsigned)ARCADE1_ROM_SIZE,
                    (unsigned long long)state_hash(&m.cpu, &m.bus),
                    (unsigned long long)fb_hash(&m));
@@ -2145,6 +2161,7 @@ static int cmd_inspect(int argc, char **argv)
                    ft->cmds_present);
             printf("VIDEO_PIXELS_WRITTEN %u\n", ft->pixels_written);
             printf("VIDEO_OOB_DRAWS %llu\n", oob);
+            printf("VIDEO_COLOR_TRUNC %llu\n", trunc);
             printf("ROM_USED %u / %u\n", (unsigned)rom_size,
                    (unsigned)ARCADE1_ROM_SIZE);
             printf("STATE_HASH 0x%016llX\n",

@@ -50,7 +50,10 @@ arcade1 run <game.arc1|bin> [options]
   --strict             exit non-zero if any draw read a source address
                        outside ROM/RAM — those draws silently paint nothing.
                        Without it the same condition still prints one
-                       warning line on stderr (stdout stays machine-readable)
+                       warning line on stderr (stdout stays machine-readable).
+                       It also fails when a colour write carried bits above
+                       15 (a 24-bit literal in an RGB565 register — see
+                       CHEATSHEET.md's palette section).
 ```
 
 The image may be a packaged `.arc1` game image (validated: magic, version,
@@ -403,6 +406,11 @@ arcade1 inspect <game.arc1|bin> [--frames N] [--input FILE] [--syms FILE]
       VIDEO_OOB_DRAWS <n>           run total: draws whose source address
                                     fell outside ROM/RAM — the same
                                     condition `run --strict` fails on
+      VIDEO_COLOR_TRUNC <n>         run total: colour writes that carried
+                                    bits above 15 (a 24-bit literal where
+                                    RGB565 was meant) and were truncated —
+                                    the same condition `run --strict` fails
+                                    on
       ROM_USED <n> / 262144         payload bytes used / budget
       STATE_HASH 0x................ the CPU+RAM+stray fingerprint `run`
                                     prints — cross-check against any

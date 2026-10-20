@@ -94,4 +94,21 @@ static inline int arcade1_rand(int n){
 }
 static inline int arcade1_fp_mul(int a,int b){ return (int)((long long)a*b>>16); }
 
+/* --- Colours (RGB565) ------------------------------------------------------
+ *
+ * Colours are 16-bit RGB565: 5 bits red, 6 bits green, 5 bits blue. The
+ * device masks the colour register to 16 bits, so a 24-bit literal
+ * (0xE8C0A0) is truncated SILENTLY — you get a different colour (0xC0A0)
+ * and no error. Build colours with arcade1_rgb():
+ *
+ *     arcade1_rect(x, y, w, h, arcade1_rgb(0xE8, 0xC0, 0xA0));
+ *
+ * which returns 0xEE14 — the colour you meant. (The host counts every
+ * colour write that carried bits above 15: `arcade1 inspect` reports
+ * VIDEO_COLOR_TRUNC, `arcade1 run --strict` fails on it.)
+ */
+static inline unsigned arcade1_rgb(unsigned r, unsigned g, unsigned b){
+    return ((r>>3)<<11) | ((g>>2)<<5) | (b>>3);
+}
+
 #endif

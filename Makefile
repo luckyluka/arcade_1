@@ -93,7 +93,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
-        test-run test-info test-golden-cli test-pad-trace
+        test-run test-info test-golden-cli test-pad-trace test-color-trunc
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -141,7 +141,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
-        test-golden-cli test-pad-trace
+        test-golden-cli test-pad-trace test-color-trunc
 
 all: $(TARGET)
 
@@ -334,6 +334,24 @@ test-info: $(CLI_BIN) $(TESTDIR)/test_info tests/test_info.sh
 # game --out FILE` writes the frame lines `arcade1 test --golden` reads.
 test-golden-cli: $(CLI_BIN) tests/test_golden_cli.sh
 	sh tests/test_golden_cli.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# The colour probe twice: the default writes 24-bit literals, the masked
+# build writes the 16-bit values the device makes of them. Their
+# framebuffers must be identical — the truncation diagnostic changes no
+# pixel (ROADMAP_V4 card 4.4).
+$(GUEST_BUILD)/probe_trunc_masked.bin: $(PROBE_DIR)/probe_trunc.c programs/gfx.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $(GUEST_BUILD)/probe_trunc_masked.elf programs/crt0.S $< -DWRITE_MASKED
+	$(RISCV_OBJCOPY) -O binary $(GUEST_BUILD)/probe_trunc_masked.elf $@
+
+# ROADMAP_V4 card 4.4: colour truncation. The probe writes a 24-bit literal
+# where RGB565 was meant; the masked build writes the 16-bit values the
+# device makes of them — their framebuffers must be identical, so the
+# diagnostic is proven to change no pixel.
+test-color-trunc: $(CLI_BIN) $(GUEST_BUILD)/probe_trunc.bin \
+        $(GUEST_BUILD)/probe_trunc_masked.bin tests/test_color_trunc.sh
+	sh tests/test_color_trunc.sh $(CLI_BIN) $(GUEST_BUILD) $(ARC1_ROM_DIR)
 
 # ROADMAP_V4 card 4.3: the pad trace (`arcade1 run --pad-trace FILE`) and
 # the edge-trigger trap. The probe guest (tests/guests/probe_edge.c) is the

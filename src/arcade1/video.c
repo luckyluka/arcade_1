@@ -757,6 +757,11 @@ void arcade1_video_mmio_write(void *ctx, uint32_t offset, uint32_t value)
         v->y = value;
         return;
     case ARCADE1_VIDEO_REG_COLOR:
+        /* RGB565 is 16 bits. A 24-bit literal (0xE8C0A0) is truncated to
+         * its low 16 bits — the draw is exactly as it always was, but the
+         * mistake is now countable (ROADMAP_V4 card 4.4). */
+        if (value & 0xFFFF0000u)
+            v->stats.color_trunc++;
         v->color = value & 0xFFFFu;   /* RGB565 is 16 bits */
         return;
     case ARCADE1_VIDEO_REG_ADDR:

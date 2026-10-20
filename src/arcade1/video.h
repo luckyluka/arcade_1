@@ -124,6 +124,12 @@ typedef struct arcade1_video_stats {
                                * diagnostics: it never changes what is
                                * drawn, it only makes an invisible mistake
                                * countable.                               */
+    uint32_t color_trunc;     /* ROADMAP_V4 card 4.4: COLOR-register writes
+                               * that carried bits above 15 — a 24-bit
+                               * literal where RGB565 was meant. The colour
+                               * is masked exactly as before (the draw is
+                               * unchanged); the counter only makes the
+                               * silent truncation visible.                */
 } arcade1_video_stats_t;
 
 /* --- B2 (ROADMAP_V3 §5): command records ---------------------------------- *
