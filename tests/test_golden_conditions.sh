@@ -31,11 +31,11 @@ CHECKS=0
 [ -f "$MANIFEST" ] || fail "missing $MANIFEST"
 [ -f "$INPUT" ]    || fail "missing $INPUT"
 
-# --- case 1: manifest sanity — all 9 games, first_frames within the file ---
+# --- case 1: manifest sanity — all 10 games, first_frames within the file --
 set -- $(awk '!/^#/ && NF {print $1}' "$MANIFEST")
-[ $# -eq 9 ] || fail "manifest lists $# games, want 9: $*"
+[ $# -eq 10 ] || fail "manifest lists $# games, want 10: $*"
 CHECKS=$((CHECKS + 1))
-echo "  ok: manifest lists 9 games"
+echo "  ok: manifest lists 10 games"
 
 # --- case 7 (same walk): repro vocabulary + rom paths exist ----------------
 while read -r game frames rom input repro; do
@@ -51,15 +51,18 @@ while read -r game frames rom input repro; do
     [ -f "$ROOT/$rom" ] || fail "$game: rom $rom does not exist"
 done < "$MANIFEST"
 CHECKS=$((CHECKS + 3))
-echo "  ok: first_frames <= frame-line count (9 files)"
+echo "  ok: first_frames <= frame-line count (10 files)"
 echo "  ok: every repro in {cli, harness}"
 echo "  ok: every rom path exists"
 
-# manifest-driven fields for the two games we replay on the CLI
+# manifest-driven fields for the games we replay on the CLI
 mframes=$(awk '$1=="m29game"{print $2}' "$MANIFEST")
 mrom=$(awk '$1=="m29game"{print $3}' "$MANIFEST")
 cframes=$(awk '$1=="color"{print $2}' "$MANIFEST")
 crom=$(awk '$1=="color"{print $3}' "$MANIFEST")
+aframes=$(awk '$1=="asteroid_run"{print $2}' "$MANIFEST")
+arom=$(awk '$1=="asteroid_run"{print $3}' "$MANIFEST")
+ainput=$(awk '$1=="asteroid_run"{print $4}' "$MANIFEST")
 
 stage() {   # stage <rom-field> <golden-name> -> $OUT/rom.arc1 + $OUT/golden.txt
     cp "$ROOT/$1" "$OUT/rom.arc1"
@@ -120,5 +123,22 @@ echo "$out" | grep -q "$cframes frame lines match" || \
     fail "color: no '$cframes frame lines match' — $out"
 CHECKS=$((CHECKS + 1))
 echo "  ok: color (no input) -> exit 0"
+
+# --- case 8: asteroid_run + its committed input reproduce (Wave 5) ---------
+case "$ainput" in
+    /*) ain="$ainput" ;;
+    *)  ain="$ROOT/$ainput" ;;
+esac
+[ -f "$ain" ] || fail "asteroid_run input $ainput does not exist"
+stage "$arom" "asteroid_run.txt"
+rc=0
+out=$("$CLI" test "$OUT/rom.arc1" --golden "$OUT/golden.txt" \
+        --frames "$aframes" --input "$ain" 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "asteroid_run with conditions: exit $rc — $out"
+echo "$out" | grep -q "$aframes frame lines match" || \
+    fail "asteroid_run: no '$aframes frame lines match' — $out"
+CHECKS=$((CHECKS + 2))
+echo "  ok: asteroid_run input path exists"
+echo "  ok: asteroid_run + manifest conditions -> exit 0"
 
 echo "test-golden-conditions: ok ($CHECKS checks, conditions manifest enforced)"

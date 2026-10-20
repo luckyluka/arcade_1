@@ -67,7 +67,7 @@ ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
-                  m29game
+                  m29game asteroid_run
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -108,7 +108,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-pong test-snake test-example-color test-cheatsheet \
         test-barrier test-build test-oob \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
-        test-mapdemo \
+        test-mapdemo test-asteroid_run \
         test-golden-conditions test-inspect test-inspect-commands
 
 all: $(TARGET)
@@ -315,8 +315,7 @@ $(TESTDIR)/test_barrier: tests/test_barrier.c src/arcade1/machine.c \
 
 # --- Experimental guests ------------------------------------------------------
 # programs/experimental/ holds works in progress: NOT built by default (not in
-# GUEST_PROGS) and NOT covered by make check. Build on demand with
-# `make experimental`. Promote into GUEST_PROGS + a test when it lasts.
+# GUEST_PROGS). Build on demand with `make experimental`.
 # walkdemo is an experiment (docs/experiments/walkdemo.md), so its test is
 # run by hand with `make test-walkdemo` — not part of `make check`.
 test-walkdemo: $(CLI_BIN) $(GUEST_BUILD)/walkdemo.arc1
@@ -327,11 +326,23 @@ test-walkdemo: $(CLI_BIN) $(GUEST_BUILD)/walkdemo.arc1
 test-assetdemo: $(CLI_BIN) $(GUEST_BUILD)/asset_demo.arc1
 	sh tests/test_assetdemo.sh $(CLI_BIN) $(GUEST_BUILD)
 
+# asteroid_run is Game #1 (ROADMAP_V3 Wave 5): it graduated — its test and
+# its golden are part of `make check` (test-asteroid_run, golden game 10).
+# Its placeholder art is generated (tools/gen_game1_art.py); `make
+# game1-sheet` regenerates art + manifest + level through arc1-assetc.
+game1-sheet: programs/experimental/asteroid_run_sheet.h
+
+programs/experimental/asteroid_run_player.png programs/experimental/asteroid_run_enemies.png programs/experimental/asteroid_run_tiles.png programs/experimental/asteroid_run_level.txt: tools/gen_game1_art.py
+	python3 tools/gen_game1_art.py
+
+programs/experimental/asteroid_run_sheet.h: programs/experimental/asteroid_run_sheet.json programs/experimental/asteroid_run_player.png programs/experimental/asteroid_run_enemies.png programs/experimental/asteroid_run_tiles.png programs/experimental/asteroid_run_level.txt tools/arc1_assetc.py
+	python3 tools/arc1_assetc.py --assets programs/experimental/asteroid_run_sheet.json --out-dir programs/experimental
+
 experimental: $(GUEST_BUILD)/asteroid_run.arc1 $(GUEST_BUILD)/walkdemo.arc1 \
               $(GUEST_BUILD)/asset_demo.arc1 $(GUEST_BUILD)/map_demo.arc1
-	@echo "experimental: built $^ (map_demo is also covered by make check)"
+	@echo "experimental: built $^ (asteroid_run also has a make check test)"
 
-$(GUEST_BUILD)/asteroid_run.elf: programs/experimental/asteroid_run.c programs/arcade1.h programs/crt0.S programs/link.ld
+$(GUEST_BUILD)/asteroid_run.elf: programs/experimental/asteroid_run.c programs/experimental/asteroid_run_sheet.h programs/asset.h programs/text.h programs/arcade1.h programs/crt0.S programs/link.ld
 	@mkdir -p $(GUEST_BUILD)
 	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld -o $@ programs/crt0.S $<
 
@@ -423,7 +434,10 @@ CLI_SRC    := tools/arcade1.c src/arcade1/machine.c src/arcade1/memory.c \
 # $(SDK_DATA). programs/ stays the single source of truth — this rule
 # regenerates the copy whenever it changes — but the built binary needs no
 # checkout, no build/ tree and no packarc1 helper beside it.
-SDK_FILES  := crt0.S link.ld arcade1.h gfx.h arcade1_map.h
+# The embedded SDK `arcade1 build` unpacks in an empty directory. asset.h
+# and text.h joined for Game #1 (Wave 5): the tenth-game metric requires
+# `arcade1 build` to build asteroid_run.c, which includes both.
+SDK_FILES  := crt0.S link.ld arcade1.h gfx.h arcade1_map.h asset.h text.h
 SDK_DATA   := $(TESTDIR)/sdk_data.c
 
 $(SDK_DATA): $(addprefix programs/,$(SDK_FILES)) tools/gen_sdk_data.awk | $(TESTDIR)
@@ -841,6 +855,13 @@ test-run: $(CLI_BIN) $(ARC1_ROM_DIR)/color_demo.arc1 $(ARC1_ROM_DIR)/breakout.ar
 # this is the copy that builds and locks (tests/golden/m29game.txt).
 test-m29game: $(CLI_BIN) $(ARC1_ROM_DIR)/m29game.arc1 | $(TESTDIR)
 	sh tests/test_m29game.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# Game #1 (ROADMAP_V3 Wave 5): asteroid_run's narrative — score rises,
+# level clear, restart, game over, restart — through a committed input
+# script; its frame lines are golden game 10's (test-golden greps them
+# from this test's stdout).
+test-asteroid_run: $(CLI_BIN) $(ARC1_ROM_DIR)/asteroid_run.arc1 | $(TESTDIR)
+	sh tests/test_asteroid_run.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 test-pong: $(CLI_BIN) $(ARC1_ROM_DIR)/example_pong.arc1 | $(TESTDIR)
 	sh tests/test_pong.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)

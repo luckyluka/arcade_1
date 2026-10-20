@@ -1,0 +1,115 @@
+{
+  "format": 1,
+  "palettes": {
+    "game1": {
+      "bank": 4,
+      "colors": [
+        "#000000",
+        "#FFFFFF",
+        "#52CBFF",
+        "#3149E7",
+        "#FFA221",
+        "#FFF342",
+        "#A5AA94",
+        "#525152",
+        "#FFDF52",
+        "#9428E7",
+        "#4259F7"
+      ]
+    }
+  },
+  "sprites": [
+    {
+      "name": "player",
+      "file": "asteroid_run_player.png",
+      "palette": "game1",
+      "quantize": "exact",
+      "frames": 4,
+      "origin": [
+        8,
+        8
+      ],
+      "collision": [
+        1,
+        1,
+        14,
+        14
+      ]
+    },
+    {
+      "name": "foe",
+      "file": "asteroid_run_enemies.png",
+      "palette": "game1",
+      "quantize": "exact",
+      "frames": 3,
+      "collision": [
+        1,
+        1,
+        14,
+        14
+      ]
+    },
+    {
+      "name": "space",
+      "file": "asteroid_run_tiles.png",
+      "palette": "game1",
+      "quantize": "exact",
+      "frames": 1
+    }
+  ],
+  "animations": [
+    {
+      "name": "idle",
+      "sprite": "player",
+      "frames": [
+        0
+      ],
+      "ms": 200
+    },
+    {
+      "name": "boost",
+      "sprite": "player",
+      "frames": [
+        1,
+        2
+      ],
+      "ms": 100
+    },
+    {
+      "name": "fire",
+      "sprite": "player",
+      "frames": [
+        3
+      ],
+      "ms": 100
+    },
+    {
+      "name": "spin",
+      "sprite": "foe",
+      "frames": [
+        0,
+        1
+      ],
+      "ms": 150
+    }
+  ],
+  "maps": [
+    {
+      "name": "level",
+      "file": "asteroid_run_level.txt",
+      "tileset": "space",
+      "tile_w": 16,
+      "tile_h": 16,
+      "legend": {
+        ".": null,
+        "s": 0,
+        "n": 1,
+        "N": {
+          "tile": 1,
+          "flipX": true
+        },
+        "c": 2
+      }
+    }
+  ]
+}

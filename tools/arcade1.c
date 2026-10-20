@@ -1033,12 +1033,12 @@ static int cmd_test(int argc, char **argv)
 /* --- build: guest C program -> .arc1 image --------------------------------
  *
  * Self-contained by design. The guest SDK (crt0.S, link.ld, arcade1.h,
- * gfx.h, arcade1_map.h) is compiled into this binary as string literals
- * (tools/sdk_data.c, generated from programs/ by the Makefile), so
- * `arcade1 build` works in any directory with no checkout, no build/ tree
- * and no packarc1 helper beside it. The toolchain runs in a private temp
- * directory that is removed again on the way out; the only file left
- * behind is the image you asked for.
+ * gfx.h, arcade1_map.h, asset.h, text.h) is compiled into this binary as
+ * string literals (tools/sdk_data.c, generated from programs/ by the
+ * Makefile), so `arcade1 build` works in any directory with no checkout,
+ * no build/ tree and no packarc1 helper beside it. The toolchain runs in
+ * a private temp directory that is removed again on the way out; the only
+ * file left behind is the image you asked for.
  *
  * The one thing it cannot carry is riscv64-unknown-elf-gcc (and objcopy),
  * which must be on PATH.
@@ -1214,11 +1214,13 @@ static int cmd_build(int argc, char **argv)
     /* The SDK files, in the order sdk_data.h declares them. */
     static char *const sdk_names[] = {
         (char *)"crt0.S", (char *)"link.ld", (char *)"arcade1.h",
-        (char *)"gfx.h", (char *)"arcade1_map.h"
+        (char *)"gfx.h", (char *)"arcade1_map.h", (char *)"asset.h",
+        (char *)"text.h"
     };
     static char *const sdk_bodies[] = {
         (char *)sdk_crt0_S, (char *)sdk_link_ld, (char *)sdk_arcade1_h,
-        (char *)sdk_gfx_h, (char *)sdk_arcade1_map_h
+        (char *)sdk_gfx_h, (char *)sdk_arcade1_map_h, (char *)sdk_asset_h,
+        (char *)sdk_text_h
     };
     const size_t nsdk = sizeof sdk_names / sizeof sdk_names[0];
 
@@ -1336,8 +1338,9 @@ static int cmd_build(int argc, char **argv)
             wrote_syms = write_syms_file(nmout, syms, img_crc);
     }
 
-    /* elf + bin + nm output on top of the SDK files. */
-    char *tmpfiles[8];
+    /* elf + bin + nm output on top of the SDK files (sized from the SDK
+     * list, so a new SDK file cannot outrun it again). */
+    char *tmpfiles[sizeof sdk_names / sizeof sdk_names[0] + 3];
     for (size_t i = 0; i < nsdk; i++)
         tmpfiles[i] = sdk_names[i];
     tmpfiles[nsdk]     = (char *)"program.elf";

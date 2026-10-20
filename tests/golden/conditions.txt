@@ -19,6 +19,10 @@
 #        END{if(!found) print c}' tests/golden/<game>.txt
 # rom from the Makefile golden_rom mapping; conditions from each test recipe.
 # Re-verified 2026-10-19 (Wave 0 card 0.1 acceptance): all nine match.
+# 2026-10-20 (Wave 5): asteroid_run added as golden game 10 — the Game #1
+# three-act script (tests/inputs/asteroid_run.txt) that test-asteroid_run
+# runs; 760 frames, one pass.
+asteroid_run    760  tests/roms/asteroid_run.arc1    tests/inputs/asteroid_run.txt cli
 breakout       595  tests/roms/breakout.arc1        harness:tests/test_breakout.c    harness
 color          120  tests/roms/color_demo.arc1      none                            cli
 example-color  100  tests/roms/example_color.arc1   none                            cli

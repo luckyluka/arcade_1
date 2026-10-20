@@ -17,5 +17,7 @@ extern const char sdk_link_ld[];      /* programs/link.ld      */
 extern const char sdk_arcade1_h[];    /* programs/arcade1.h    */
 extern const char sdk_gfx_h[];        /* programs/gfx.h        */
 extern const char sdk_arcade1_map_h[];/* programs/arcade1_map.h */
+extern const char sdk_asset_h[];      /* programs/asset.h      */
+extern const char sdk_text_h[];       /* programs/text.h       */
 
 #endif /* ARCADE1_SDK_DATA_H */

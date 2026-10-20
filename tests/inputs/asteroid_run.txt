@@ -1,0 +1,21 @@
+# ASTEROID RUN scripted run (tests/test_asteroid_run.sh + golden game 10).
+# Later entries win, so a window can replace an earlier hold — but only for
+# its own frames: every act below is explicit so no hold leaks into the next.
+#
+# Act 1 — the level: idle (player anim state 0), fire in place (state 2),
+# then sweep right/left/right while firing (state 1). The sweep dodges the
+# aimed comets; the run reaches the end of the level -> state 2 = WIN.
+0 9 none
+10 89 a
+90 209 a right
+210 329 a left
+330 379 a right
+# START restarts after the win. Hands off: the aimed comets land and the
+# three lives go -> state 1 = GAME OVER. (The reseeded run is identical
+# every time: the same passive death, twice.)
+380 389 start
+390 529 none
+# START again: act 3 replays act 2's deterministic death, proving the
+# restart left no residue.
+530 539 start
+540 759 none
