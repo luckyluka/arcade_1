@@ -160,7 +160,7 @@ Do cards 0.1 (manifest) and 0.3 (a short run must fail), merge the teaching hint
 
 ### 4.5 Play window — unchanged, optional
 
-SDL2 optional, exit 3 when absent, not in `make check`, scripting and `--live` share no mutable state. Its only reason to exist is recording a human session as an input script. It is not part of the AI flow.
+SDL3 optional, exit 3 when absent, not in `make check`, scripting and `--live` share no mutable state. Its only reason to exist is recording a human session as an input script. It is not part of the AI flow.
 
 ## 5. Wave B — `arcade1 inspect` v1
 
