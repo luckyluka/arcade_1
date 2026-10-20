@@ -243,6 +243,45 @@ replayed here — the replay format is the script format.
 
 ---
 
+## Golden files
+
+A golden is a text file of per-frame hash lines. `arcade1 golden <game>
+--out FILE` writes one; `arcade1 test <game> --golden FILE` compares
+against one. The grammar:
+
+```
+# any line that does not start with "frame " is ignored
+frame    0 hash=0x423419F69344CE80 fb=0x2BB88FC67027469D
+frame    1 hash=0x67EB6F57FDF3BC86 fb=0xD4719AEC6C503FDD
+```
+
+* **Only `frame ` lines matter.** Blank lines, `#` comments and any header
+  a tool writes above the hashes are ignored — so a golden can carry its
+  own conditions (frames, input script, ROM) as comments.
+* **The first pass is the sequence `frame 0`, `frame 1`, ...** and it ends
+  at the first break in that sequence. A golden may carry a *second* pass
+  after it (a reset-and-replay recording); `arcade1 test` compares the
+  first pass only, because one `test` run cannot reproduce a reset.
+* **A golden shorter than the run is compared over its own length** — the
+  frames it has must match, and that is a pass.
+* **A run shorter than the golden's first pass is NOT a pass** — the
+  comparison reports how many of the golden's lines matched and exits 1,
+  because the missing frames are unexplained. Run more frames
+  (`--frames N`) to cover the golden.
+* On a difference the report names the first differing frame line and
+  prints the run line next to the golden line.
+
+Authoring a golden is one command:
+
+```sh
+arcade1 golden game.arc1 --input session.txt --frames 600 --out game.golden
+arcade1 test  game.arc1 --input session.txt --frames 600 --golden game.golden
+```
+
+The golden pins the exact image: the state hash folds in the guest's
+instruction counter, so a golden matches one ROM and one input script
+exactly. `tests/golden/conditions.txt` records those conditions per game.
+
 ## The other commands
 
 ```
@@ -259,6 +298,16 @@ arcade1 test <game.arc1|bin> [--golden FILE] [arcade1 run options]
     `frame N hash=.. fb=..` lines against FILE (a golden's first pass,
     the layout the tests/golden files use) and fails on any difference;
     --quiet is ignored in that mode.
+
+arcade1 golden <game.arc1|bin> --out FILE [arcade1 run options]
+    writes a golden file: the per-frame `frame N hash=.. fb=..` lines of
+    a run, and nothing else (no summary line, no var lines). --out FILE is
+    required; every other option is passed to `arcade1 run` (--frames N,
+    --input FILE, --vars LIST, --syms FILE, ...). --quiet cannot be used
+    (the frame lines ARE the golden) and is exit 2. The output is exactly
+    what `arcade1 test --golden FILE` compares against, so a golden can be
+    authored without reading the tool's source. Exit: 0 ok, 1 the run or the
+    write failed, 2 usage.
 
 arcade1 build <program.c> [output.arc1]
     compile a guest into an .arc1 image. The output must end in .arc1 —

@@ -1332,6 +1332,138 @@ static int cmd_test(int argc, char **argv)
     return rc;
 }
 
+/* --- golden subcommand: author a golden file from the CLI -----------------
+ *
+ * `arcade1 golden <game> --out FILE [run options]` writes the per-frame
+ * hash lines of a run to FILE — frame lines only, no summary, no var lines.
+ * The output is exactly the format `arcade1 test --golden FILE` compares
+ * against and exactly the format the files under tests/golden/ use, so a
+ * golden can be authored without reading the tool's source (round 3 findings
+ * 2, 3, 4 and 7: the grammar lived in code and only `make golden-update`
+ * was documented).
+ *
+ * The golden GRAMMAR (SDK.md "Golden files"):
+ *   - a line that does not start with "frame " is ignored (comments, blank
+ *     lines, a conditions header — all fine);
+ *   - the frame lines of the first pass are `frame 0`, `frame 1`, ... and
+ *     the sequence ends at the first break (a golden may carry a second
+ *     pass after a reset-and-replay);
+ *   - a golden SHORTER than the run is compared over its own length (that
+ *     is a pass for those lines);
+ *   - a run SHORTER than the golden's first pass is reported and is NOT a
+ *     pass (exit 1) — the missing frames are unexplained.
+ */
+static int cmd_golden(int argc, char **argv)
+{
+    const char *out = NULL;
+    char      **rest;
+    int         nrest = 0, rc;
+    char        tmpl[] = "/tmp/arcade1-golden-XXXXXX";
+    int         saved = -1, fd;
+    FILE       *src, *dst;
+    char        line[512];
+    unsigned    lines = 0;
+
+    if (argc < 1) {
+        fprintf(stderr,
+                "usage: arcade1 golden <game.arc1|bin> --out FILE [options]\n"
+                "  writes the per-frame hash lines of a run to FILE — frame\n"
+                "  lines only, the format `arcade1 test --golden FILE` reads.\n"
+                "  --out FILE     where to write the golden (required)\n"
+                "  every other option is passed to `arcade1 run`\n"
+                "  (--frames N, --input FILE, --vars LIST, --syms FILE, ...)\n");
+        return 2;
+    }
+
+    rest = calloc((size_t)argc, sizeof *rest);
+    if (!rest)
+        return 1;
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--out") && i + 1 < argc) {
+            out = argv[++i];
+            continue;
+        }
+        if (!strcmp(argv[i], "--quiet")) {
+            fprintf(stderr, "arcade1 golden: --quiet cannot be used — the "
+                    "frame lines are the golden\n");
+            free(rest);
+            return 2;
+        }
+        rest[nrest++] = argv[i];
+    }
+    if (!out) {
+        fprintf(stderr, "arcade1 golden: --out FILE is required\n"
+                "usage: arcade1 golden <game.arc1|bin> --out FILE [options]\n");
+        free(rest);
+        return 2;
+    }
+
+    /* Run with stdout captured, then keep only the frame lines. */
+    fflush(stdout);
+    fd = mkstemp(tmpl);
+    if (fd < 0) {
+        fprintf(stderr, "arcade1 golden: cannot create a temp file\n");
+        free(rest);
+        return 1;
+    }
+    saved = dup(1);
+    if (saved < 0 || dup2(fd, 1) < 0) {
+        close(fd);
+        free(rest);
+        return 1;
+    }
+    close(fd);
+
+    rc = cmd_run(nrest, rest);
+    free(rest);
+
+    fflush(stdout);
+    dup2(saved, 1);
+    close(saved);
+
+    if (rc != 0) {
+        unlink(tmpl);
+        return rc;
+    }
+
+    src = fopen(tmpl, "r");
+    if (!src) {
+        fprintf(stderr, "arcade1 golden: cannot read the captured run\n");
+        unlink(tmpl);
+        return 1;
+    }
+    dst = fopen(out, "w");
+    if (!dst) {
+        fprintf(stderr, "arcade1 golden: cannot write %s\n", out);
+        fclose(src);
+        unlink(tmpl);
+        return 1;
+    }
+    while (fgets(line, sizeof line, src)) {
+        if (strncmp(line, "frame ", 6) != 0)
+            continue;                       /* frame lines only */
+        if (fputs(line, dst) == EOF) {
+            fprintf(stderr, "arcade1 golden: cannot write %s\n", out);
+            fclose(src);
+            fclose(dst);
+            unlink(tmpl);
+            return 1;
+        }
+        lines++;
+    }
+    fclose(src);
+    fclose(dst);
+    unlink(tmpl);
+
+    if (lines == 0) {
+        fprintf(stderr, "arcade1 golden: the run produced no frame lines — "
+                "nothing was written to %s\n", out);
+        return 1;
+    }
+    printf("arcade1 golden: wrote %u frame lines to %s\n", lines, out);
+    return 0;
+}
+
 /* --- build subcommand: compile a guest C program into a .arc1 image ------ */
 /* --- build: guest C program -> .arc1 image --------------------------------
  *
@@ -2119,6 +2251,7 @@ int main(int argc, char **argv)
                 "           opens the play window (SDL3) driven by your keyboard\n"
                 "  capture  run + dump frames (default dir: captures/)\n"
                 "  test     smoke run; --golden FILE compares per-frame hashes\n"
+                "  golden   write a golden file: `golden game --out FILE`\n"
                 "  build    compile a guest C program into a .arc1 image\n"
                 "  inspect  structured last-frame report: KEY value lines\n"
                 "           (--json, --regs, --commands, --at X,Y)\n"
@@ -2132,6 +2265,8 @@ int main(int argc, char **argv)
         return cmd_capture(argc - 2, argv + 2);
     if (!strcmp(argv[1], "test"))
         return cmd_test(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "golden"))
+        return cmd_golden(argc - 2, argv + 2);
     if (!strcmp(argv[1], "build"))
         return cmd_build(argc - 2, argv + 2);
     if (!strcmp(argv[1], "inspect"))

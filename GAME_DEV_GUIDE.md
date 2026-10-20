@@ -272,6 +272,18 @@ captured frames, determinism via two identical runs. Then:
 3. `make golden-update` — runs the test and records its frame hashes into
    `tests/golden/<name>.txt`.
 
+To author a golden by hand (outside the Makefile), the CLI does it too:
+
+```sh
+arcade1 golden game.arc1 --input session.txt --frames 600 --out game.golden
+arcade1 test  game.arc1 --input session.txt --frames 600 --golden game.golden
+```
+
+`arcade1 golden` writes the per-frame hash lines and nothing else — the
+exact format the committed goldens use. The grammar (what counts as a
+frame line, what a shorter golden or a shorter run means) is in
+[SDK.md](SDK.md#golden-files).
+
 From then on `make check` re-runs the game against the committed image
 and diffs every frame hash; a mismatch means the game's behaviour
 changed (a golden change is a behaviour change — commit it deliberately
