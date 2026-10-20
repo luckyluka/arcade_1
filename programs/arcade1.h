@@ -2,6 +2,15 @@
 #define ARCADE1_H
 #include "gfx.h"
 
+/* The freestanding runtime (crt0.S) provides exactly these three libc
+ * functions — the ones GCC emits on its own for struct copies, array
+ * initialisers and aggregate zeroing. Nothing else libc exists: no printf,
+ * no malloc, no string functions. (Signatures match GCC's builtins on
+ * rv32 where size_t is `unsigned`.) */
+void *memcpy(void *dst, const void *src, unsigned n);
+void *memmove(void *dst, const void *src, unsigned n);
+void *memset(void *dst, int c, unsigned n);
+
 #define BTN_UP 0x1u
 #define BTN_DOWN 0x2u
 #define BTN_LEFT 0x4u

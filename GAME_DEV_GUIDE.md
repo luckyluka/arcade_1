@@ -202,6 +202,16 @@ flags (architecture, freestanding, linker script) are fixed by the build
 system — do not hand-roll them; a guest that builds differently may
 behave differently.
 
+There is no libc. The guest runtime (crt0) provides exactly the three
+functions the compiler itself emits — `memcpy`, `memset`, `memmove` — so
+struct assignment, array initialisers and `= {0}` locals link out of the
+box (this used to be the #1 build trap: `undefined reference to memcpy`).
+Nothing else libc-ish exists: no `printf`, no `malloc`, no string
+functions. Use the arcade1.h API for I/O and fixed arrays for storage.
+One more boundary: the machine is RV32IM and the SDK links no libgcc
+helpers, so 64-bit arithmetic (`uint64_t` maths) fails at link — keep to
+32-bit types.
+
 ## Run and iterate
 
     arcade1 run game.arc1 --frames 600 --quiet

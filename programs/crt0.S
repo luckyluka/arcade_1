@@ -45,3 +45,73 @@ _start:
 5:  j    5b
 
     .size _start, . - _start
+
+/* Freestanding C runtime minimum: the three functions GCC emits on its own
+ * behalf. Assigning a struct, initialising an array or zeroing an aggregate
+ * compiles to a memcpy/memset call, so without these the build dies at link
+ * with "undefined reference to memcpy" — asteroid_run hit exactly that (all
+ * its per-slot spin states were hand-listed to dodge the struct copy).
+ *
+ * Each is a straight byte loop: correctness over speed. Guest copies are
+ * small struct-sized things, and large fills are the machine's job
+ * (arcade1_clear_fb), not the guest's.
+ *
+ * They live in .arcade1.text, which link.ld appends AFTER the guest's own
+ * code and rodata, so adding them here cannot move a single address in an
+ * already-built guest: every committed golden stays reproducible. */
+    .section .arcade1.text, "ax", @progbits
+
+    .global memcpy
+    .type   memcpy, @function
+memcpy:
+    mv   t0, a0                       /* remember dst: memcpy returns it */
+1:  beqz a2, 2f
+    lbu  t1, 0(a1)
+    sb   t1, 0(a0)
+    addi a0, a0, 1
+    addi a1, a1, 1
+    addi a2, a2, -1
+    j    1b
+2:  mv   a0, t0
+    ret
+    .size memcpy, . - memcpy
+
+    .global memset
+    .type   memset, @function
+memset:
+    mv   t0, a0
+    andi a1, a1, 0xff                 /* c arrives as an int; store its byte */
+1:  beqz a2, 2f
+    sb   a1, 0(a0)
+    addi a0, a0, 1
+    addi a2, a2, -1
+    j    1b
+2:  mv   a0, t0
+    ret
+    .size memset, . - memset
+
+    .global memmove
+    .type   memmove, @function
+memmove:
+    mv   t0, a0
+    beq  a0, a1, 4f                    /* same pointer: nothing to copy */
+    bltu a0, a1, 1f                    /* dst below src: forward is safe */
+    add  a1, a1, a2                    /* else copy backward from the ends */
+    add  a0, a0, a2
+3:  beqz a2, 4f
+    addi a1, a1, -1
+    addi a0, a0, -1
+    lbu  t1, 0(a1)
+    sb   t1, 0(a0)
+    addi a2, a2, -1
+    j    3b
+1:  beqz a2, 4f
+    lbu  t1, 0(a1)
+    sb   t1, 0(a0)
+    addi a0, a0, 1
+    addi a1, a1, 1
+    addi a2, a2, -1
+    j    1b
+4:  mv   a0, t0
+    ret
+    .size memmove, . - memmove

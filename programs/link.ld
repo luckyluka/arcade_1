@@ -28,6 +28,11 @@ SECTIONS
         *(.text .text.*)
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
+        *(.arcade1.text)                 /* crt0's memcpy/memset/memmove, */
+                                         /* appended last: the guest's own */
+                                         /* code and rodata keep their      */
+                                         /* addresses when the runtime      */
+                                         /* grows (goldens stay stable)     */
     } > rom
 
     .data :
