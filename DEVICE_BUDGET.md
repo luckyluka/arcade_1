@@ -6,14 +6,65 @@ figure below is labelled **[M] MEASURED** (read from the machine's own
 counters) or **[E] ESTIMATED** (arithmetic on those measurements — no
 hardware has been built or simulated).
 
-> **Resolution note (M25).** Every pixel-based number here (`px`, `bytes`, the
-> per-game and worst-case tables, and the derived FPGA cycle budgets) was
-> measured at the **320×240** screen that was current during Task C.
-> **M25 changed the screen to 480×270**, so full-screen pixel work scales up by
-> 480·270 / 320·240 = **1.6875×**. The numbers below remain a valid record of
-> the measurements taken then; re-run `make test-video-worst` / the game tests
-> at 480×270 to refresh them before relying on them for the new resolution.
+> **Resolution note (M25).** Every pixel-based number in the sections below
+> (`px`, `bytes`, the per-game and worst-case tables, and the derived FPGA
+> cycle budgets) was measured at the **320×240** screen that was current
+> during Task C. **M25 changed the screen to 480×270**, so full-screen pixel
+> work scales up by 480·270 / 320·240 = **1.6875×**. The numbers below
+> remain a valid record of the measurements taken then; **section 0
+> re-measures the games at the real resolution**.
 > The cost-model **decision is deferred** (see the end of this file).
+
+## 0. Re-measured at 480×270 (2026-10-20)
+
+**[M] MEASURED** at 480×270 on 2026-10-20 by `tools/measure_budget.sh`, which
+runs `arcade1 inspect` over every golden game plus Petal Blade and writes
+`docs/experiments/budget-480x270.csv` (the raw numbers, one row per game).
+The script is measurement only — it changes no machine state, and no source
+changed with it.
+
+Sampling: `inspect` reports the **last** frame's counters, so the script
+sweeps the frame count with a stride of 50 (one sample per step; `STRIDE=1`
+measures every frame, at quadratic cost). `instret` is retired instructions
+in that frame, `px` is pixels written after clipping, `cmd` is video commands
+issued. **Overdraw** = `px` / 129 600 (the 480×270 screen): how many times
+over the machine painted the whole screen in one frame.
+
+| game | frames | samples | `inst` avg/max | `px` avg/max | `cmd` avg/max | overdraw avg/max |
+|---|---:|---:|---:|---:|---:|---:|
+| breakout       | 1190 | 24 |  1,716 /  1,819 | 144,356 / 144,356 | 105 / 105 | 1.114 / 1.114 |
+| tetris         |  600 | 12 |  7,975 /  9,555 | 173,124 / 173,124 | 316 / 316 | 1.336 / 1.336 |
+| platformer     |  616 | 13 |    907 /  6,324 | 173,838 / 173,846 |  18 /  18 | 1.341 / 1.341 |
+| scroll         |  240 |  5 |  3,467 / 17,140 | 180,900 / 188,604 |   5 /   5 | 1.396 / 1.455 |
+| color          |  240 |  5 | 11,881 / 59,115 | 256,964 / 258,211 |   7 /   7 | 1.983 / 1.992 |
+| example_pong   | 2400 | 48 |     47 /    168 | 130,144 / 130,144 |   5 /   5 | 1.004 / 1.004 |
+| example_snake  |   60 |  2 |  1,185 /  2,278 | 130,000 / 130,000 |   6 /   7 | 1.003 / 1.003 |
+| example_color  |  100 |  2 |  8,600 / 17,158 | 209,872 / 212,252 |   4 /   4 | 1.619 / 1.638 |
+| m29game        | 1800 | 36 |  7,914 / 34,765 | 163,092 / 171,044 | 247 / 306 | 1.258 / 1.320 |
+| asteroid_run   |  760 | 16 |  2,456 /  4,950 | 152,371 / 156,315 |  53 /  62 | 1.176 / 1.206 |
+| flappy         |  520 | 11 |    591 /    602 | 150,895 / 151,086 |  26 /  28 | 1.164 / 1.166 |
+| **petalblade** | 1202 | 25 |  3,620 /  5,808 | 335,029 / 335,816 |  72 /  72 | **2.585 / 2.591** |
+
+What the numbers say, without proposing a cost model:
+
+* **Pixel work dominates, and it is not close.** The heaviest frame in the
+  set is Petal Blade's: 335 816 pixels written in a frame whose screen holds
+  129 600 — **2.59 screens painted per frame** — while that same frame
+  retires only 3 620 instructions. The CPU is not the constraint anywhere in
+  this table; the blitter's write port is.
+* **A full-screen clear alone is 1.0.** Every game sits at or above 1.0
+  because `CLEAR` writes every pixel; the games that stay near 1.0
+  (example_pong 1.004, example_snake 1.003) draw almost nothing else, and
+  the ones that draw a world on top pay for it (color 1.98, petalblade
+  2.59).
+* **Petal Blade is the only game above 2×**, and it is there because it
+  paints a parallax background *and* a tilemap *and* the characters every
+  frame. Its 72 commands per frame are unremarkable; the pixels are not.
+* **The 320×240 numbers further down are not comparable to these.** At
+  320×240 a full-screen clear was 76 800 pixels; the same clear at
+  480×270 is 129 600 — the 1.6875× factor the resolution note predicts. The games'
+  *own* work (sprites, tilemaps) did not change, which is why the ratios
+  here are close to the old ones while the absolute pixel counts are not.
 
 How the measurements were taken:
 
