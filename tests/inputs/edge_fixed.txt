@@ -1,0 +1,19 @@
+# edge_fixed.txt — the FIX for the edge-trigger trap (ROADMAP_V4 card 4.3).
+#
+# The same intent as edge_trap.txt (restart, then keep the bird flying),
+# written so every press is a real edge: release A for one frame between
+# two presses. Frame 6 restarts (its edge is spent on the restart), frame 7
+# releases, frame 8 is a fresh edge and flaps — and so on.
+#
+# With this script the bird is still alive at frame 40 (flaps = 4); with
+# edge_trap.txt it died at frame 10 (flaps = 0).
+6    6    a
+7    7    none
+8    8    a
+9    17   none
+18   18   a
+19   27   none
+28   28   a
+29   37   none
+38   38   a
+39   40   none

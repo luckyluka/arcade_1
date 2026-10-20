@@ -1,0 +1,14 @@
+# edge_trap.txt — the EDGE-TRIGGER TRAP (ROADMAP_V4 card 4.3).
+#
+# The author wants to restart and then keep the bird flying. They hold A:
+#
+#     6    40   a
+#
+# A held button is ONE press (the edge at frame 6) and then "still down".
+# The edge lands while the game is over, so it is spent on the RESTART —
+# and the flaps the author meant never happen. The bird falls and the run
+# dies again at frame 10. Nothing in the output says "your hold did
+# nothing"; the session just diverges from the plan.
+#
+# The fix: release A for one frame (see edge_fixed.txt).
+6    40   a

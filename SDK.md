@@ -40,6 +40,9 @@ arcade1 run <game.arc1|bin> [options]
   --var-every K        also print the selected variables every K frames
   --record FILE         write the applied per-frame buttons to FILE, in the
                         input script format (run-length, "none" = idle)
+  --pad-trace FILE      write the applied pad per frame to FILE, one line
+                        per frame: "frame N pad 0xXX" (the pad the guest
+                        saw — see "Edge-triggered buttons and input scripts")
   --quiet              suppress the per-frame hash lines (summary only)
   --inspect            print the final frame, pc, instruction count and all
                        32 registers after the run (the `inspect` subcommand
@@ -130,6 +133,65 @@ Example — idle for a second, then hold right + A for half a second:
 0   59  none
 60  119 right a
 ```
+
+### Edge-triggered buttons and input scripts
+
+**A press is an edge, not a hold.** Most games edge-detect their buttons
+(press = "down now, up last frame"), because a hold is a hold. A script
+line `6 40 a` therefore gives the guest **one** press — at frame 6 — and
+then "still down" for 35 frames. It does not give 35 presses.
+
+The trap: if the single edge lands while the game is in its game-over
+state, the edge is spent on the **restart**, and the presses you meant to
+give it afterwards never happen. Nothing in the output says so — the
+session simply diverges from your plan (in Flappy, the bird fell out of the
+sky ~40 frames later).
+
+**The fix: release the button for one frame.** A released button is what
+makes the next press a new edge.
+
+Both scripts below are in the repo, and the test
+(`tests/test_pad_trace.sh`) runs exactly them, so this example cannot
+drift away from the truth:
+
+* `tests/inputs/edge_trap.txt` — the trap: `6 40 a` (A held).
+* `tests/inputs/edge_fixed.txt` — the fix: release A at frame 7, press
+  again at frame 8, and keep releasing between presses.
+
+Against `tests/guests/probe_edge.c` (the smallest guest that shows the
+trap — it counts the presses, the flaps and the restarts):
+
+```
+$ arcade1 run probe_edge.bin --input tests/inputs/edge_trap.txt  --frames 40 --vars state,presses,flaps,restarts
+var state = 1        # dead: the run ended again
+var presses = 1      # one edge — the hold was ONE press
+var flaps = 0        # and it was spent on the restart
+var restarts = 1
+
+$ arcade1 run probe_edge.bin --input tests/inputs/edge_fixed.txt --frames 40 --vars state,presses,flaps,restarts
+var state = 0        # still alive
+var presses = 5      # five real edges
+var flaps = 4        # four of them flapped
+var restarts = 1
+```
+
+To see the pad the guest actually saw, run with a pad trace:
+
+```
+$ arcade1 run probe_edge.bin --input tests/inputs/edge_fixed.txt --frames 9 --pad-trace pad.txt
+$ cat pad.txt
+frame    0 pad 0x00
+...
+frame    6 pad 0x10     # the press that restarts
+frame    7 pad 0x00     # the release — this is what makes the next press an edge
+frame    8 pad 0x10     # a fresh edge: this one flaps
+```
+
+`--pad-trace FILE` writes one line per frame — `frame N pad 0xXX` — the
+pad the guest saw, in the same bit layout as the `INPUT_PAD` register
+(up 0x01, down 0x02, left 0x04, right 0x08, A 0x10, B 0x20, START 0x40,
+SELECT 0x80). Use it whenever a session diverges from your plan: it shows
+exactly which frames carried a press.
 
 ### Worked examples — the three sharp edges
 

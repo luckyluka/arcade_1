@@ -93,7 +93,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-ray test-sandbox test-systems test-persist roms-update \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
-        test-run test-info test-golden-cli
+        test-run test-info test-golden-cli test-pad-trace
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -141,7 +141,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-m29game test-syms test-capture-png test-text test-arc1assetc \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
-        test-golden-cli
+        test-golden-cli test-pad-trace
 
 all: $(TARGET)
 
@@ -334,6 +334,13 @@ test-info: $(CLI_BIN) $(TESTDIR)/test_info tests/test_info.sh
 # game --out FILE` writes the frame lines `arcade1 test --golden` reads.
 test-golden-cli: $(CLI_BIN) tests/test_golden_cli.sh
 	sh tests/test_golden_cli.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# ROADMAP_V4 card 4.3: the pad trace (`arcade1 run --pad-trace FILE`) and
+# the edge-trigger trap. The probe guest (tests/guests/probe_edge.c) is the
+# smallest guest that shows the trap: a held A is one edge, spent on the
+# restart; the fix releases for one frame.
+test-pad-trace: $(CLI_BIN) $(GUEST_BUILD)/probe_edge.bin tests/test_pad_trace.sh
+	sh tests/test_pad_trace.sh $(CLI_BIN) $(GUEST_BUILD) $(RISCV_NM)
 
 # Wave B card B2 (ROADMAP_V3 §5): inspect command records + pixel
 # provenance. tests/guests/probe_cmds.c draws a sprite, then a FILL

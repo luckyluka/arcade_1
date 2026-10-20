@@ -210,6 +210,21 @@ static void input_for_frame(unsigned frame, arcade1_input_t *out)
             *out = g_entries[i].in;
 }
 
+/* The pad byte the guest sees in the INPUT_PAD register — the same bit
+ * layout the machine maps (machine.c: machine_mmio_read), spelled with the
+ * machine's own macros so the two can never drift. */
+static unsigned pad_bits(const arcade1_input_t *in)
+{
+    return (in->up     ? ARCADE1_INPUT_BIT_UP     : 0u) |
+           (in->down   ? ARCADE1_INPUT_BIT_DOWN   : 0u) |
+           (in->left   ? ARCADE1_INPUT_BIT_LEFT   : 0u) |
+           (in->right  ? ARCADE1_INPUT_BIT_RIGHT  : 0u) |
+           (in->a      ? ARCADE1_INPUT_BIT_A      : 0u) |
+           (in->b      ? ARCADE1_INPUT_BIT_B      : 0u) |
+           (in->start  ? ARCADE1_INPUT_BIT_START  : 0u) |
+           (in->select ? ARCADE1_INPUT_BIT_SELECT : 0u);
+}
+
 /* --- Record (write side of the replay primitive) ----------------------------
  * Run-length encode the applied per-frame button state to an open FILE in the
  * input script format: one "<first> <last> <buttons...>" line per run of
@@ -833,6 +848,7 @@ static int cmd_run(int argc, char **argv)
     const char *capture = NULL, *capture_dir = NULL;
     const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
+    const char *pad_trace_path = NULL;
     unsigned frames = 600, capture_every = 1, var_every = 0;
     unsigned scale = 1;              /* capture upscale, 1..8 (A3) */
     int format_png = 0;              /* capture-dir extension: .png? */
@@ -847,6 +863,7 @@ static int cmd_run(int argc, char **argv)
     const void *rom;
     size_t rom_size;
     arcade1_input_t in;
+    FILE *pad_trace = NULL;
 
     for (int i = 0; i < argc; i++) {
         const char *a = argv[i];
@@ -870,6 +887,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--syms") && i + 1 < argc)     syms_path = argv[++i];
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(a, "--pad-trace") && i + 1 < argc) pad_trace_path = argv[++i];
         else if (!strcmp(a, "--inspect")) inspect = 1;
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
         else if (!strcmp(a, "--strict"))                   strict = 1;
@@ -891,7 +909,7 @@ static int cmd_run(int argc, char **argv)
                 "                   [--capture-every K] [--format png|ppm]\n"
                 "                   [--scale N] [--record FILE] [--live]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
-                "                   [--quiet] [--strict]\n"
+                "                   [--pad-trace FILE] [--quiet] [--strict]\n"
                 "  --strict exits non-zero if any draw read a source address\n"
                 "  outside ROM/RAM (they silently draw nothing); see below.\n"
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
@@ -901,6 +919,8 @@ static int cmd_run(int argc, char **argv)
                 "  --format sets --capture-dir's extension (default ppm);\n"
                 "  --scale N upscales captures N x, nearest neighbour (1..8).\n"
                 "  --record writes the applied buttons in the script format.\n"
+                "  --pad-trace FILE writes one line per frame:\n"
+                "  'frame N pad 0xXX' — the pad the guest actually saw.\n"
                 "  --live opens the play window (SDL3): arrows/WASD d-pad,\n"
                 "  Z -> A, X -> B, Enter -> START, --scale N sets the window\n"
                 "  size; R ends the session writing --record's script, ESC\n"
@@ -951,6 +971,17 @@ static int cmd_run(int argc, char **argv)
                              : record_open(record_path, frames);
         if (rec != 0)
             return 1;
+    }
+
+    /* The pad trace: one line per frame, the pad the guest actually saw.
+     * Opened before the run so an unwritable path fails before any work. */
+    if (pad_trace_path) {
+        pad_trace = fopen(pad_trace_path, "w");
+        if (!pad_trace) {
+            fprintf(stderr, "arcade1 run: cannot write the pad trace '%s'\n",
+                    pad_trace_path);
+            return 1;
+        }
     }
 
     /* Load the image (accept a raw flat binary too, like the tests). */
@@ -1015,6 +1046,8 @@ static int cmd_run(int argc, char **argv)
             record_close(0);
             unlink(record_path);
         }
+        if (pad_trace)
+            fclose(pad_trace);
         live_shutdown();
         return 3;
     }
@@ -1034,6 +1067,8 @@ static int cmd_run(int argc, char **argv)
         }
         arcade1_set_input(&m, &in);
         record_frame(fr, &in);
+        if (pad_trace)
+            fprintf(pad_trace, "frame %4u pad 0x%02X\n", fr, pad_bits(&in));
         arcade1_run_frame(&m);
         if (live)
             live_present(&m);           /* upload + show + pace to 60 Hz */
@@ -1055,12 +1090,17 @@ static int cmd_run(int argc, char **argv)
                      format_png ? "png" : "ppm");
             if (write_capture(path, arcade1_framebuffer(&m), scale) != 0) {
                 record_close(fr);
+                if (pad_trace)
+                    fclose(pad_trace);
                 if (live)
                     live_shutdown();
                 return 1;
             }
         }
     }
+
+    if (pad_trace)
+        fclose(pad_trace);
 
     /* The recorded runs always end on the last frame actually played. */
     record_close(fr ? fr - 1 : 0);

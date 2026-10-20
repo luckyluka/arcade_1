@@ -259,6 +259,52 @@ provenance).
 `--strict` fails the run if any draw read a source address outside
 ROM/RAM (see SDK.md for the full flag reference).
 
+### Edge-triggered buttons and input scripts
+
+**A press is an edge, not a hold.** Games edge-detect their buttons (press
+= "down now, up last frame"), so a script line `6 40 a` gives the guest
+**one** press — at frame 6 — and then "still down". It is not 35 presses.
+
+The trap: if that one edge lands while the game is in its game-over state,
+the edge is spent on the **restart** and the presses you meant to give it
+never happen. The session then diverges from your plan silently (in
+Flappy, the bird fell out of the sky ~40 frames later).
+
+**The fix: release the button for one frame** — a release is what makes
+the next press a new edge.
+
+Both scripts are in the repo and the test runs exactly them, so this
+example cannot drift:
+
+* `tests/inputs/edge_trap.txt` — the trap: `6 40 a` (A held).
+* `tests/inputs/edge_fixed.txt` — the fix: release A at frame 7, press
+  again at frame 8, release between every press.
+
+```
+$ arcade1 run probe_edge.bin --input tests/inputs/edge_trap.txt  --frames 40 --vars state,presses,flaps,restarts
+var state = 1        # dead again: the edge was spent on the restart
+var presses = 1      # one edge — the hold was ONE press
+var flaps = 0        # no flap ever happened
+var restarts = 1
+
+$ arcade1 run probe_edge.bin --input tests/inputs/edge_fixed.txt --frames 40 --vars state,presses,flaps,restarts
+var state = 0        # still alive
+var presses = 5      # five real edges
+var flaps = 4
+var restarts = 1
+```
+
+When a session diverges from your plan, look at the pad the guest actually
+saw:
+
+```sh
+arcade1 run game.arc1 --input session.txt --frames 200 --pad-trace pad.txt
+```
+
+`pad.txt` holds one line per frame — `frame N pad 0xXX` — which shows
+exactly which frames carried a press (A = 0x10). The full worked example
+is in [SDK.md](SDK.md#edge-triggered-buttons-and-input-scripts).
+
 ## Test and golden-lock it
 
 Give the game a shell test in `tests/test_<name>.sh` in the style of
