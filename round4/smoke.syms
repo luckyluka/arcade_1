@@ -1,0 +1,6 @@
+# arc1-syms crc32=0x6efff381
+20000004 B _ebss
+20000004 D _edata
+20000004 B _sbss
+20000000 D _sdata
+20000000 d x

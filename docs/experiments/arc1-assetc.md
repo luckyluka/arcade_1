@@ -257,6 +257,21 @@ plus a packed `NAME_tiles` blob and `NAME_COLS/ROWS/TILE_W/TILE_H/
 TILES` defines. `tests/test_arc1assetc.sh` grew a Wave 4 section
 (134 → 185 checks).
 
+### Round-5 usage notes (PETAL BLADE)
+
+- **Define names are map-name prefixed.** A map named `level1` emits
+  `LEVEL1_COLS/ROWS/TILE_W/TILE_H/TILES/tiles/cells` — not `LEVEL_TILE_W`.
+  If you also keep a hand-written level header (`level.h` with
+  `LEVEL_COLS`/`LEVEL_ROWS`), the two sets sit side by side; do not assume
+  the map's `*_COLS` come from it.
+- **Cells are for rendering, not collision.** Dedup means a cell's `[15:0]`
+  is a *dedup index*, not a tile type — solidity cannot be read from it.
+  Emit a parallel collision grid from the same generator (round 5:
+  `level.h`'s `level_solid[]`); it is a small RAM cost (1 B/cell) and the
+  only reliable source of truth for physics.
+- **Dedup is a large ROM win.** A 130×17 level of grass/dirt/stone uses 7
+  unique tiles, so the whole field costs ~1 KB of tile data.
+
 ## Validators are the retraction's survivors only (V3 §4.3)
 
 Kept: even `tile_w` (the 4-bit blit rejects odd widths,

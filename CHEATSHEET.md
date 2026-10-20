@@ -67,6 +67,12 @@ power-on camera is (0,0), so early draws are unaffected.
 `gfx_pal_upload(start, data, n)` writes n entries from `start`, auto-incrementing.
 `gfx_pal_bank(b)` sets the bank (0..15) used by sprite4: pixel v draws PALETTE[bank*16 + v].
 
+**Every colour argument is a 16-bit RGB565 word** (`(r>>3)<<11 | (g>>2)<<5 |
+(b>>3)`). The device masks it to 16 bits, so a 24-bit `#RRGGBB` literal (e.g.
+`0xE8C0A0`) is silently truncated to `0xC0A0` and renders the wrong colour —
+a cloud came out magenta, HUD text pink. Convert before passing; the
+`arcade1_pal(i, rgb)` helper takes the same RGB565 word.
+
 ## Sprites, 1-bit
 `gfx_sprite(x, y, img, w, h, color)`: img is h rows of (w+7)/8 bytes,
 MSB = leftmost pixel; set bits draw `color`, clear bits are transparent.

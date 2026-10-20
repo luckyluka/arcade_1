@@ -1,0 +1,395 @@
+{
+ "format": 1,
+ "palettes": {
+  "hero": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  },
+  "oni": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#180C10",
+    "#6B1C21",
+    "#A53431",
+    "#CE5942",
+    "#EF8A63",
+    "#E7D7AD",
+    "#AD9263",
+    "#F7CF4A",
+    "#211018",
+    "#293C6B",
+    "#42598C",
+    "#392821",
+    "#9C8A7B",
+    "#F7E7CE",
+    "#CEA239"
+   ]
+  },
+  "beetle": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#081410",
+    "#183821",
+    "#296131",
+    "#4A9642",
+    "#84C75A",
+    "#5A4129",
+    "#DE4529",
+    "#F7AA84",
+    "#102018",
+    "#214129",
+    "#EFF3E7",
+    "#CEB242",
+    "#103018",
+    "#101C10",
+    "#7B694A"
+   ]
+  },
+  "terrain": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#100C18",
+    "#292029",
+    "#423039",
+    "#5A4142",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#7BAA5A",
+    "#393442",
+    "#52515A",
+    "#73717B",
+    "#8C8273",
+    "#6B6573",
+    "#ADA2B5",
+    "#AD7952"
+   ]
+  },
+  "ridge": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#101029",
+    "#181439",
+    "#211C4A",
+    "#292852",
+    "#393063",
+    "#423C73",
+    "#524584",
+    "#5A5594",
+    "#6B61A5",
+    "#7B71B5",
+    "#8C82C6",
+    "#9C92CE",
+    "#B5AAD6",
+    "#E7AA7B",
+    "#CE8A63"
+   ]
+  },
+  "sky": {
+   "bank": 5,
+   "colors": [
+    "#000000",
+    "#F7EBCE",
+    "#DECFAD",
+    "#BDAE8C",
+    "#AD9A7B",
+    "#EFC3A5",
+    "#DEAA9C",
+    "#4A4563",
+    "#6B5D7B",
+    "#94869C",
+    "#C6AAB5",
+    "#E7B69C",
+    "#CE927B",
+    "#FFFFFF",
+    "#211831",
+    "#7B6D8C"
+   ]
+  },
+  "mid": {
+   "bank": 6,
+   "colors": [
+    "#000000",
+    "#080C21",
+    "#101431",
+    "#181839",
+    "#212042",
+    "#292852",
+    "#31305A",
+    "#393863",
+    "#42416B",
+    "#4A497B",
+    "#525184",
+    "#6B4952",
+    "#8C5952",
+    "#A5695A",
+    "#080818",
+    "#6361A5"
+   ]
+  },
+  "near": {
+   "bank": 7,
+   "colors": [
+    "#000000",
+    "#080818",
+    "#080C18",
+    "#101021",
+    "#181831",
+    "#211C39",
+    "#212042",
+    "#29284A",
+    "#39305A",
+    "#4A3439",
+    "#734542",
+    "#8C594A",
+    "#101018",
+    "#423C6B",
+    "#29244A",
+    "#5A557B"
+   ]
+  },
+  "fx": {
+   "bank": 8,
+   "colors": [
+    "#000000",
+    "#181421",
+    "#8C6921",
+    "#C69A31",
+    "#EFD36B",
+    "#FFF3B5",
+    "#8C385A",
+    "#C6698C",
+    "#EFA2B5",
+    "#FFE3EF",
+    "#EFF7FF",
+    "#9CB6D6",
+    "#C63842",
+    "#7B2431",
+    "#FFFFFF",
+    "#392C42"
+   ]
+  },
+  "goal": {
+   "bank": 9,
+   "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#EF8A5A",
+    "#211821",
+    "#DEB65A",
+    "#393842",
+    "#5A5563",
+    "#847984",
+    "#A5A2AD",
+    "#CEB27B",
+    "#ADE3DE",
+    "#F7EBE7",
+    "#100C10"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "hero",
+   "file": "art/hero.png",
+   "palette": "hero",
+   "frames": 11,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    8,
+    12,
+    12,
+    28
+   ]
+  },
+  {
+   "name": "oni",
+   "file": "art/oni.png",
+   "palette": "oni",
+   "frames": 4,
+   "origin": [
+    14,
+    36
+   ],
+   "collision": [
+    6,
+    18,
+    16,
+    18
+   ]
+  },
+  {
+   "name": "beetle",
+   "file": "art/beetle.png",
+   "palette": "beetle",
+   "frames": 2,
+   "origin": [
+    10,
+    12
+   ],
+   "collision": [
+    5,
+    2,
+    14,
+    10
+   ]
+  },
+  {
+   "name": "tiles",
+   "file": "art/tiles.png",
+   "palette": "terrain",
+   "frames": 1
+  },
+  {
+   "name": "ridge",
+   "file": "art/bg_ridge.png",
+   "palette": "ridge",
+   "frames": 1
+  },
+  {
+   "name": "mid",
+   "file": "art/bg_mid.png",
+   "palette": "mid",
+   "frames": 1
+  },
+  {
+   "name": "near",
+   "file": "art/bg_near.png",
+   "palette": "near",
+   "frames": 1
+  },
+  {
+   "name": "moon",
+   "file": "art/moon.png",
+   "palette": "sky",
+   "frames": 1
+  },
+  {
+   "name": "slash",
+   "file": "art/slash.png",
+   "palette": "fx",
+   "frames": 3
+  },
+  {
+   "name": "fx",
+   "file": "art/fx.png",
+   "palette": "fx",
+   "frames": 4
+  },
+  {
+   "name": "coin",
+   "file": "art/coin.png",
+   "palette": "fx",
+   "frames": 2
+  },
+  {
+   "name": "goal",
+   "file": "art/goal.png",
+   "palette": "goal",
+   "frames": 1
+  }
+ ],
+ "animations": [
+  {
+   "name": "run",
+   "sprite": "hero",
+   "frames": [
+    1,
+    2,
+    3
+   ],
+   "ms": 90
+  },
+  {
+   "name": "heroslash",
+   "sprite": "hero",
+   "frames": [
+    6,
+    7,
+    8
+   ],
+   "ms": 45
+  },
+  {
+   "name": "oniwalk",
+   "sprite": "oni",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 140
+  },
+  {
+   "name": "oniattack",
+   "sprite": "oni",
+   "frames": [
+    2,
+    3
+   ],
+   "ms": 90
+  },
+  {
+   "name": "crawl",
+   "sprite": "beetle",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 150
+  }
+ ],
+ "maps": [
+  {
+   "name": "level1",
+   "file": "level1.txt",
+   "tileset": "tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "#": 1,
+    "d": 2,
+    "D": 3,
+    "s": 4,
+    "b": 5,
+    "w": 6,
+    "B": 7,
+    "g": 8,
+    "f": 9,
+    "r": 10,
+    "m": 11,
+    "p": 12,
+    "l": 13,
+    "t": 14,
+    "v": 15
+   }
+  }
+ ]
+}

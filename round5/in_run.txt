@@ -1,0 +1,9 @@
+0 9 right b
+10 33 right a b
+34 130 right b
+131 154 right a b
+155 247 right b
+248 271 right a b
+272 428 right b
+429 452 right a b
+453 900 right a b
