@@ -131,6 +131,40 @@ Example — idle for a second, then hold right + A for half a second:
 60  119 right a
 ```
 
+### Worked examples — the three sharp edges
+
+A tap is a one-frame run; a gap releases; and an overlap **replaces**,
+it never merges:
+
+```
+# 1) tap A on exactly frame 120
+120 120 a
+
+# 2) steer right for a second, release for one, then right + A together
+0   59  right
+120 179 right a
+
+# 3) overlap: the LATER line wins with its WHOLE button set
+60  120 right       # frames 60..120: right
+90  100 a           # frames 90..100: ONLY a — right drops in the overlap
+```
+
+Script 3 spelled out: frames 60..89 hold `right`, frames 90..100 hold `a`
+alone, frames 101..120 hold `right` again. Want right *through* the tap?
+The merge is yours to write — the runner never adds buttons across
+entries:
+
+```
+60  89  right
+90  100 right a
+101 120 right
+```
+
+Recordings look tidier than hand-written scripts (the recorder merges
+consecutive identical states and writes `none` for idle stretches), but
+what matters is the per-frame pad: two scripts that hold the same buttons
+on the same frames replay identically, however they are written.
+
 The runner applies the entry set to each frame before `arcade1_run_frame`, so a
 game that polls the pad sees exactly the scripted buttons. `make test-run`
 verifies a script changes `breakout`'s state hash versus a no-input run, and

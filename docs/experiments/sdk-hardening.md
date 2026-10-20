@@ -84,4 +84,20 @@ probe with `cc` — the guard is plain C99).
 
 ## Card 3 — input scripts: worked examples for the sharp edges
 
-(see git history of this file for the card-3 section)
+**The gap.** The reviewer's note was that input-script *semantics* were
+documented (SDK.md "Input script format", the CHEATSHEET one-liner, the
+runner's header comment) but only with one polite example — the sharp
+edges an agent actually trips on had no worked form: a tap (one-frame
+run), a gap (release), and above all the overlap rule.
+
+**Verified, then written.** Before documenting, the runner was re-read to
+pin the exact semantics: `input_for_frame` memsets the pad to zero and
+lets each covering entry *replace* the whole word (`*out = entry.in`) —
+later lines win entirely for the frames they cover; buttons are never
+merged across entries. SDK.md now carries a "three sharp edges" block
+with a tap, a hold-with-gap, and an overlap spelled out frame by frame
+(including the write-it-as-three-lines idiom for "hold right THROUGH the
+tap"), plus one sentence on why recordings look tidier than hand-written
+scripts yet replay identically whenever the per-frame pad matches.
+
+No code change in this card — documentation only, gated like the rest.
