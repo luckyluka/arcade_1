@@ -16,15 +16,33 @@
  * blob tile as an unflipped marker, mirrored by the device at draw time.
  * The test pins exact painted-pixel counts per map region — nothing is
  * read back through globals.
+ *
+ * The two small maps also carry a COLLISION layer (ROADMAP_V4 card 4.6):
+ * assetc emits <MAP>_solid[] and the map_ref, and asset.h's map_solid()
+ * answers for a cell. The values are exposed as globals so the test can
+ * read them back (the accessor is the thing under test).
  */
 #include "asset.h"           /* the header names sprite4_ref — include first */
 #include "mapdemo_tiles.h"
 
 #define SKY ((4u << 11) | (12u << 5) | 28u)   /* dusk blue, (r5,g6,b5) */
 
+/* What map_solid() answers for a few probe cells. */
+int s43_empty;     /* small43 (0,0)  — empty  */
+int s43_solid;     /* small43 (1,1)  — solid  */
+int s43_outside;   /* small43 (99,99)— out of range is solid */
+int s51_solid;     /* small51 (2,0)  — solid  */
+int s51_hazard;    /* small51 (3,0)  — hazard */
+
 int main(void)
 {
     int i;
+
+    s43_empty   = map_solid(&small43_map, 0, 0);
+    s43_solid   = map_solid(&small43_map, 1, 1);
+    s43_outside = map_solid(&small43_map, 99, 99);
+    s51_solid   = map_solid(&small51_map, 2, 0);
+    s51_hazard  = map_solid(&small51_map, 3, 0);
 
     for (i = 0; i < 16; i++)
         arcade1_pal(tiles_frames[0].bank * 16 + i, mapdemo_palette[i]);

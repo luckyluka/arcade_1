@@ -984,10 +984,124 @@ def compile_maps(doc, sprites, anims, palettes, base_dir):
                     break
             if broken:
                 continue
+            solid = compile_solid(where, m, rows, leg, base_dir)
+            if solid is None and m.get("solid") is not None:
+                continue                    # a teaching error was reported
             maps[name] = {"cols": w, "rows": len(rows), "tw": tw, "th": th,
                           "tiles": tiles, "cells": cells, "sprite": tname,
-                          "bank": bank}
+                          "bank": bank, "solid": solid}
     return maps
+
+
+def _solid_value(spec, where, what):
+    """One solidity value: 0 empty, 1 solid, 2 hazard (or the words)."""
+    if isinstance(spec, bool):
+        fail_asset(where, "%s %s is not a solidity" % (what, json.dumps(spec)))
+        return None
+    if isinstance(spec, int):
+        if spec in (0, 1, 2):
+            return spec
+        fail_asset(where,
+                   "%s %s is not 0 (empty), 1 (solid) or 2 (hazard)"
+                   % (what, json.dumps(spec)))
+        return None
+    if isinstance(spec, str):
+        words = {"empty": 0, "solid": 1, "hazard": 2}
+        if spec in words:
+            return words[spec]
+    fail_asset(where,
+               "%s %s must be 0 (empty), 1 (solid), 2 (hazard), or one of "
+               '"empty", "solid", "hazard"' % (what, json.dumps(spec)))
+    return None
+
+
+def compile_solid(where, m, rows, leg, base_dir):
+    """The optional collision layer of a map (ROADMAP_V4 card 4.6).
+    Returns the per-cell solidity list (0 empty, 1 solid, 2 hazard), or
+    None when the map declares no layer (or after a teaching error — the
+    caller then drops the map).
+
+    Two forms:
+      "solid": "level1_solid.txt"     a second ASCII layer, same size as the
+                                     map: '#' solid, '.' empty, '^' hazard
+      "solid": {"by_tile": {"#": 1}} a per-tile-type table: the map's own
+                                     legend characters ARE the tile types
+                                     (the emitted cell index is a deduped
+                                     tile, not a type — that is the whole
+                                     point of this layer)"""
+    spec = m.get("solid")
+    if spec is None:
+        return None
+
+    if isinstance(spec, str):
+        if not spec:
+            fail_asset(where, '"solid" must name a file (the second ASCII '
+                             "layer) or be {\"by_tile\": {...}}")
+            return None
+        srows = load_map_rows(where, os.path.join(base_dir, spec))
+        if srows is None:
+            return None
+        w = len(rows[0])
+        if len(srows) != len(rows) or any(len(r) != w for r in srows):
+            got = "%dx%d" % (len(srows[0]) if srows else 0, len(srows))
+            fail_asset(where,
+                       "the solid layer %s is %s, the map is %dx%d — a solid "
+                       "layer must be exactly the map's size"
+                       % (spec, got, w, len(rows)))
+            return None
+        out = []
+        for r, row in enumerate(srows):
+            for c, ch in enumerate(row):
+                if ch == ".":
+                    out.append(0)
+                elif ch == "#":
+                    out.append(1)
+                elif ch == "^":
+                    out.append(2)
+                else:
+                    fail_asset(where,
+                               "solid layer %s: character %s at row %d, "
+                               "column %d is not one of '#' (solid), '.' "
+                               "(empty), '^' (hazard)"
+                               % (spec, json.dumps(ch), r + 1, c + 1))
+                    return None
+        return out
+
+    if isinstance(spec, dict) and "by_tile" in spec:
+        table = spec["by_tile"]
+        if not isinstance(table, dict):
+            fail_asset(where, '"solid": {"by_tile": ...} must map each tile '
+                             "type to 0 (empty), 1 (solid) or 2 (hazard)")
+            return None
+        values = {}
+        for ch, v in table.items():
+            if not isinstance(ch, str) or len(ch) != 1:
+                fail_asset(where,
+                           '"solid": {"by_tile": ...} key %s must be exactly '
+                           "one character (the map's legend character)"
+                           % json.dumps(ch))
+                return None
+            if ch not in leg:
+                fail_asset(where,
+                           '"solid": {"by_tile": ...} key %s is not a tile '
+                           "type of this map — its legend has %s"
+                           % (json.dumps(ch),
+                              ", ".join(sorted(json.dumps(k) for k in leg))))
+                return None
+            value = _solid_value(v, where, "solid type %s" % json.dumps(ch))
+            if value is None:
+                return None
+            values[ch] = value
+        out = []
+        for row in rows:
+            for ch in row:
+                out.append(values.get(ch, 0))
+        return out
+
+    fail_asset(where,
+               '"solid" must be a file name (a second ASCII layer of the '
+               'map\'s size) or {"by_tile": {...}} — a per-tile-type table')
+    return None
 
 
 def _expand565(v):
@@ -1042,12 +1156,17 @@ def emit_header(sprites, anims, maps, palettes, out_path):
     for name in sorted(maps):
         m = maps[name]
         banner.append(" * map %s of %s: %dx%d cells, tile %dx%d, %d unique "
-                      "tiles, bank %d"
+                      "tiles, bank %d%s"
                       % (name, m["sprite"], m["cols"], m["rows"],
-                         m["tw"], m["th"], len(m["tiles"]), m["bank"]))
+                         m["tw"], m["th"], len(m["tiles"]), m["bank"],
+                         (", collision layer %dx%d" % (m["cols"], m["rows"]))
+                         if m.get("solid") else ""))
     if sprites or anims or maps:
         banner.append(" * the NAME_frames refs need programs/asset.h"
                       " (sprite4_ref) — include it first")
+        if any(m.get("solid") for m in maps.values()):
+            banner.append(" * the NAME_map refs need programs/asset.h"
+                          " (map_ref) too")
         banner.append(" */")
         text = "\n".join(banner) + "\n\n"
     else:
@@ -1117,6 +1236,20 @@ def emit_header(sprites, anims, maps, palettes, out_path):
             vals = ["0x%05X," % v for v in m["cells"][k:k + 8]]
             text += "    " + " ".join(vals) + "\n"
         text += "};\n\n"
+        if m.get("solid"):
+            # The collision layer (ROADMAP_V4 card 4.6): one byte per cell.
+            text += "#define %s_SOLID_COLS %d\n" % (macro, m["cols"])
+            text += "#define %s_SOLID_ROWS %d\n" % (macro, m["rows"])
+            text += ("/* solid: 0 = empty, 1 = solid, 2 = hazard — one byte "
+                     "per cell, row by row */\n")
+            text += ("static const unsigned char %s_solid[%s_SOLID_COLS * "
+                     "%s_SOLID_ROWS] = {\n" % (name, macro, macro))
+            for k in range(0, len(m["solid"]), 16):
+                text += "    " + ", ".join(str(v) for v in m["solid"][k:k + 16])
+                text += ",\n"
+            text += "};\n\n"
+            text += ("static const map_ref %s_map = { %s_solid, %s_SOLID_COLS, "
+                     "%s_SOLID_ROWS };\n\n" % (name, name, macro, macro))
 
     for name in sorted(palettes):
         p = palettes[name]
@@ -1155,10 +1288,13 @@ def print_report(result):
     for name in sorted(result.get("maps", {})):
         m = result["maps"][name]
         n = len(m["tiles"]) * (m["tw"] // 2) * m["th"] + 4 * len(m["cells"])
+        solid = len(m.get("solid") or [])
+        n += solid
         total += n
-        print("MAP %s of %s: %dx%d cells, %d tiles = %d B"
+        print("MAP %s of %s: %dx%d cells, %d tiles = %d B%s"
               % (name, m["sprite"], m["cols"], m["rows"],
-                 len(m["tiles"]), n))
+                 len(m["tiles"]), n,
+                 (", %d B collision layer" % solid) if solid else ""))
     for name in sorted(palettes):
         total += 32
         print("PALETTE %s bank %d = 32 B" % (name, palettes[name]["bank"]))

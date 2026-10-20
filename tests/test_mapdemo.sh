@@ -142,7 +142,26 @@ expect_color "field brick (28 tiles incl. the corners)" $BRK_R $BRK_G $BRK_B \
 expect_color "field stripe s" $STR_R $STR_G $STR_B 256 112 127 128 143
 expect_color "field marker o" $MRK_R $MRK_G $MRK_B 32 144 145 128 143
 
-# --- 5) totals: no stray pixels of any scene colour ------------------------
+# --- 5) the collision layer: asset.h's map_solid() answers for a cell -----
+# (ROADMAP_V4 card 4.6). The guest reads the accessor and exposes the
+# answers, so the accessor itself is what the test pins.
+"$CLI" run "$GAME" --frames 3 --syms "$SYMS" \
+    --vars s43_empty,s43_solid,s43_outside,s51_solid,s51_hazard \
+    > "$OUT/solid.txt" 2>/dev/null || fail "the vars run failed"
+expect_var() {
+    v=$1; want=$2
+    got=$(sed -n "s/^var $v = \(-*[0-9]*\)$/\1/p" "$OUT/solid.txt")
+    [ "$got" = "$want" ] || fail "map_solid: $v is $got, want $want"
+    CHECKS=$((CHECKS + 1))
+    note "map_solid ok — $v = $got"
+}
+expect_var s43_empty   0     # an empty cell
+expect_var s43_solid   1     # a solid cell
+expect_var s43_outside 1     # out of range is solid
+expect_var s51_solid   1     # a solid cell
+expect_var s51_hazard  2     # a hazard cell
+
+# --- 6) totals: no stray pixels of any scene colour ------------------------
 set -- $(scan_color "$OUT/scene.ppm" $BRK_R $BRK_G $BRK_B)
 [ "$1" -eq 8704 ] || fail "stray brick: want 8704 px total, got $1"
 set -- $(scan_color "$OUT/scene.ppm" $STR_R $STR_G $STR_B)

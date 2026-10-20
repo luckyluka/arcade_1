@@ -196,6 +196,27 @@ map size** — that "rule" was a pre-barrier compiler artifact, retracted
 in `docs/experiments/tilemap-minsize-retraction.md`; 4×3 and 5×1 maps
 draw, pinned by `make test-mapdemo` (inside `make check`).
 
+A map may also declare a **collision layer** — so a game does not have to
+write a second, parallel collision table next to its map (assetc dedups
+tiles, so a cell index is not a tile type; every game used to pay for that
+with its own generator). Two forms:
+
+    "solid": "level1_solid.txt"          # a second ASCII layer, same size
+    "solid": { "by_tile": { "#": 1 } }   # a per-tile-type table
+
+The layer file uses `#` = solid, `.` = empty, `^` = hazard; the table form
+keys on the map's own legend characters (the tile types) and takes 0/1/2
+(or "empty"/"solid"/"hazard"). Either way assetc emits `NAME_solid[]` —
+one byte per cell — with `NAME_SOLID_COLS/ROWS` and a `map_ref`, and
+`asset.h` reads it:
+
+    #include "asset.h"          /* map_ref + map_solid */
+    #include "assets.h"
+
+    int s = map_solid(&level1_map, tx, ty);   /* 0 empty, 1 solid, 2 hazard */
+
+Outside the map is solid: a player must not walk off the world.
+
 ## Build
 
 One command, from any directory, with nothing but the CLI and your source:

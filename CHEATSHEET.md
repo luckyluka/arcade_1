@@ -114,6 +114,23 @@ y + row*tile_h), clipped like a sprite.
 cell carries its own. Tile N is at tiles + (N-1) * (tile_w/2 * tile_h);
 tile_w/tile_h are written to REG_W/REG_H by the command.
 
+## Map collision layer (asset.h)
+`arc1-assetc` compiles a map's ASCII grid into cells, and — when the
+manifest declares one — a collision layer: `<MAP>_solid[]`, one byte per
+cell (0 empty, 1 solid, 2 hazard), plus `<MAP>_SOLID_COLS/ROWS` and a
+`map_ref`:
+
+```c
+#include "asset.h"          /* map_ref + map_solid */
+/* the generated header declares: static const map_ref level1_map; */
+int ex_map_solid(const map_ref *m, int tx, int ty)
+{
+    return map_solid(m, tx, ty);   /* 0 empty, 1 solid, 2 hazard */
+}
+```
+
+Outside the map is **solid** (1): a player must not walk off the world.
+
 ## Observable state must be a global
 Anything a test or tool should read — score, lives, state, length,
 camera position — must be a file-scope global: the tools read those out

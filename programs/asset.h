@@ -140,4 +140,38 @@ static inline const sprite4_ref *anim_tick(anim_state *a, unsigned timer)
     return a->frames[a->step];
 }
 
+/* --- Maps (Wave 4) and their collision layer (ROADMAP_V4 card 4.6) -------
+ *
+ * assetc compiles a map into a cell grid (gfx.h's tilemap cells) and — when
+ * the manifest declares one — a COLLISION layer: one byte per cell,
+ * 0 empty, 1 solid, 2 hazard, plus the map_ref that carries it:
+ *
+ *     static const map_ref level1_map = { level1_solid, 64, 16 };
+ *
+ * The layer is what a platformer needs to answer "can I stand here?", so
+ * no game has to write a second collision generator next to its map (that
+ * was round 5's finding: assetc dedups tiles, so a cell index is not a
+ * tile type, and every game paid for it with its own parallel table). */
+
+#define MAP_EMPTY   0   /* walkable                             */
+#define MAP_SOLID   1   /* blocks movement                      */
+#define MAP_HAZARD  2   /* walkable, but it hurts (lava, spikes) */
+
+typedef struct map_ref {
+    const unsigned char *solid;   /* one byte per cell: MAP_EMPTY,
+                                   * MAP_SOLID or MAP_HAZARD */
+    int cols, rows;               /* the layer's size in cells */
+} map_ref;
+
+/* The solidity of the cell (tx, ty). Outside the map is SOLID: a player
+ * that walks off the edge must not walk off the world. */
+static inline int map_solid(const map_ref *map, int tx, int ty)
+{
+    if (!map || !map->solid)
+        return MAP_SOLID;           /* no layer: assume the worst */
+    if (tx < 0 || ty < 0 || tx >= map->cols || ty >= map->rows)
+        return MAP_SOLID;
+    return (int)map->solid[ty * map->cols + tx];
+}
+
 #endif

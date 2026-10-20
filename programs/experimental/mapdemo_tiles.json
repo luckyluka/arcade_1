@@ -19,6 +19,7 @@
     {
       "name": "small43",
       "file": "mapdemo_small43.txt",
+      "solid": "mapdemo_small43_solid.txt",
       "tileset": "tiles",
       "tile_w": 16,
       "tile_h": 16,
@@ -27,6 +28,7 @@
     {
       "name": "small51",
       "file": "mapdemo_small51.txt",
+      "solid": "mapdemo_small51_solid.txt",
       "tileset": "tiles",
       "tile_w": 16,
       "tile_h": 16,

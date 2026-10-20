@@ -908,9 +908,9 @@ CHECKS=$((CHECKS + 2))
 echo "  ok: map defines + banners (4x3/5x1 fixtures, field dedup 4->3)"
 
 assert_has "MAP field of tiles: 10x3 cells, 3 tiles = 504 B" "field report line"
-assert_has "MAP small43 of tiles: 4x3 cells, 2 tiles = 304 B" "small43 report line"
-assert_has "MAP small51 of tiles: 5x1 cells, 3 tiles = 404 B" "small51 report line"
-assert_has "ROM assets 1756 / 262144 (0.7 %)" "ROM total counts the maps"
+assert_has "MAP small43 of tiles: 4x3 cells, 2 tiles = 316 B, 12 B collision layer" "small43 report line"
+assert_has "MAP small51 of tiles: 5x1 cells, 3 tiles = 409 B, 5 B collision layer" "small51 report line"
+assert_has "ROM assets 1773 / 262144 (0.7 %)" "ROM total counts the maps"
 
 # F3 oracle rule: recompute every map's dedup + cell encoding INDEPENDENTLY
 # in python (split the emitted sheet bytes yourself, dedup first-occurrence,
@@ -1027,6 +1027,86 @@ cmp "$OUT/mapdet1/mapdemo_tiles.h" "$OUT/mapdet2/mapdemo_tiles.h" || \
     fail "map headers differ between two runs"
 CHECKS=$((CHECKS + 2))
 echo "  ok: map headers byte-identical across two runs"
+
+# --- 13) the collision layer (ROADMAP_V4 card 4.6) --------------------------
+# A map may declare a collision layer: a second ASCII layer of the map's
+# size ('#' solid, '.' empty, '^' hazard), or a per-tile-type table. The
+# emitted <MAP>_solid[] is one byte per cell; asset.h's map_solid() reads it.
+
+# the dimension mismatch teaches
+printf 'x.\n' > "$OUT/lvl.txt"
+printf '#\n' > "$OUT/small_solid.txt"
+mapman "$OUT/mapsolidmismatch.json" '[{"name":"lvl","file":"lvl.txt","solid":"small_solid.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0,".":null}}]'
+expect 1 "a solid layer of the wrong size is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapsolidmismatch.json" --out-dir "$OUT/gen"
+assert_has "must be exactly the map's size" "solid layer size error"
+
+# an unknown character in the layer teaches
+printf 'x?\n' > "$OUT/bad_solid.txt"
+mapman "$OUT/mapsolidchar.json" '[{"name":"lvl","file":"lvl.txt","solid":"bad_solid.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0,".":null}}]'
+expect 1 "an unknown solid-layer character is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapsolidchar.json" --out-dir "$OUT/gen"
+assert_has "is not one of '#' (solid), '.' (empty), '^' (hazard)" "solid layer character error"
+
+# the per-tile-type table compiles and emits the right bytes
+printf 'x.\n' > "$OUT/lvl.txt"
+mapman "$OUT/mapsolidtable.json" '[{"name":"lvl","file":"lvl.txt","solid":{"by_tile":{"x":1,".":0}},"tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0,".":null}}]'
+expect 0 "a per-tile-type solid table compiles" \
+    python3 "$TOOL" --assets "$OUT/mapsolidtable.json" --out-dir "$OUT/solidtable"
+grep -Fq "static const unsigned char lvl_solid[LVL_SOLID_COLS * LVL_SOLID_ROWS] = {" \
+    "$OUT/solidtable/mapsolidtable.h" || fail "no lvl_solid array in the header"
+grep -Fq "static const map_ref lvl_map = { lvl_solid, LVL_SOLID_COLS, LVL_SOLID_ROWS };" \
+    "$OUT/solidtable/mapsolidtable.h" || fail "no lvl_map ref in the header"
+python3 - "$OUT/solidtable/mapsolidtable.h" <<'PY'
+import re, sys
+h = open(sys.argv[1]).read()
+m = re.search(r"lvl_solid\[[^\]]*\] = \{(.*?)\};", h, re.S)
+vals = [int(v) for v in re.findall(r"\d+", m.group(1))]
+assert vals == [1, 0], vals          # 'x' is solid, '.' is empty
+PY
+CHECKS=$((CHECKS + 3))
+echo "  ok: the collision layer emits <MAP>_solid[] + the map_ref"
+
+# the layer's bytes are the layer's characters (independent recompute)
+python3 - "$H" "$ROOT/programs/experimental" "$MAPMAN" <<'PY'
+import json, os, re, sys
+header, basedir, manifest_path = sys.argv[1], sys.argv[2], sys.argv[3]
+header = open(header).read()
+manifest = json.load(open(manifest_path))
+for mdoc in manifest["maps"]:
+    if "solid" not in mdoc:
+        continue
+    want = []
+    for line in open(os.path.join(basedir, mdoc["solid"])):
+        line = line.rstrip("\r\n")
+        if not line:
+            continue
+        for ch in line:
+            want.append({".": 0, "#": 1, "^": 2}[ch])
+    m = re.search(re.escape(mdoc["name"]) + r"_solid\[[^\]]*\] = \{(.*?)\};",
+                  header, re.S)
+    got = [int(v) for v in re.findall(r"\d+", m.group(1))]
+    assert got == want, (mdoc["name"], got, want)
+PY
+CHECKS=$((CHECKS + 1))
+echo "  ok: the emitted solid bytes equal the layer's characters"
+
+# a table naming a character that is not a tile type teaches
+mapman "$OUT/mapsolidbadkey.json" '[{"name":"lvl","file":"lvl.txt","solid":{"by_tile":{"z":1}},"tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0,".":null}}]'
+expect 1 "a solid table key that is not a tile type is a validation error" \
+    python3 "$TOOL" --assets "$OUT/mapsolidbadkey.json" --out-dir "$OUT/gen"
+assert_has "is not a tile type of this map" "solid table key error"
+
+# older generated headers are unchanged: the committed asteroid_run header
+# must come out of the tool byte for byte (the new feature adds nothing to
+# a manifest that does not ask for a collision layer).
+python3 "$TOOL" --assets "$ROOT/programs/experimental/asteroid_run_sheet.json" \
+    --out-dir "$OUT/older" > /dev/null 2>&1 || fail "older-header run"
+cmp "$OUT/older/asteroid_run_sheet.h" \
+    "$ROOT/programs/experimental/asteroid_run_sheet.h" || \
+    fail "an older generated header changed"
+CHECKS=$((CHECKS + 1))
+echo "  ok: an older generated header is byte-identical"
 
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
