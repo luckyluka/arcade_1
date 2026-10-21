@@ -1072,6 +1072,16 @@ static int resolve_vars(const char *list)
           const symbol_t *s = find_sym(tok);
           if (!s) {
               fprintf(stderr, "arcade1: no symbol named '%s'\n", tok);
+              /* The most common reason: the guest's optimiser deleted it.
+               * A file-scope global the game never READS is a dead store,
+               * and one it never WRITES is folded to a constant — either
+               * way the symbol is gone from the image (ROADMAP_V4 card
+               * 7.8, the round's doc gap 7). */
+              fprintf(stderr, "arcade1: if the game declares it, the symbol "
+                              "may have been optimised away: a file-scope "
+                              "global the game never reads is deleted at "
+                              "-Os (make the game read it, or declare it "
+                              "volatile)\n");
               return -1;
           }
           if (!sym_is_ram_var(s)) {

@@ -69,6 +69,15 @@ assert rgb565(key) not in [rgb565(c) for c in colors[1:]], \
 # the outline (index 1) is dark: it must read as an edge, not as a fill
 assert lum(colors[1]) < 64, "%s: the outline colour %s is not dark" % (
     name, colors[1])
+# ...and it must be the DARKEST colour in the bank: the checker infers the
+# outline as the darkest colour among the frame's edge pixels, so a bank
+# whose index 1 is only just the darkest fails the check by accident
+# (ROADMAP_V4 card 7.8, the round's doc gap 4).
+others = [lum(c) for i, c in enumerate(colors) if i not in (0, 1)]
+assert lum(colors[1]) < min(others) - 4, (
+    "%s: the outline %s (luminance %.1f) is not clearly the darkest "
+    "colour in the bank (the next is %.1f)"
+    % (name, colors[1], lum(colors[1]), min(others)))
 PY
     CHECKS=$((CHECKS + 1))
 done

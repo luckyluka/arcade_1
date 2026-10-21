@@ -115,21 +115,27 @@ agent's own note says the same: *"Promote the game to a repo test … and,
 if the round is judged a success, a `GUEST_PROGS` entry — deliberately
 not done here."*
 
-## What I would fix next, in order
+## All seven are closed (and pinned)
 
-1. **The five documentation gaps** (1, 2, 4, 5, 6) — they are the
-   cheapest and the most likely to bite the next agent. Gap 1 and gap 4
-   are contradictions in text written for this wave, so they are the
-   urgent ones.
-2. **The outline-coverage check on an opaque strip** (3) — it should say
-   "a background layer has no edge; this check does not apply" rather
-   than pass silently, and the tileset's "a border repeats in every cell"
-   belongs in the art rules.
-3. **`arc1-art preview <manifest>`** — the pipeline should produce the
-   contact sheet the review checklist asks for.
-4. **The optimiser and `--vars`** (7) — the docs should say a global
-   must be *read* to survive `-Os` (or be `volatile`), and the CLI's
-   "no symbol named X" should say so too.
+The gaps above are not a wish list: every one of them is fixed and
+pinned by `tests/test_doc_gaps.sh`, so the next agent cannot hit them
+again.
 
-The round's metrics are recorded here and **not tuned afterwards** — the
-numbers above are what the round measured, gap for gap.
+| # | the fix |
+|---|---|
+| 1 | `art/README.md` now says where the repository root is, in the words the code uses ("a folder whose parent's parent is the repository root"), and offers `ARCADE1_ROOT` as the way out |
+| 2 | `art/README.md` has a **"The collision layer"** section: both forms (`"solid": "<file>"` and `"solid": {"by_tile": {...}}`), the characters, and how to read it with `map_solid()` |
+| 3 | the QA tool now says **"the outline check does not apply — the frame is fully opaque, so it has no edge"** instead of passing silently, and the art rules say that a border in a tileset **repeats in every cell of the map** |
+| 4 | the outline is now inferred as the **darkest colour among the frame's EDGE pixels** (the outline is on the edge by definition) — not the darkest in the whole frame, which a dark fill could beat. The docs say "the **darkest** colour in the bank", and the palette test enforces it (index 1 must be clearly the darkest) |
+| 5 | `art/README.md` has a **"The manifest, in full"** section: a manifest **may define its own palette** (with the same rules as a preset), and the style template says a deviation may be a new bank |
+| 6 | the same section states that **every path is relative to the `assets.json` file** |
+| 7 | `GAME_DEV_GUIDE.md` and `SDK.md` say the game must **READ** the variable (or declare it `volatile`), and the CLI's *"no symbol named X"* now says the symbol may have been **optimised away**, and why |
+
+**The pipeline gap is closed too:** `arc1-art preview <assets.json> --out
+sheet.png` writes the contact sheet the review checklist asks for — the
+round-6 agent had to write its own. It shows every sprite's frames at 1x
+and scaled, numbered, with the legend on stdout.
+
+**What the fixes did not change:** the round's metrics. They are recorded
+above and were **not tuned afterwards** — the numbers are what the round
+measured, gap for gap.

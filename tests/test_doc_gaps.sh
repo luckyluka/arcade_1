@@ -17,6 +17,7 @@ ROOT=${1:-$(cd "$(dirname "$0")/.." && pwd)}
 case "$ROOT" in /*) ;; *) ROOT="$(pwd)/$ROOT" ;; esac
 
 CLI=$ROOT/build/arcade1
+ART=$ROOT/tools/arc1-art
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT
 
@@ -109,5 +110,61 @@ rc=0
 [ -f "$OUT/game/game.arc1" ] || fail "no image was written"
 CHECKS=$((CHECKS + 1))
 echo "  ok: the build carries the game's own include path"
+
+# --- 5) the round's seven gaps (ROADMAP_V4 card 7.8) -----------------------
+# The clean-room round found these; each is pinned here so it cannot come
+# back. The order is the round's.
+
+# 1. the repository root: the prose and the code must agree
+grep -q "whose parent's parent is the" "$ROOT/art/README.md" || \
+    fail "art/README.md does not say where the repository root is"
+grep -q "ARCADE1_ROOT" "$ROOT/art/README.md" || \
+    fail "art/README.md does not offer the ARCADE1_ROOT way out"
+
+# 2. the collision layer must be in the art documentation
+grep -q '"solid"' "$ROOT/art/README.md" || \
+    fail "art/README.md does not document the map's collision layer"
+grep -q "map_solid" "$ROOT/art/README.md" || \
+    fail "art/README.md does not show how to read the collision layer"
+
+# 3. a fully opaque strip has no edge: the check must SAY so, and the
+#    art rules must say that a tileset's border repeats in every cell
+grep -q "does not apply" "$ROOT/tools/arc1_art/qa.py" || \
+    fail "the QA tool still passes an opaque strip silently"
+grep -q "repeats in every cell" "$ROOT/art/README.md" || \
+    fail "art/README.md does not warn that a tileset's border repeats"
+
+# 4. the outline is the DARKEST colour in the bank (not just "dark")
+grep -q "darkest colour in the bank" "$ROOT/art/README.md" || \
+    fail "art/README.md does not state the outline rule"
+grep -q "not clearly the darkest" "$ROOT/tests/test_art_palettes.sh" || \
+    fail "the palette test does not check the outline rule"
+
+# 5. a manifest may define its own palette
+grep -q "may define its own palette" "$ROOT/art/README.md" || \
+    fail "art/README.md does not say a manifest may define its own palette"
+
+# 6. the manifest's paths are relative to assets.json
+grep -q "relative to the .assets.json" "$ROOT/art/README.md" || \
+    fail "art/README.md does not state the path convention"
+
+# 7. an observable global must be read by the game, or it is optimised away
+grep -q "must READ it" "$ROOT/GAME_DEV_GUIDE.md" || \
+    fail "GAME_DEV_GUIDE.md does not say the game must read the variable"
+grep -q "must READ it" "$ROOT/SDK.md" || \
+    fail "SDK.md does not say the game must read the variable"
+grep -q "optimised away" "$ROOT/tools/arcade1.c" || \
+    fail "the CLI does not hint at the optimiser when a symbol is missing"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the round's seven gaps are closed and pinned"
+
+# --- 6) the pipeline gap: a preview of a manifest ------------------------
+[ -f "$ROOT/tools/arc1_art/preview.py" ] || \
+    fail "the pipeline has no preview of a manifest (the round wrote its own)"
+rc=0
+"$ART" preview --help > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "arc1-art has no preview command"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the pipeline can make the contact sheet a review looks at"
 
 echo "test-doc-gaps: ok ($CHECKS checks, card 7.8)"

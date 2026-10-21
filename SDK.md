@@ -269,7 +269,12 @@ var lives = 3
 * Each variable is read as one 32-bit word — the guest's `int`, printed
   signed — exactly how the game tests read `score`/`lives`/`state`.
   State you want to observe must be a file-scope global: its address
-  comes from the `.syms`, never from declaration order.
+  comes from the `.syms`, never from declaration order. **And the game
+  must READ it**: the guest is compiled at `-Os`, so a global that is
+  only written is a dead store and one that is only read is folded to a
+  constant — either way the optimiser removes the symbol, and `--vars`
+  answers *"no symbol named 'score'"*. Make the game read it (the HUD
+  usually does), or declare it `volatile`.
 * `--var-every K` additionally prints a `vars <frame> <name>=<value> ...`
   trace line every K frames, for watching a variable move.
 * Errors: no sidecar for `--vars` is exit 2 with a build hint, and a

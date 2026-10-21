@@ -42,6 +42,10 @@ and which palette they use. The fields below are required — the lint
 * **Bank**: <n>
 * **Group**: <one asset group per bank>
 * **Deviation from the preset**: <none, or exactly which index and why>
+  — a deviation may also be a **new bank**: write one in the manifest's
+  "palettes" when the art needs colours no preset holds (index 0 the
+  transparent key, index 1 the outline — the darkest colour in the bank,
+  2..15 the ramp, every colour distinct as RGB565)
 
 ## 6. Silhouette rules
 

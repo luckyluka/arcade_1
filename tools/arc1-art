@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from arc1_art import ingest as ingest_mod              # noqa: E402
+from arc1_art import preview as preview_mod            # noqa: E402
 from arc1_art import qa as qa_mod                      # noqa: E402
 from arc1_art import pixmap, rig                        # noqa: E402
 
@@ -373,6 +374,25 @@ def cmd_check(args):
     return 0
 
 
+def cmd_preview(args):
+    """The contact sheet of a manifest: what a review looks at.
+
+    The review checklist (art/CRITIQUE.md) asks a human to look at a
+    contact sheet; the pipeline had no way to make one, so the round-6
+    agent wrote its own (ROADMAP_V4 card 7.8, the pipeline gap).
+    """
+    try:
+        written, names = preview_mod.preview_manifest(args.manifest, args.out,
+                                                      scale=args.scale)
+    except (preview_mod.PreviewError, OSError, ValueError) as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+    print("preview: %s" % written)
+    for i, name in enumerate(names, 1):
+        print("  %d: %s" % (i, name))
+    return 0
+
+
 def cmd_info(args):
     pm = _load(args.file)
     print("name %s" % pm["name"])
@@ -436,6 +456,12 @@ def main(argv=None):
     p.add_argument("--key", metavar="#RRGGBB",
                    help="the transparent key colour (default #000000)")
     p.set_defaults(func=cmd_check)
+
+    p = sub.add_parser("preview", help="the contact sheet of a manifest")
+    p.add_argument("manifest", metavar="assets.json")
+    p.add_argument("--out", required=True, metavar="FILE.png")
+    p.add_argument("--scale", type=int, default=4)
+    p.set_defaults(func=cmd_preview)
 
     p = sub.add_parser("info", help="what a pixmap declares")
     p.add_argument("file", metavar="FILE.px")

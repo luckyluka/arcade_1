@@ -41,6 +41,12 @@ Two rules make games testable:
    by name via `--vars`; locals are invisible to them. The address comes
    from `game.syms`, never from declaration order — don't assume
    `score` sits at any particular offset.
+   **And the game must READ it.** The guest is compiled at `-Os`, and the
+   optimiser deletes a global the game never reads (a dead store) or
+   folds one it never writes (a constant) — the symbol is then simply not
+   in the image, and `--vars` answers *"no symbol named 'score'"*. Make
+   the game read the variable (the HUD usually does), or declare it
+   `volatile`.
 2. **Everything is deterministic**: no wall-clock, no unseeded random.
    The same image + the same input script always replays bit-identically,
    which is what makes the golden regression and `--record`/`--input`

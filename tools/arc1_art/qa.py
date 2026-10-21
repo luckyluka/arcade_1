@@ -212,8 +212,12 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
             failures.append("frame %d is empty" % (i + 1))
 
         # --- the outline coverage -----------------------------------------
-        edge = 0
-        outlined = 0
+        # The outline colour is the DARKEST colour among the edge pixels
+        # (the outline is on the edge by definition) — not the darkest in
+        # the whole frame, which a sprite may beat with a dark fill (a
+        # black hair against a dark outline). An explicit --outline-colour
+        # overrides the guess.
+        edge_pixels = []
         for y in range(fh):
             for x in range(fw):
                 if not _opaque(f[y][x], key):
@@ -223,24 +227,28 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
                     if (0 <= nx < fw and 0 <= ny < fh and
                             not _opaque(f[ny][nx], key)):
                         touches = True
-                if not touches:
-                    continue
-                edge += 1
-                c = f[y][x]
-                if outline_colour is not None:
-                    if _same(c, outline_colour):
-                        outlined += 1
-                else:
-                    # the darkest colour in the frame is the outline
-                    if c == min(colours, key=_luminance):
-                        outlined += 1
-        coverage = (outlined / float(edge)) if edge else 1.0
-        info["outline_coverage"] = round(coverage, 3)
-        if edge and coverage < 0.75:
-            failures.append("frame %d: only %.0f%% of the silhouette's edge "
-                            "is the outline colour (the rest is fill) — the "
-                            "sprite has no readable edge"
-                            % (i + 1, coverage * 100))
+                if touches:
+                    edge_pixels.append(f[y][x])
+        edge = len(edge_pixels)
+        if edge:
+            if outline_colour is None:
+                outline_colour = min(edge_pixels, key=_luminance)
+            outlined = sum(1 for c in edge_pixels
+                           if _same(c, outline_colour))
+            coverage = outlined / float(edge)
+            info["outline_coverage"] = round(coverage, 3)
+            if coverage < 0.75:
+                failures.append("frame %d: only %.0f%% of the silhouette's "
+                                "edge is the outline colour (the rest is "
+                                "fill) — the sprite has no readable edge"
+                                % (i + 1, coverage * 100))
+        else:
+            # A fully opaque strip (a background layer, a tileset) has no
+            # edge at all: the check does not apply, and saying so beats a
+            # silent pass (ROADMAP_V4 card 7.8, the round's doc gap 3).
+            info["outline_coverage"] = None
+            info["outline_check"] = "does not apply — the frame is fully " \
+                                    "opaque, so it has no edge"
 
         # --- the fill-to-outline contrast ----------------------------------
         if outline_colour is not None:
