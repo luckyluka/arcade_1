@@ -94,7 +94,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
-        test-petalblade test-agents-md test-art-palettes
+        test-petalblade test-agents-md test-art-palettes test-art-canvas
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -143,7 +143,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-agents-md test-art-palettes
+        test-agents-md test-art-palettes test-art-canvas
 
 all: $(TARGET)
 
@@ -359,6 +359,13 @@ test-color-trunc: $(CLI_BIN) $(GUEST_BUILD)/probe_trunc.bin \
 # the style template, the tool package and the provenance schema.
 test-art-palettes: tests/test_art_palettes.sh
 	sh tests/test_art_palettes.sh .
+
+# ROADMAP_V4 card 7.2: the drawing library. The generator now paints
+# through tools/arc1_art/canvas.py, and every strip must come out
+# byte-identical (the sha256 of each committed strip is pinned in the
+# test) — plus the unit tests of every primitive.
+test-art-canvas: tests/test_art_canvas.sh tests/test_art_canvas.py
+	sh tests/test_art_canvas.sh .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

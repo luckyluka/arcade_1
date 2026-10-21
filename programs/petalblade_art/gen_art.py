@@ -32,6 +32,17 @@ import struct
 import sys
 import zlib
 
+# The drawing library (ROADMAP_V4 card 7.2): the canvas primitives and the
+# PNG writers live in tools/arc1_art/canvas.py. They were extracted from
+# this file verbatim, so the assets are byte-identical either way — the
+# regression test (tests/test_art_canvas.sh) pins that.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "tools"))
+from arc1_art.canvas import (Canvas as G, Rng, bayer, ordered_dither,   # noqa: E402
+                             expand565, to_strip, contact_sheet,
+                             write_indexed_png, png_chunk)
+
 # --------------------------------------------------------------------------
 # RGB565 palette components. Everything is authored as (r5, g6, b5) — the
 # device's native 5/6/5 — and expanded to #RRGGBB for the PNG, which assetc
@@ -154,190 +165,20 @@ def C(name, i):
 # Canvas: a grid of palette indices. 0 == transparent.
 # --------------------------------------------------------------------------
 
-BAYER4 = [[0, 8, 2, 10],
-          [12, 4, 14, 6],
-          [3, 11, 1, 9],
-          [15, 7, 13, 5]]
-
-
-def bayer(x, y):
-    """Ordered-dither threshold in [0, 1)."""
-    return (BAYER4[y & 3][x & 3] + 0.5) / 16.0
-
-
-class G:
-    def __init__(self, w, h):
-        self.w, self.h = w, h
-        self.p = [[0] * w for _ in range(h)]
-
-    # --- primitives -------------------------------------------------------
-    def set(self, x, y, c):
-        if 0 <= x < self.w and 0 <= y < self.h:
-            self.p[y][x] = c
-
-    def px(self, x, y, c):
-        if c and 0 <= x < self.w and 0 <= y < self.h:
-            self.p[y][x] = c
-
-    def get(self, x, y):
-        if 0 <= x < self.w and 0 <= y < self.h:
-            return self.p[y][x]
-        return 0
-
-    def box(self, x0, y0, x1, y1, c):
-        for y in range(max(0, y0), min(self.h - 1, y1) + 1):
-            for x in range(max(0, x0), min(self.w - 1, x1) + 1):
-                if c:
-                    self.p[y][x] = c
-
-    def rect(self, x, y, w, h, c):
-        self.box(x, y, x + w - 1, y + h - 1, c)
-
-    def hline(self, y, x0, x1, c):
-        self.box(x0, y, x1, y, c)
-
-    def vline(self, x, y0, y1, c):
-        self.box(x, y0, x, y1, c)
-
-    def line(self, x0, y0, x1, y1, c, t=1):
-        n = max(abs(x1 - x0), abs(y1 - y0), 1)
-        r = max(0, t // 2)
-        for i in range(n + 1):
-            x = round(x0 + (x1 - x0) * i / n)
-            y = round(y0 + (y1 - y0) * i / n)
-            if r:
-                self.disc(x, y, r, c)
-            else:
-                self.px(x, y, c)
-
-    def disc(self, cx, cy, r, c):
-        for y in range(cy - r, cy + r + 1):
-            for x in range(cx - r, cx + r + 1):
-                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r + r:
-                    self.px(x, y, c)
-
-    # --- compositing ------------------------------------------------------
-    def blit(self, other, dx, dy):
-        for y in range(other.h):
-            for x in range(other.w):
-                c = other.p[y][x]
-                if c:
-                    self.px(dx + x, dy + y, c)
-
-    def outline(self, c, only=0):
-        """Paint `c` into transparent pixels touching a filled pixel."""
-        todo = []
-        for y in range(self.h):
-            for x in range(self.w):
-                if self.p[y][x] != only:
-                    continue
-                if (self.get(x - 1, y) or self.get(x + 1, y) or
-                        self.get(x, y - 1) or self.get(x, y + 1)):
-                    todo.append((x, y))
-        for x, y in todo:
-            self.p[y][x] = c
-
-    def edge_light(self, c, dx=-1, dy=-1):
-        """Highlight pixels whose neighbour in (dx,dy) is transparent."""
-        todo = []
-        for y in range(self.h):
-            for x in range(self.w):
-                if not self.p[y][x]:
-                    continue
-                if not self.get(x + dx, y + dy):
-                    todo.append((x, y))
-        for x, y in todo:
-            self.p[y][x] = c
-
-    # --- shading ----------------------------------------------------------
-    def grad_v(self, x0, x1, y0, y1, stops, dither=True):
-        """Vertical ramp through `stops` (palette indices) over y0..y1."""
-        n = len(stops) - 1
-        for y in range(max(0, y0), min(self.h - 1, y1) + 1):
-            t = 0.0 if n == 0 else (y - y0) / max(1, (y1 - y0)) * n
-            i = min(int(t), n - 1) if n else 0
-            frac = 0.0 if n == 0 else t - i
-            for x in range(max(0, x0), min(self.w - 1, x1) + 1):
-                if not n:
-                    c = stops[0]
-                elif (frac > (bayer(x, y) if dither else 0.5)):
-                    c = stops[i + 1]
-                else:
-                    c = stops[i]
-                if c:
-                    self.p[y][x] = c
-
-    def hmirror(self):
-        self.p = [list(reversed(row)) for row in self.p]
-
-    def copy(self):
-        g = G(self.w, self.h)
-        g.p = [row[:] for row in self.p]
-        return g
-
-
 # --------------------------------------------------------------------------
 # PNG output (8-bit RGB, no dependencies)
 # --------------------------------------------------------------------------
 
 def write_sheet(path, frames, pal_name, scale=3, bg=(16, 16, 28)):
     """Contact sheet: every frame of one sprite side by side, upscaled."""
-    w, h = frames[0].w, frames[0].h
-    cell_w, cell_h = w * scale, h * scale
-    W, H_ = cell_w * len(frames), cell_h
-    def pix(v):
-        c = PALETTES[pal_name][1][v]
-        if c is None:
-            return None
-        return (((c[0] << 3) | (c[0] >> 2)),
-                ((c[1] << 2) | (c[1] >> 4)),
-                ((c[2] << 3) | (c[2] >> 2)))
-    raw = bytearray()
-    for y in range(H_):
-        raw.append(0)
-        fi = y * 0
-        for x in range(W):
-            fi = x // cell_w
-            lx = (x - fi * cell_w) // scale
-            ly = y // scale
-            col = pix(frames[fi].p[ly][lx])
-            raw += bytes(col if col else bg)
-    def chunk(tag, data):
-        return struct.pack(">I", len(data)) + tag + data + \
-            struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    png = (b"\x89PNG\r\n\x1a\n" +
-           chunk(b"IHDR", struct.pack(">IIBBBBB", W, H_, 8, 2, 0, 0, 0)) +
-           chunk(b"IDAT", zlib.compress(bytes(raw), 9)) +
-           chunk(b"IEND", b""))
-    with open(path, "wb") as f:
-        f.write(png)
+    contact_sheet(frames, scale=scale, path=path,
+                  palette=PALETTES[pal_name][1], bg=bg)
 
 
 def write_strip(path, frames, pal_name, w, h):
     """Write a horizontal strip: FRAMES frames of w x h, each pixel authored
     in its palette's expanded 8-bit colour (key #000000 for transparent)."""
-    cols = PALETTES[pal_name][1]
-    exp = [None if c is None else
-           (((c[0] << 3) | (c[0] >> 2)),
-            ((c[1] << 2) | (c[1] >> 4)),
-            ((c[2] << 3) | (c[2] >> 2))) for c in cols]
-    raw = bytearray()
-    for y in range(h):
-        raw.append(0)
-        for g in frames:
-            for x in range(w):
-                v = g.p[y][x]
-                raw += bytes(exp[v] if exp[v] else (0, 0, 0))
-    def chunk(tag, data):
-        return struct.pack(">I", len(data)) + tag + data + \
-            struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-    png = (b"\x89PNG\r\n\x1a\n" +
-           chunk(b"IHDR", struct.pack(">IIBBBBB", w * len(frames), h,
-                                       8, 2, 0, 0, 0)) +
-           chunk(b"IDAT", zlib.compress(bytes(raw), 9)) +
-           chunk(b"IEND", b""))
-    with open(path, "wb") as f:
-        f.write(png)
+    to_strip(frames, PALETTES[pal_name][1], path)
 
 
 def ascii_art(g):
