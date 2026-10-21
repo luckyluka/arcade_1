@@ -256,11 +256,7 @@ def _palette_colours(preset):
     expansion, so the PNG and the palette agree pixel for pixel and
     arc1-assetc's exact quantiser maps every one of them back.
     """
-    out = []
-    for hexcolor in preset["colors"]:
-        v = int(hexcolor.lstrip("#"), 16)
-        out.append(((v >> 16) & 255, (v >> 8) & 255, v & 255))
-    return out
+    return _canvas.palette_rgb(preset["colors"])
 
 
 def write_strip(path, pixmap, preset):

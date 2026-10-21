@@ -95,7 +95,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
         test-petalblade test-agents-md test-art-palettes test-art-canvas \
-        test-art-pixmap
+        test-art-pixmap test-art-rig
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -144,7 +144,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-agents-md test-art-palettes test-art-canvas test-art-pixmap
+        test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
+        test-art-rig
 
 all: $(TARGET)
 
@@ -392,6 +393,19 @@ $(GUEST_BUILD)/px_probe.bin: $(GUEST_BUILD)/px_probe.elf
 # errors, each pinned.
 test-art-pixmap: $(CLI_BIN) $(GUEST_BUILD)/px_probe.bin tests/test_art_pixmap.sh
 	sh tests/test_art_pixmap.sh $(CLI_BIN) $(GUEST_BUILD) .
+
+# ROADMAP_V4 card 7.4: the rig animator. The humanoid preset builds into
+# programs/rig/ (the strips, the manifest fragment, the compiled header and
+# the contact sheet) — the build truth.
+rig-samples:
+	tools/arc1-art rig art/rigs/humanoid.json --out-dir programs/rig
+	python3 tools/arc1_assetc.py --assets programs/rig/assets.json \
+	    --out-dir programs/rig --report
+
+# The rig's acceptance: determinism, one baseline per state, the walk
+# within 25 % of its mean, at most 15 colours a frame, and the review.
+test-art-rig: tests/test_art_rig.sh
+	sh tests/test_art_rig.sh .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

@@ -46,8 +46,8 @@ import struct
 import zlib
 
 __all__ = ["Canvas", "Rng", "BAYER4", "bayer", "ordered_dither",
-           "expand565", "write_indexed_png", "to_strip", "contact_sheet",
-           "png_chunk"]
+           "expand565", "palette_rgb", "write_indexed_png", "to_strip",
+           "contact_sheet", "png_chunk"]
 
 
 # --------------------------------------------------------------------------
@@ -131,6 +131,24 @@ class Rng:
         if n <= 1:
             return 0
         return (self.next() >> 16) % n
+
+
+def palette_rgb(palette):
+    """The palette's 8-bit RGB entries.
+
+    Accepts both forms the pipeline uses: the device's own (r5, g6, b5)
+    triples and the presets' '#RRGGBB' strings. `None` is transparent.
+    """
+    out = []
+    for c in palette:
+        if c is None:
+            out.append(None)
+        elif isinstance(c, str):
+            v = int(c.lstrip("#"), 16)
+            out.append(((v >> 16) & 255, (v >> 8) & 255, v & 255))
+        else:
+            out.append(expand565(c))
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -379,7 +397,7 @@ def to_strip(frames, palette, path):
     if not frames:
         raise ValueError("to_strip needs at least one frame")
     w, h = frames[0].w, frames[0].h
-    exp = [expand565(c) for c in palette]
+    exp = palette_rgb(palette)
     raw = bytearray()
     for y in range(h):
         raw.append(0)
@@ -407,7 +425,7 @@ def contact_sheet(items, scale=3, labels=None, path=None, palette=None,
     w, h = frames[0].w, frames[0].h
     cell_w, cell_h = w * scale, h * scale
     W, H_ = cell_w * len(frames), cell_h
-    exp = [expand565(c) for c in (palette or [])]
+    exp = palette_rgb(palette or [])
     raw = bytearray()
     for y in range(H_):
         raw.append(0)

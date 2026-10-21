@@ -1,0 +1,266 @@
+{
+ "format": 1,
+ "palettes": {
+  "dusk16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#080C18",
+    "#181831",
+    "#21244A",
+    "#31306B",
+    "#424184",
+    "#5255A5",
+    "#7371BD",
+    "#9492D6",
+    "#B5B6EF",
+    "#7B2839",
+    "#A5384A",
+    "#C6595A",
+    "#EF8E73",
+    "#EFBA5A",
+    "#FFE3A5"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "humanoid_attack",
+   "file": "humanoid_attack.png",
+   "palette": "dusk16",
+   "frames": 4,
+   "collision": [
+    1,
+    2,
+    23,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_dead",
+   "file": "humanoid_dead.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "collision": [
+    0,
+    4,
+    20,
+    28
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_fall",
+   "file": "humanoid_fall.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "collision": [
+    4,
+    2,
+    20,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_hurt",
+   "file": "humanoid_hurt.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "collision": [
+    2,
+    0,
+    18,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_idle",
+   "file": "humanoid_idle.png",
+   "palette": "dusk16",
+   "frames": 4,
+   "collision": [
+    3,
+    1,
+    19,
+    31
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_jump",
+   "file": "humanoid_jump.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "collision": [
+    4,
+    2,
+    20,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_run",
+   "file": "humanoid_run.png",
+   "palette": "dusk16",
+   "frames": 8,
+   "collision": [
+    1,
+    3,
+    22,
+    29
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_walk",
+   "file": "humanoid_walk.png",
+   "palette": "dusk16",
+   "frames": 8,
+   "collision": [
+    3,
+    1,
+    19,
+    31
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "attack",
+   "sprite": "humanoid_attack",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 100
+  },
+  {
+   "name": "dead",
+   "sprite": "humanoid_dead",
+   "frames": [
+    0
+   ],
+   "ms": 300
+  },
+  {
+   "name": "fall",
+   "sprite": "humanoid_fall",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "hurt",
+   "sprite": "humanoid_hurt",
+   "frames": [
+    0
+   ],
+   "ms": 200
+  },
+  {
+   "name": "idle",
+   "sprite": "humanoid_idle",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 200
+  },
+  {
+   "name": "jump",
+   "sprite": "humanoid_jump",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "run",
+   "sprite": "humanoid_run",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 80
+  },
+  {
+   "name": "walk",
+   "sprite": "humanoid_walk",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 120
+  }
+ ]
+}

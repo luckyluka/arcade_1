@@ -44,6 +44,27 @@ art/
    [docs/art/PROVENANCE.md](../docs/art/PROVENANCE.md) for the schema and
    `art/ART_LICENSES.md` for the generated summary.
 
+## The rig animator
+
+A character is a list of **parts** (a name, a parent, a pivot, a shape, a
+colour) and a **pose** (per part: an angle in whole degrees and an
+integer offset). Animating is interpolating between poses — linear, with
+the result rounded to whole pixels **half away from zero**.
+
+```sh
+tools/arc1-art rig art/rigs/humanoid.json --out-dir programs/rig
+    # the strips (one per state), the manifest fragment and the sheet
+```
+
+`art/rigs/humanoid.json` is the reference preset: idle (4), walk (8),
+run (8), jump (1), fall (1), attack (4), hurt (1), dead (1), with an
+optional weapon part. The frames of a state share their size and their
+baseline, the idle frame's opaque pixels give the collision box, and the
+outline pass runs last.
+
+The honest verdict on the result — including what looked wrong and what
+was changed — is in **[art/reports/humanoid.md](reports/humanoid.md)**.
+
 ## The `.px` format (text pixmaps)
 
 A pixmap is a sprite written as text — the one thing an agent writes
@@ -107,7 +128,7 @@ fragment and the compiled header — the build truth).
 |---|---|---|
 | 7.2 | `tools/arc1_art/canvas.py` | the drawing library (primitives, ramps, PNG) |
 | 7.3 | `tools/arc1_art/pixmap.py` | the `.px` text pixmap format and the sprite lab |
-| 7.4 | `tools/arc1_art/rig.py` | the rig animator (parts, keyframes, strips) |
+| 7.4 | `tools/arc1_art/rig.py` | the rig animator (parts, keyframes, strips) — see `art/rigs/humanoid.json` and the review in `art/reports/humanoid.md` |
 | 7.5 | `tools/arc1_art/ingest.py` | raster ingest — **local only, stdlib only** |
 | 7.6 | `tools/arc1_art/qa.py` | `arc1-art check`: the automated visual checks |
 

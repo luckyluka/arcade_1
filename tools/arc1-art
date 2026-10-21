@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from arc1_art import pixmap                              # noqa: E402
+from arc1_art import pixmap, rig                        # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PALETTES_DIR = os.path.join(ROOT, "art", "palettes")
@@ -103,6 +103,71 @@ def cmd_sheet(args):
     return 0
 
 
+def cmd_rig(args):
+    """The rig preset -> the strips, the manifest fragment, the sheet."""
+    try:
+        with open(args.preset) as f:
+            preset = json.load(f)
+    except (OSError, ValueError) as e:
+        sys.stderr.write("arc1-art: cannot read %s: %s\n" % (args.preset, e))
+        return 2
+    try:
+        palette = pixmap.load_preset(PALETTES_DIR,
+                                     preset.get("palette", "neutral16"))
+        built, states = rig.build_rig(preset)
+    except (rig.RigError, pixmap.PxError) as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    name = preset.get("name", "rig")
+    fragment = {"format": 1, "palettes": {}, "sprites": [], "animations": []}
+    fragment["palettes"][preset.get("palette", "neutral16")] = {
+        "bank": preset.get("bank", 0),
+        "colors": list(palette["colors"]),
+    }
+    provenance = {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "the rig animator: %s" % os.path.basename(args.preset),
+        "seed": 0,
+        "licence": "this repository",
+    }
+    for state, frames in sorted(states.items()):
+        sprite = "%s_%s" % (name, state)
+        strip = os.path.join(args.out_dir, sprite + ".png")
+        rig.write_strip(strip, frames, palette["colors"])
+        box = rig.collision_box(frames)
+        fragment["sprites"].append({
+            "name": sprite,
+            "file": sprite + ".png",
+            "palette": preset.get("palette", "neutral16"),
+            "frames": len(frames),
+            "collision": list(box),
+            "provenance": dict(provenance),
+        })
+        anim = preset.get("animations", {}).get(state, {})
+        fragment["animations"].append({
+            "name": state,
+            "sprite": sprite,
+            "frames": list(range(len(frames))),
+            "ms": anim.get("ms", 100),
+        })
+
+    fragment_path = os.path.join(args.out_dir, "assets.json")
+    with open(fragment_path, "w", encoding="utf-8") as f:
+        json.dump(fragment, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+    sheet = os.path.join(args.out_dir, name + "_sheet.png")
+    rig.write_contact_sheet(sheet, states, palette, scale=args.scale)
+    print("rig: %s (%d state(s), %d sprite(s))"
+          % (args.out_dir, len(states), len(fragment["sprites"])))
+    print("rig: %s" % fragment_path)
+    print("rig: %s" % sheet)
+    return 0
+
+
 def cmd_info(args):
     pm = _load(args.file)
     print("name %s" % pm["name"])
@@ -129,6 +194,12 @@ def main(argv=None):
     p.add_argument("--scale", type=int, default=8)
     p.add_argument("--out", required=True, metavar="FILE.png")
     p.set_defaults(func=cmd_sheet)
+
+    p = sub.add_parser("rig", help="a rig preset -> strips, a fragment, a sheet")
+    p.add_argument("preset", metavar="FILE.json")
+    p.add_argument("--out-dir", required=True, metavar="DIR")
+    p.add_argument("--scale", type=int, default=4)
+    p.set_defaults(func=cmd_rig)
 
     p = sub.add_parser("info", help="what a pixmap declares")
     p.add_argument("file", metavar="FILE.px")
