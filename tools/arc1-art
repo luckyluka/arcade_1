@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""arc1-art — the ARCADE-1 art tools (ROADMAP_V4, Wave 7).
+
+    arc1-art px2assets FILE.px... --out-dir DIR
+        Parse the pixmaps, write each one's strip PNG and write an
+        assets.json fragment (the manifest arc1-assetc compiles).
+
+    arc1-art sheet FILE.px [--scale N] --out FILE.png
+        Write the preview sheet: every frame at 1x and at N times, with
+        the frame numbers.
+
+    arc1-art info FILE.px
+        Print what the file declares (name, size, palette, bank, frames).
+
+Stdlib only, deterministic. Exit codes: 0 ok, 1 a teaching error (with
+the file, the line and what to do), 2 a usage error.
+"""
+
+import argparse
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from arc1_art import pixmap                              # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PALETTES_DIR = os.path.join(ROOT, "art", "palettes")
+
+
+def _load(path):
+    try:
+        return pixmap.parse_px(path)
+    except pixmap.PxError as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        raise SystemExit(1)
+    except OSError as e:
+        sys.stderr.write("arc1-art: cannot read %s: %s\n" % (path, e))
+        raise SystemExit(2)
+
+
+def cmd_px2assets(args):
+    """The pixmaps -> strip PNGs + an assets.json fragment."""
+    os.makedirs(args.out_dir, exist_ok=True)
+    fragment = {"format": 1, "palettes": {}, "sprites": []}
+    written = []
+    for path in args.files:
+        pm = _load(path)
+        try:
+            preset = pixmap.load_preset(PALETTES_DIR, pm["palette"])
+        except pixmap.PxError as e:
+            sys.stderr.write("arc1-art: %s\n" % e)
+            return 1
+        png = os.path.join(args.out_dir, pm["name"] + ".png")
+        pixmap.write_strip(png, pm, preset)
+        written.append(png)
+
+        palette_name = pm["palette"]
+        if palette_name not in fragment["palettes"]:
+            fragment["palettes"][palette_name] = {
+                "bank": pm["bank"],
+                "colors": list(preset["colors"]),
+            }
+        elif fragment["palettes"][palette_name]["bank"] != pm["bank"]:
+            sys.stderr.write(
+                "arc1-art: %s: the palette %r is already in the fragment with "
+                "bank %d (this file asks for %d) — one palette, one bank\n"
+                % (path, palette_name,
+                   fragment["palettes"][palette_name]["bank"], pm["bank"]))
+            return 1
+        sprite = {
+            "name": pm["name"],
+            "file": pm["name"] + ".png",
+            "palette": palette_name,
+            "frames": len(pm["frames"]),
+        }
+        if pm["provenance"] is not None:
+            sprite["provenance"] = pm["provenance"]
+        fragment["sprites"].append(sprite)
+
+    fragment_path = os.path.join(args.out_dir, "assets.json")
+    with open(fragment_path, "w", encoding="utf-8") as f:
+        json.dump(fragment, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+    for png in written:
+        print("px2assets: %s" % png)
+    print("px2assets: %s (%d sprite(s))" % (fragment_path,
+                                             len(fragment["sprites"])))
+    return 0
+
+
+def cmd_sheet(args):
+    pm = _load(args.file)
+    try:
+        preset = pixmap.load_preset(PALETTES_DIR, pm["palette"])
+    except pixmap.PxError as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+    pixmap.write_sheet(args.out, pm, preset, scale=args.scale)
+    print("sheet: %s (%d frame(s) at %dx and %dx)"
+          % (args.out, len(pm["frames"]), args.scale, 1))
+    return 0
+
+
+def cmd_info(args):
+    pm = _load(args.file)
+    print("name %s" % pm["name"])
+    print("size %dx%d" % (pm["w"], pm["h"]))
+    print("palette %s bank %d" % (pm["palette"], pm["bank"]))
+    print("anchor %s" % pm["anchor"])
+    print("frames %d" % len(pm["frames"]))
+    if pm["provenance"] is not None:
+        print("provenance %s" % json.dumps(pm["provenance"], sort_keys=True))
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="arc1-art", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="command")
+
+    p = sub.add_parser("px2assets", help="pixmaps -> strip PNGs + a manifest fragment")
+    p.add_argument("files", nargs="+", metavar="FILE.px")
+    p.add_argument("--out-dir", required=True, metavar="DIR")
+    p.set_defaults(func=cmd_px2assets)
+
+    p = sub.add_parser("sheet", help="the preview sheet of a pixmap")
+    p.add_argument("file", metavar="FILE.px")
+    p.add_argument("--scale", type=int, default=8)
+    p.add_argument("--out", required=True, metavar="FILE.png")
+    p.set_defaults(func=cmd_sheet)
+
+    p = sub.add_parser("info", help="what a pixmap declares")
+    p.add_argument("file", metavar="FILE.px")
+    p.set_defaults(func=cmd_info)
+
+    args = ap.parse_args(argv)
+    if not getattr(args, "func", None):
+        ap.print_usage(sys.stderr)
+        return 2
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

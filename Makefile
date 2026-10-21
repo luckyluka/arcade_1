@@ -94,7 +94,8 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
-        test-petalblade test-agents-md test-art-palettes test-art-canvas
+        test-petalblade test-agents-md test-art-palettes test-art-canvas \
+        test-art-pixmap
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -143,7 +144,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-agents-md test-art-palettes test-art-canvas
+        test-agents-md test-art-palettes test-art-canvas test-art-pixmap
 
 all: $(TARGET)
 
@@ -366,6 +367,31 @@ test-art-palettes: tests/test_art_palettes.sh
 # test) — plus the unit tests of every primitive.
 test-art-canvas: tests/test_art_canvas.sh tests/test_art_canvas.py
 	sh tests/test_art_canvas.sh .
+
+# ROADMAP_V4 card 7.3: the .px text pixmaps. The samples in art/px/ are
+# the sources; the strips, the manifest fragment and the compiled header in
+# programs/px/ are the build truth (regenerate, never hand-edit).
+px-samples:
+	tools/arc1-art px2assets art/px/*.px --out-dir programs/px
+	python3 tools/arc1_assetc.py --assets programs/px/assets.json \
+	    --out-dir programs/px --report
+
+# The pixmap probe: draws one .px sprite so the round trip can be counted.
+$(GUEST_BUILD)/px_probe.elf: tests/guests/px_probe.c programs/px/assets.h \
+        programs/asset.h programs/arcade1.h programs/gfx.h programs/crt0.S \
+        programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -Iprograms/px -T programs/link.ld \
+	    -o $@ programs/crt0.S $<
+
+$(GUEST_BUILD)/px_probe.bin: $(GUEST_BUILD)/px_probe.elf
+	$(RISCV_OBJCOPY) -O binary $< $@
+
+# ROADMAP_V4 card 7.3: the .px text pixmaps — the round trip (a .px file
+# -> the strip -> the header -> a guest that draws it) and the teaching
+# errors, each pinned.
+test-art-pixmap: $(CLI_BIN) $(GUEST_BUILD)/px_probe.bin tests/test_art_pixmap.sh
+	sh tests/test_art_pixmap.sh $(CLI_BIN) $(GUEST_BUILD) .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

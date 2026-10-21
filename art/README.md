@@ -44,6 +44,49 @@ art/
    [docs/art/PROVENANCE.md](../docs/art/PROVENANCE.md) for the schema and
    `art/ART_LICENSES.md` for the generated summary.
 
+## The `.px` format (text pixmaps)
+
+A pixmap is a sprite written as text — the one thing an agent writes
+well. The samples live in `art/px/`:
+
+```
+# name: coin   size: 8x8   palette: warm16   bank: 3
+# provenance: {"tool": "agent-authored", ...}
+..1111..
+.144441.
+14455441
+14455441
+14444441
+14444441
+.144441.
+..1111..
+```
+
+* `.` is transparent; `0`-`9` and `a`-`f` are palette indices (index 0
+  is the palette's transparent slot, so `.` is the usual way to say it).
+* `--` on its own line separates the frames; every frame of a pixmap has
+  the declared size.
+* The header keys: `name`, `size` (WxH), `palette` (a preset), `bank`
+  (0..15), the optional `anchor` (`feet` — the default — or `center`) and
+  the optional `provenance` (the JSON block of
+  [docs/art/PROVENANCE.md](../docs/art/PROVENANCE.md)).
+
+The tools:
+
+```sh
+tools/arc1-art px2assets art/px/*.px --out-dir programs/px
+    # the strip PNGs + the assets.json fragment (arc1-assetc compiles it)
+
+tools/arc1-art sheet art/px/coin.px --scale 8 --out preview.png
+    # the preview sheet: every frame at 1x and at 8x, with the numbers
+
+tools/arc1-art info art/px/coin.px
+    # what the file declares
+```
+
+`make px-samples` regenerates `programs/px/` (the strips, the manifest
+fragment and the compiled header — the build truth).
+
 ## The presets
 
 `art/palettes/*.json` — six 16-entry banks, ready to paste into an

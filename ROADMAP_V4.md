@@ -243,8 +243,8 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 1. Read §0-§2 and `docs/experiments/round3-cleanroom.md`, `docs/experiments/round5-petalblade.md`.
 2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
    the status table in §9.
-3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1 and
-   7.2 are done; **7.3** (the text pixmaps) is next.
+3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.3
+   are done; **7.4** (the rig animator) is next.
 
 ## 9. Status
 
@@ -264,8 +264,9 @@ that carried it, and the day it landed.
 | 4.8 | the device work re-measured at 480x270 | `22fdb0d` | 2026-10-20 |
 | 4.9 | AGENTS.md, the status tables, the `make check` budget | (this commit) | 2026-10-20 |
 | 7.1 | the art workspace: presets, style template, provenance | `ae8f234` | 2026-10-21 |
-| 7.2 | the drawing library, extracted without changing a byte | (this commit) | 2026-10-21 |
-| 7.3-7.8 | the AI art pipeline | — | not started |
+| 7.2 | the drawing library, extracted without changing a byte | `f55e3db` | 2026-10-21 |
+| 7.3 | the .px text pixmaps and the sprite lab | (this commit) | 2026-10-21 |
+| 7.4-7.8 | the AI art pipeline | — | not started |
 | 8.1-8.3 | audio observability | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 
