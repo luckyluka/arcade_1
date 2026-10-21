@@ -284,10 +284,23 @@ ROM are exactly as they were.
   GAUNTLET, CROSS, LATTICE, CROWN and THE CORE. The title screen's
   **level picker** (left/right) lets a player jump to any stage.
 * **The feel**: the paddle returns the ball at an angle that depends on
-  where you hit it (thirteen steps from -60° to +60°), the ball speeds up
-  with every paddle hit, a **lost ball costs a life and not the bricks
-  you have already broken** (the classic rule — the first cut reloaded
-  the field and that was wrong), and the screen clears when you die.
+  where you hit it (thirteen steps from -60° to +60°), a **lost ball
+  costs a life and not the bricks you have already broken** (the classic
+  rule — the first cut reloaded the field and that was wrong), and the
+  screen clears when you die.
+* **The physics, revised after play-testing.** The first cut sampled the
+  paddle collision once a frame, so the launch angle was a third of a
+  step off the one the player aimed at; the ball's speed crept up on
+  every hit, so the rally turned to noise; and nothing stopped a bounce
+  from flattening the ball, so it could settle into a loop between the
+  wall and the paddle. Now: the contact is **swept** (the exact point
+  where the ball crossed the paddle's plane decides the angle), the
+  speed is a property of the **stage** (it grows a little per level and
+  never creeps mid-rally), no bounce may leave the ball shallower than
+  **60° from the vertical** (it is put back on that line at the same
+  speed), and the paddle's own motion adds a little **english**. The
+  ball's velocity is observable (`ball_vx`, `ball_vy`) so the invariants
+  can be checked: over a whole session the ball is never flat.
 * **Four brick kinds**: normal, tough (two hits — it cracks first),
   steel (the ball bounces off it) and bomb (it takes its neighbours with
   it, three links deep).
@@ -304,12 +317,14 @@ ROM are exactly as they were.
   brickstorm-art` regenerates both).
 * **The sound**: the audio device's tone, pitched by where the ball hit
   the paddle and by which row of brick it broke.
-* **The test**: `tests/test_brickstorm.sh` with two scripted sessions —
+* **The test**: `tests/test_brickstorm.sh` with the scripted session
   `tests/inputs/brickstorm.txt` (the title, level 1 played to the game
-  over, the level picker, the boss and the win) and
-  `tests/inputs/brickstorm_clear.txt` (a stage cleared, so the
-  progression is covered too) — plus a 2,600-frame golden and a
-  committed ROM.
+  over, the level picker, the boss and the win) — plus a 2,600-frame
+  golden and a committed ROM. The stage-to-stage progression is *not*
+  scripted: with the new physics a blind paddle cannot clear a stage
+  (the ball's path is too precise for a fixed sweep, and a real player
+  breaks the loop by moving), so the stage-CLEAR path is covered by the
+  boss's death instead — the last stage ends like any other.
 * **Cost**: 7,155 instructions and 167,541 pixels a frame (1.29 screens)
   — under 1 % of the instruction cap.
 

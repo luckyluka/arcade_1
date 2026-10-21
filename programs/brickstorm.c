@@ -51,9 +51,18 @@
 #define PADDLE_W_MID 56
 #define PADDLE_SPEED 7
 #define BALL_S       8
-#define SERVE_SPEED  52       /* 3.25 px per frame */
-#define BALL_MAX_V   96       /* 6 px per frame: the fastest it gets */
-#define BALL_MIN_V   26       /* 1.6 px: the ball never crawls sideways */
+/* The ball's speed is a property of the STAGE, not of the rally: it grows
+ * a little with every level and never creeps up while the player is
+ * returning it. (It used to climb on every paddle hit, and the ball ended
+ * up both fast and flat — the rally turned into noise.) */
+#define SPEED_BASE   42       /* 2.6 px per frame at stage 1 */
+#define SPEED_STEP   2        /* +0.125 px per stage */
+#define SPEED_MAX    58       /* 3.6 px per frame: the fastest it gets */
+/* The shallowest legal angle is 60 degrees from the vertical, so the ball
+ * may never travel flatter than that — no matter which way it is bounced.
+ * Without this the ball settles into a flat loop between the wall and
+ * the paddle and the game stops moving. */
+#define FLAT_LIMIT   223      /* |vx| may not exceed 0.87 * |vy| (256ths) */
 
 #define SPARK_MAX 64
 
@@ -88,6 +97,8 @@ int power_timer = 0;      /* its frames left */
 int boss_hp = 0;
 int boss_state = 0;       /* 0 none, 1 entering, 2 fighting, 3 dying */
 int balls = 0;            /* the balls in play */
+int ball_vx = 0;          /* the first ball's velocity, 1/16 px a frame */
+int ball_vy = 0;
 
 /* ------------------------------------------------------------------------ */
 /* the entities                                                             */
@@ -96,6 +107,7 @@ int balls = 0;            /* the balls in play */
 typedef struct {
     int kind;              /* the brick kind */
     int hp;
+    int flash;             /* the frames of the hit-flash left */
     int alive;
 } Brick;
 
@@ -119,15 +131,19 @@ static Shot  boss_shots[8];        /* the boss's guns */
 
 /* the run's private state */
 static int paddle_w = PADDLE_W_MID;
-static int ball_speed = SERVE_SPEED;
+static int ball_speed = SPEED_BASE;
+static int paddle_vx;          /* the paddle's speed this frame (english) */
+static int paddle_squash;      /* the frames of the paddle's squash left */
 static int drop_timer;
 static int laser_timer;        /* the frames of the laser left */
+static int speed_timer;        /* the frames of the SLOW/FAST left */
 static int catch_timer;        /* the frames of the catch left */
 static int laser_cool;         /* the frames until the next laser shot */
 static int dead_timer;
 static int clear_timer;
 static int shake;
 static int boss_x, boss_y;
+static int boss_cleared;      /* the boss is down: the stage is over */
 static int boss_timer;
 static int title_t;
 static int title_level = 1;     /* the level the title screen starts at */
@@ -178,6 +194,32 @@ static void sfx_update(void)
     __asm__ volatile ("" ::: "memory");
     AUDIO_FREQ = (unsigned int)f;
     AUDIO_CTRL = 1;
+}
+
+/* The ball's speed for a stage: a little faster every level, capped. */
+static int speed_for_level(int n)
+{
+    int v = SPEED_BASE + (n - 1) * SPEED_STEP;
+    if (v > SPEED_MAX)
+        v = SPEED_MAX;
+    return v;
+}
+
+/* Keep the ball out of the flat band: no bounce may leave it shallower
+ * than 60 degrees from the vertical.
+ *
+ * The ball is put back ON the 60 degree line at the same speed, rather
+ * than having its horizontal part trimmed: trimming it made the ball
+ * crawl along the ceiling instead of flying (a flat ball whose speed
+ * keeps shrinking is a slower flat ball, and it never gets out). */
+static void limit_flat(Ball *b)
+{
+    int ax = b->vx < 0 ? -b->vx : b->vx;
+    int ay = b->vy < 0 ? -b->vy : b->vy;
+    if (ay == 0 || ax * 256 <= ay * FLAT_LIMIT)
+        return;
+    b->vx = (b->vx < 0 ? -1 : 1) * ((ball_speed * FLAT_LIMIT) >> 8);
+    b->vy = (b->vy < 0 ? -1 : 1) * ((ball_speed * 128) >> 8);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -425,9 +467,10 @@ static void spawn_drop(int x, int y, int kind)
 
 /* The return angles: the paddle's edge returns the ball at a shallow
  * angle and its centre at a steep one — thirteen steps from -60 to +60
- * degrees, as unit vectors in hundredths. */
-static const signed char ang_x[7] = { 0, 17, 34, 50, 64, 77, 87 };
-static const signed char ang_y[7] = { 100, 98, 94, 87, 77, 64, 50 };
+ * degrees, as unit vectors in 256ths (so the multiplication into the
+ * ball's 1/16 px velocity does not throw the angle away). */
+static const short ang_x[7] = { 0, 44, 87, 128, 164, 197, 223 };
+static const short ang_y[7] = { 256, 251, 241, 223, 197, 164, 128 };
 
 /* ------------------------------------------------------------------------ */
 /* the levels                                                               */
@@ -437,6 +480,7 @@ static void load_level(int n)
 {
     int r, c;
     bricks_left = 0;
+    ball_speed = speed_for_level(n);
     for (r = 0; r < BRICK_ROWS; r++) {
         for (c = 0; c < BRICK_COLS; c++) {
             Brick *b = &bricks[r * BRICK_COLS + c];
@@ -445,6 +489,7 @@ static void load_level(int n)
                 ch = levels[n - 1][r * BRICK_COLS + c];
             b->alive = 0;
             b->hp = 0;
+            b->flash = 0;
             b->kind = B_NORMAL;
             switch (ch) {
             case 'a': case 'b': case 'c': case 'd': case 'e':
@@ -518,12 +563,14 @@ static void apply_power(int kind)
         }
         break;
     case P_SLOW:
-        if (ball_speed > 30)
+        if (ball_speed > SPEED_BASE)
             ball_speed -= 8;
+        speed_timer = 600;
         break;
     case P_FAST:
-        if (ball_speed < BALL_MAX_V)
+        if (ball_speed < SPEED_MAX)
             ball_speed += 8;
+        speed_timer = 600;
         break;
     case P_LASER:
         laser_timer = 900;
@@ -551,6 +598,7 @@ static void apply_power(int kind)
 
 static void start_boss(void)
 {
+    ball_speed = speed_for_level(BOSS_LEVEL);
     boss_x = (SCREEN_W - BOSS_W) / 2;
     boss_y = -BOSS_H;
     boss_state = 1;
@@ -602,13 +650,17 @@ static void reset_game(void)
     level = 1;
     paddle_w = PADDLE_W_MID;
     paddle_x = SCREEN_W / 2;
-    ball_speed = SERVE_SPEED;
+    ball_speed = speed_for_level(1);
+    paddle_vx = 0;
+    paddle_squash = 0;
     power = 0;
     power_timer = 0;
     laser_timer = 0;
     catch_timer = 0;
+    speed_timer = 0;
     shake = 0;
     boss_state = 0;
+    boss_cleared = 0;
     boss_hp = 0;
     frames = 0;
     load_level(level);
@@ -695,6 +747,7 @@ static void ball_vs_bricks(Ball *b)
                 else
                     b->x = (bx + BRICK_W) * FP;
             }
+            limit_flat(b);
 
             if (br->kind == B_STEEL) {
                 sfx(240, 200, 8);
@@ -702,6 +755,8 @@ static void ball_vs_bricks(Ball *b)
                 return;
             }
             br->hp--;
+            br->flash = 3;
+            shake = 2;
             if (br->hp <= 0) {
                 break_brick(r, c, 0);
                 if (bricks_left <= 0 && boss_state == 0) {
@@ -762,16 +817,27 @@ static void ball_vs_boss(Ball *b)
             b->vy = -b->vy;
             b->y = (boss_y - BALL_S) * FP;
         }
+        limit_flat(b);
         sfx(300, 240, 6);
     }
 }
 
-/* The ball against the paddle: where it lands decides the angle. */
+/* The ball against the paddle: where it lands decides the angle.
+ *
+ * The contact is SWEPT, not sampled: the ball moves three or four pixels
+ * a frame, so the position at the moment the overlap was noticed can be
+ * a whole ball-width past the paddle — and the launch angle with it.
+ * Here the exact point where the ball's lower edge crossed the paddle's
+ * top edge is worked out instead, so the angle is the one the player
+ * aimed at and not the one the frame rate happened to produce.
+ *
+ * The paddle's own motion adds a little english: sweeping it as the ball
+ * arrives bends the return. */
 static void ball_vs_paddle(Ball *b)
 {
     int px = b->x / FP;
     int py = b->y / FP;
-    int off, step, k;
+    int prev_top, now_top, frac, cross_x, off, step, k;
     if (b->vy <= 0)
         return;
     if (py + BALL_S < PADDLE_Y || py > PADDLE_Y + PADDLE_H)
@@ -779,19 +845,37 @@ static void ball_vs_paddle(Ball *b)
     if (px + BALL_S <= paddle_x - paddle_w / 2 ||
         px >= paddle_x + paddle_w / 2)
         return;
-    off = px + BALL_S / 2 - paddle_x;
-    step = (off * 6) / (paddle_w / 2);
+
+    /* where the ball's lower edge crossed the paddle's top edge */
+    prev_top = b->y - b->vy + BALL_S * FP;
+    now_top = b->y + BALL_S * FP;
+    if (now_top <= prev_top) {
+        /* the ball is already past the plane (it tunnelled): use where it
+         * is now */
+        cross_x = b->x;
+    } else {
+        frac = ((PADDLE_Y * FP - prev_top) * 256) / (now_top - prev_top);
+        if (frac < 0)
+            frac = 0;
+        if (frac > 256)
+            frac = 256;
+        cross_x = (b->x - b->vx) + (b->vx * frac) / 256;
+    }
+
+    /* the offset from the paddle's centre, in 1/16 px */
+    off = cross_x - paddle_x * FP;
+    step = (off * 6) / (paddle_w * FP / 2);
+    /* the english: the paddle's own motion bends the return a little */
+    step += paddle_vx / 5;
     k = step < 0 ? -step : step;
     if (k > 6)
         k = 6;
     step = step < 0 ? -k : k;
-    b->vx = (ball_speed * ang_x[k]) / 100;
-    b->vy = -(ball_speed * ang_y[k]) / 100;
-    if (b->vy > -(BALL_MIN_V * 100) / 100)
-        b->vy = -(BALL_MIN_V * 100) / 100;
+    b->vx = (ball_speed * ang_x[k]) >> 8;
+    b->vy = -(ball_speed * ang_y[k]) >> 8;
     b->y = (PADDLE_Y - BALL_S) * FP;
-    if (ball_speed < BALL_MAX_V)
-        ball_speed += 4;
+    paddle_squash = 3;
+    spawn_sparks(cross_x / FP, PADDLE_Y, 3, 5);
     sfx(440 + k * 90, 300 + k * 60, 6);
     trail_n = 0;
 }
@@ -833,15 +917,18 @@ static void update_balls(void)
         if (b->x < 0) {
             b->x = 0;
             b->vx = -b->vx;
+            limit_flat(b);
             sfx(700, 500, 4);
         } else if (b->x > (SCREEN_W - BALL_S) * FP) {
             b->x = (SCREEN_W - BALL_S) * FP;
             b->vx = -b->vx;
+            limit_flat(b);
             sfx(700, 500, 4);
         }
         if (b->y < HUD_H * FP) {
             b->y = HUD_H * FP;
             b->vy = -b->vy;
+            limit_flat(b);
             sfx(700, 500, 4);
         }
 
@@ -916,16 +1003,20 @@ static void update(void)
     }
     if (state == ST_CLEAR) {
         if (--clear_timer <= 0) {
-            level++;
-            if (level == BOSS_LEVEL) {
-                start_boss();
-                state = ST_SERVE;
-            } else if (level > BOSS_LEVEL) {
+            if (boss_cleared) {
                 state = ST_WIN;
             } else {
-                load_level(level);
-                serve_ball();
-                state = ST_SERVE;
+                level++;
+                if (level == BOSS_LEVEL) {
+                    start_boss();
+                    state = ST_SERVE;
+                } else if (level > BOSS_LEVEL) {
+                    state = ST_WIN;
+                } else {
+                    load_level(level);
+                    serve_ball();
+                    state = ST_SERVE;
+                }
             }
         }
         prev_pad = pad;
@@ -933,16 +1024,22 @@ static void update(void)
     }
 
     /* --- the paddle -------------------------------------------------------- */
-    if (pad & BTN_LEFT) {
-        paddle_x -= PADDLE_SPEED;
-        if (paddle_x < paddle_w / 2 + 2)
-            paddle_x = paddle_w / 2 + 2;
+    {
+        int before = paddle_x;
+        if (pad & BTN_LEFT) {
+            paddle_x -= PADDLE_SPEED;
+            if (paddle_x < paddle_w / 2 + 2)
+                paddle_x = paddle_w / 2 + 2;
+        }
+        if (pad & BTN_RIGHT) {
+            paddle_x += PADDLE_SPEED;
+            if (paddle_x > SCREEN_W - paddle_w / 2 - 2)
+                paddle_x = SCREEN_W - paddle_w / 2 - 2;
+        }
+        paddle_vx = paddle_x - before;     /* the english */
     }
-    if (pad & BTN_RIGHT) {
-        paddle_x += PADDLE_SPEED;
-        if (paddle_x > SCREEN_W - paddle_w / 2 - 2)
-            paddle_x = SCREEN_W - paddle_w / 2 - 2;
-    }
+    if (paddle_squash > 0)
+        paddle_squash--;
 
     /* --- the serve --------------------------------------------------------- */
     if (state == ST_SERVE) {
@@ -951,9 +1048,13 @@ static void update(void)
                 if (!ball_list[i].alive)
                     continue;
                 ball_list[i].stuck = 0;
-                if (ball_list[i].vx == 0)
-                    ball_list[i].vx = (arcade1_rand(2) ? 1 : -1) * 12;
-                ball_list[i].vy = -(ball_speed * 70) / 100;
+                if (ball_list[i].vx == 0) {
+                    /* a small, bounded launch angle — the classic's
+                     * coin-flip launch made the first shot a lottery */
+                    int k = 1 + arcade1_rand(3);      /* 1..3 */
+                    ball_list[i].vx = (ball_speed * ang_x[k] * (arcade1_rand(2) ? 1 : -1)) >> 8;
+                    ball_list[i].vy = -(ball_speed * ang_y[k]) >> 8;
+                }
             }
             state = ST_PLAY;
             sfx(880, 1320, 8);
@@ -987,7 +1088,11 @@ static void update(void)
         if (boss_timer > 80) {
             boss_state = 0;
             add_score(20000);
-            state = ST_WIN;
+            /* the last stage ends like any other stage: the clear beat,
+             * then the win */
+            boss_cleared = 1;
+            clear_timer = 120;
+            state = ST_CLEAR;
             sfx(500, 1000, 30);
         }
     }
@@ -1008,6 +1113,11 @@ static void update(void)
         laser_timer--;
         if (laser_timer == 0)
             power = 0;
+    }
+    if (speed_timer > 0) {
+        speed_timer--;
+        if (speed_timer == 0)
+            ball_speed = speed_for_level(level);   /* the stage's speed back */
     }
 
     /* --- the paddle's laser ------------------------------------------------ */
@@ -1121,6 +1231,11 @@ static void update(void)
         }
     }
 
+    /* --- the bricks' hit flash --------------------------------------------- */
+    for (i = 0; i < BRICK_ROWS * BRICK_COLS; i++)
+        if (bricks[i].flash > 0)
+            bricks[i].flash--;
+
     /* --- the sparks -------------------------------------------------------- */
     for (i = 0; i < SPARK_MAX; i++) {
         Spark *s = &sparks[i];
@@ -1168,6 +1283,8 @@ static void draw_bricks(void)
             int y = BRICK_Y0 + r * BRICK_PITCH_Y;
             if (!b->alive)
                 continue;
+            if (b->flash > 0)
+                arcade1_rect(x, y, BRICK_W, 2, arcade1_rgb(0xFF, 0xF0, 0xC0));
             switch (b->kind) {
             case B_TOUGH:
                 asset_sprite4(&brick_tough_frames[b->hp > 1 ? 0 : 1], x, y, 0);
@@ -1224,7 +1341,8 @@ static void draw_paddle(void)
         fr = &paddle_m_frames[0];
     else
         fr = &paddle_l_frames[0];
-    asset_sprite4(fr, paddle_x - paddle_w / 2, PADDLE_Y, 0);
+    asset_sprite4(fr, paddle_x - paddle_w / 2,
+                  PADDLE_Y + (paddle_squash ? 1 : 0), 0);
 }
 
 static void draw_fx(void)
@@ -1327,7 +1445,10 @@ static void draw_hud(void)
         if ((frames / 30) & 1)
             text_draw(160, 136, "PRESS START", arcade1_rgb(0xFF, 0xD0, 0x60));
     } else if (state == ST_CLEAR) {
-        text_draw(168, 110, "LEVEL CLEAR", arcade1_rgb(0x60, 0xFF, 0x90));
+        if (boss_cleared)
+            text_draw(152, 110, "THE CORE IS DOWN", arcade1_rgb(0x60, 0xFF, 0x90));
+        else
+            text_draw(168, 110, "LEVEL CLEAR", arcade1_rgb(0x60, 0xFF, 0x90));
     } else if (boss_state == 1) {
         text_draw(140, 60, "WARNING", arcade1_rgb(0xFF, 0x40, 0x40));
     }
@@ -1383,6 +1504,13 @@ int main(void)
         }
         draw_paddle();
         draw_hud();
+        for (i = 0; i < 8; i++) {
+            if (ball_list[i].alive) {
+                ball_vx = ball_list[i].vx;
+                ball_vy = ball_list[i].vy;
+                break;
+            }
+        }
         arcade1_present();
     }
     return 0;
