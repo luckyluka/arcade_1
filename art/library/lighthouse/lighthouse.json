@@ -10,7 +10,7 @@
  "description": "A lighthouse's cast and tiles: the keeper (three states), the tower lamp, and four tilesets (a dusk sky, the tower, the cliff, the sea).",
  "palettes": {
   "sky16": {
-   "bank": 0,
+   "bank": 9,
    "colors": [
     "#000000",
     "#080C18",
@@ -31,7 +31,7 @@
    ]
   },
   "tower16": {
-   "bank": 1,
+   "bank": 10,
    "colors": [
     "#000000",
     "#101410",
@@ -52,7 +52,7 @@
    ]
   },
   "rock16": {
-   "bank": 2,
+   "bank": 11,
    "colors": [
     "#000000",
     "#181018",
@@ -73,7 +73,7 @@
    ]
   },
   "sea16": {
-   "bank": 3,
+   "bank": 12,
    "colors": [
     "#000000",
     "#081421",
@@ -94,7 +94,7 @@
    ]
   },
   "keeper16": {
-   "bank": 4,
+   "bank": 13,
    "colors": [
     "#000000",
     "#211408",
@@ -115,7 +115,7 @@
    ]
   },
   "lamp16": {
-   "bank": 5,
+   "bank": 14,
    "colors": [
     "#000000",
     "#080C18",
@@ -136,7 +136,7 @@
    ]
   },
   "ui16": {
-   "bank": 6,
+   "bank": 15,
    "colors": [
     "#000000",
     "#101018",

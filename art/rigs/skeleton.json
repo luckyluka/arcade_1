@@ -6,7 +6,7 @@
   "origin": [12, 30],
   "baseline": 31,
   "palette": "enemy16",
-  "bank": 16,
+  "bank": 7,
   "outline": 1,
   "parts": [
     { "name": "root",  "parent": "root",  "pivot": [0, 0],     "shape": "root",    "color": 1 },

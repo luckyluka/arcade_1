@@ -67,6 +67,7 @@ PACKS = [
     "ui",
     "backgrounds",
     "enemies",
+    "faces",
 ]
 
 
@@ -321,6 +322,14 @@ def merge_packs(names, out_path, root=None):
         # --- the palettes: keep the bank, or move to a free one ----------
         rename = {}
         for pal_name, pal in sorted(doc.get("palettes", {}).items()):
+            colours = list(pal["colors"])
+            existing = manifest["palettes"].get(pal_name)
+            if existing and existing["colors"] == colours:
+                # the SAME palette (the same name, the same colours): share
+                # it, bank and all — so the merged header's names do not
+                # depend on the order the packs were merged in
+                rename[pal_name] = pal_name
+                continue
             bank = pal.get("bank", 0)
             if bank in banks and banks[bank] != pal_name:
                 taken = set(banks)
@@ -328,12 +337,16 @@ def merge_packs(names, out_path, root=None):
                 while free in taken:
                     free += 1
                 bank = free
+            if bank > 15:
+                raise LibraryError(
+                    "the machine has sixteen palette banks and the merge "
+                    "needs a seventeenth (%s) — merge fewer packs, or make "
+                    "two packs share one palette" % pal_name)
             banks[bank] = pal_name
             key = pal_name
             if key in manifest["palettes"]:
                 key = "%s_%s" % (name, pal_name)
-            manifest["palettes"][key] = {"bank": bank,
-                                         "colors": list(pal["colors"])}
+            manifest["palettes"][key] = {"bank": bank, "colors": colours}
             rename[pal_name] = key
 
         # --- the sprites ---------------------------------------------------

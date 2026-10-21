@@ -1,0 +1,90 @@
+{
+ "format": 1,
+ "description": "Two faces for the rigged characters: the rig cannot draw a face, so a game composites one of these on the head.",
+ "roles": {
+  "face_samurai": "overlay",
+  "face_skeleton": "overlay"
+ },
+ "palettes": {
+  "hero16": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  },
+  "enemy16": {
+   "bank": 7,
+   "colors": [
+    "#000000",
+    "#101410",
+    "#293821",
+    "#4A7939",
+    "#7BB25A",
+    "#392418",
+    "#5A3821",
+    "#8C6542",
+    "#181C29",
+    "#4A495A",
+    "#8C8A9C",
+    "#CECBD6",
+    "#F7F3F7",
+    "#6B2021",
+    "#C63839",
+    "#EFC363"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "face_samurai",
+   "file": "strips/face_samurai.png",
+   "palette": "hero16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/faces/pixmaps/face_samurai.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "face_skeleton",
+   "file": "strips/face_skeleton.png",
+   "palette": "enemy16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/faces/pixmaps/face_skeleton.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

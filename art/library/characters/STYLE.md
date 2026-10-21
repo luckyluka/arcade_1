@@ -37,7 +37,7 @@ same character by construction.
 
 ## Palette
 
-* **Preset**: the humanoid uses `neutral16` (bank 0) and the samurai
+* **Preset**: the humanoid uses `dusk16` (bank 0) and the samurai
   `hero16` (bank 1) — the round-5 hero palette, verbatim
 * **Group**: one bank per character
 * **Deviation from the preset**: none

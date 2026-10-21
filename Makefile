@@ -98,7 +98,8 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-art-flip \
         test-art-library \
         test-art-canvas \
-        test-art-pixmap test-art-rig test-art-ingest test-art-qa
+        test-art-pixmap test-art-rig test-art-ingest test-art-qa \
+        test-art-faces
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -148,7 +149,8 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
-        test-art-rig test-art-ingest test-art-qa test-doc-gaps
+        test-art-rig test-art-ingest test-art-qa test-art-faces \
+        test-doc-gaps
 
 all: $(TARGET)
 
@@ -454,6 +456,12 @@ $(GUEST_BUILD)/flip_probe.bin: $(GUEST_BUILD)/flip_probe.elf
 
 test-art-flip: $(CLI_BIN) $(GUEST_BUILD)/flip_probe.bin tests/test_art_flip.sh
 	sh tests/test_art_flip.sh $(CLI_BIN) $(GUEST_BUILD)
+
+# The face probe: a rig body with a .px face on it. The guest is built
+# INSIDE the test, because it needs the merged manifest's header — the
+# merge is part of what the test proves.
+test-art-faces: $(CLI_BIN) tests/test_art_faces.sh
+	sh tests/test_art_faces.sh $(CLI_BIN) $(GUEST_BUILD) .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

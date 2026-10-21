@@ -19,10 +19,11 @@ arc1-art merge <pack>...  # compose packs into a game's manifest
 | `tiles` | Twelve seamless 16x16 surface tiles in one tileset: grass, dirt, stone, brick, wood, sand, water, roof, floor, road, snow, lava. | 1 |
 | `effects` | Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame. | 10 |
 | `ui` | The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip. | 6 |
-| `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 8 |
+| `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 10 |
 | `enemies` | Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig). | 16 |
+| `faces` | Two faces for the rigged characters: the rig cannot draw a face, so a game composites one of these on the head. | 2 |
 
-**100 assets in 9 packs.**
+**104 assets in 10 packs.**
 
 ## `icons`
 
@@ -78,22 +79,22 @@ Two rigged characters (the humanoid reference and the samurai) — eight states 
 | `samurai_jump` | sprite | 28x40 | 1 | hero16 |
 | `samurai_run` | sprite | 28x40 | 8 | hero16 |
 | `samurai_walk` | sprite | 28x40 | 8 | hero16 |
-| `humanoid_attack` | animation | — | 4 | 100 ms |
-| `humanoid_dead` | animation | — | 1 | 300 ms |
-| `humanoid_fall` | animation | — | 1 | 150 ms |
-| `humanoid_hurt` | animation | — | 1 | 200 ms |
-| `humanoid_idle` | animation | — | 4 | 200 ms |
-| `humanoid_jump` | animation | — | 1 | 150 ms |
-| `humanoid_run` | animation | — | 8 | 80 ms |
-| `humanoid_walk` | animation | — | 8 | 120 ms |
-| `samurai_attack` | animation | — | 4 | 100 ms |
-| `samurai_dead` | animation | — | 1 | 300 ms |
-| `samurai_fall` | animation | — | 1 | 150 ms |
-| `samurai_hurt` | animation | — | 1 | 200 ms |
-| `samurai_idle` | animation | — | 4 | 200 ms |
-| `samurai_jump` | animation | — | 1 | 150 ms |
-| `samurai_run` | animation | — | 8 | 80 ms |
-| `samurai_walk` | animation | — | 8 | 120 ms |
+| `humanoid_attack_anim` | animation | — | 4 | 100 ms |
+| `humanoid_dead_anim` | animation | — | 1 | 300 ms |
+| `humanoid_fall_anim` | animation | — | 1 | 150 ms |
+| `humanoid_hurt_anim` | animation | — | 1 | 200 ms |
+| `humanoid_idle_anim` | animation | — | 4 | 200 ms |
+| `humanoid_jump_anim` | animation | — | 1 | 150 ms |
+| `humanoid_run_anim` | animation | — | 8 | 80 ms |
+| `humanoid_walk_anim` | animation | — | 8 | 120 ms |
+| `samurai_attack_anim` | animation | — | 4 | 100 ms |
+| `samurai_dead_anim` | animation | — | 1 | 300 ms |
+| `samurai_fall_anim` | animation | — | 1 | 150 ms |
+| `samurai_hurt_anim` | animation | — | 1 | 200 ms |
+| `samurai_idle_anim` | animation | — | 4 | 200 ms |
+| `samurai_jump_anim` | animation | — | 1 | 150 ms |
+| `samurai_run_anim` | animation | — | 8 | 80 ms |
+| `samurai_walk_anim` | animation | — | 8 | 120 ms |
 
 **Review:** **The format is the value; the samurai's pixels are not.** A rig gives
 
@@ -251,7 +252,9 @@ What is behind the game: three seamless parallax ridge strips, a tileable star f
 | `cloud` | layer | 32x16 | 1 | dusk16 |
 | `moon` | layer | 16x16 | 1 | dusk16 |
 | `sky_bands` | tileset | 272x16 | 1 | dusk16 |
+| `sky_bands_day` | tileset | 272x16 | 1 | day16 |
 | `sky_dusk` | map | — | 0 | — |
+| `sky_day` | map | — | 0 | — |
 
 **Review:** **The ridges are the useful part, and they work.** Each is a seamless
 
@@ -289,4 +292,25 @@ Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig).
 | `skeleton_dead_anim` | animation | — | 1 | 300 ms |
 
 **Review:** **The skeleton is the one that matters, and it works.** A walking enemy is
+
+## `faces`
+
+Two faces for the rigged characters: the rig cannot draw a face, so a game composites one of these on the head.
+
+* sprite grid and sizes
+* where a face sits
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `face_samurai` | overlay | 8x8 | 1 | hero16 |
+| `face_skeleton` | overlay | 8x8 | 1 | enemy16 |
+
+**Review:** **It works, and it is the smallest thing in the library.** The samurai
 

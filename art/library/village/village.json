@@ -10,7 +10,7 @@
  "description": "A village's cast and ground: a farmer, a slime, four harvests and a three-tile ground (grass, a paved square, a pond).",
  "palettes": {
   "farmer": {
-   "bank": 1,
+   "bank": 5,
    "colors": [
     "#000000",
     "#101018",
@@ -31,7 +31,7 @@
    ]
   },
   "slime": {
-   "bank": 2,
+   "bank": 6,
    "colors": [
     "#000000",
     "#101808",
@@ -52,7 +52,7 @@
    ]
   },
   "props": {
-   "bank": 3,
+   "bank": 7,
    "colors": [
     "#000000",
     "#1A1218",

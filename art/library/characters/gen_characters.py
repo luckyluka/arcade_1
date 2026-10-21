@@ -94,7 +94,9 @@ def main():
             })
             anim = preset.get("animations", {}).get(state, {})
             fragment["animations"].append({
-                "name": "%s_%s" % (rig_name, state),
+                # the "_anim" suffix: a sprite and an animation may not
+                # share a name (they would emit the same symbols)
+                "name": "%s_%s_anim" % (rig_name, state),
                 "sprite": sprite,
                 "frames": list(range(len(frames))),
                 "ms": anim.get("ms", 100),

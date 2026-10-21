@@ -1,0 +1,24 @@
+{
+  "name": "day16",
+  "description": "The day-sky palette: the deep blue at the top, the pale blue in the middle and the warm haze at the horizon.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#101410",
+    "#184984",
+    "#295D9C",
+    "#3971B5",
+    "#4A8ACE",
+    "#6BA2DE",
+    "#9CC7EF",
+    "#CEDFF7",
+    "#EFE3D6",
+    "#F7DBB5",
+    "#EFC394",
+    "#DEAA7B",
+    "#C68A5A",
+    "#A56942",
+    "#EFF3FF"
+  ]
+}

@@ -9,7 +9,7 @@
  },
  "palettes": {
   "enemy16": {
-   "bank": 16,
+   "bank": 7,
    "colors": [
     "#000000",
     "#101410",

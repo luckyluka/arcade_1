@@ -218,6 +218,7 @@ All builds use `-Wall -Wextra` and must stay warning-free.
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-21 | the library's day sky and faces | 1 m 48 s (108 s) |
 | 2026-10-20 | card 4.9 | **1 m 28 s** (88 s) |
 | 2026-10-20 | `22fdb0d` (card 4.8) | 1 m 22 s (82 s) |
 | 2026-10-20 | `711a2e4` (before Wave 7a) | 1 m 42 s (102 s) |

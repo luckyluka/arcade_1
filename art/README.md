@@ -88,6 +88,16 @@ pack also says how it is meant to be used (its style sheet: the sizes, the
 anchor, the collision convention, the palette bank) and carries a review
 (`art/reports/<pack>.md`).
 
+**The machine has sixteen palette banks, so a game can use at most
+sixteen palette groups.** The library's packs are *alternatives*, not a
+set to ship whole: a merge that needs a seventeenth bank fails loudly
+("the machine has sixteen palette banks and the merge needs a
+seventeenth") rather than quietly overwriting one. Two packs that share
+a palette — the same name with the same colours — **share the bank** on
+merge, so a face and the body it sits on cost one bank between them and
+the merged header's names do not depend on the order the packs were
+merged in.
+
 The four packs that are there now are the art the two clean-room rounds
 made — the icons, the two rigged characters, the village and the lighthouse
 — tidied, with the games' own maps dropped (a map belongs to a game, not
@@ -120,6 +130,22 @@ rather than only in `tools/arc1_art/qa.py`:
 | **outline coverage** | the silhouette's **edge** (the opaque pixels that touch a transparent one) must be the outline colour, at least 75 % of them. The outline colour is inferred as the **darkest of the edge pixels** and then used for every frame of the strip; `--outline-colour #RRGGBB` says it outright |
 | **fill-to-outline contrast** | the outline's luminance over the mean fill's: at most 0.55 |
 | **readability** | the frame's bounding box must be at least 8 px tall |
+
+**The role says what an asset is.** `arc1-art check --role` takes
+`sprite` (the default), `tileset`, `layer`, `effect` or `overlay`, and
+the role decides which checks apply:
+
+| role | what it is | graded on |
+|---|---|---|
+| `sprite` | a character or a prop that stands alone | everything: the silhouette, the outline, the baseline, the jitter |
+| `tileset` | a set of tiles that repeats | the colours and the distinctness |
+| `layer` | a background layer | the colours and the distinctness |
+| `effect` | a particle strip | the colours and the distinctness |
+| `overlay` | a piece drawn **on top of** another asset — a face on a rig's head | the colours and the distinctness |
+
+The `overlay` role exists for the faces pack: a face has no outline ring
+of its own (the head beneath it has one), so grading it as a sprite
+would fail it for a rule it does not break.
 
 Two things the checks do **not** apply to:
 

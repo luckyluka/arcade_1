@@ -43,8 +43,8 @@ if "--out-dir" in sys.argv:
     _OUT = os.path.abspath(sys.argv[sys.argv.index("--out-dir") + 1])
 STRIP_DIR = os.path.join(_OUT, "strips")
 MANIFEST = os.path.join(_OUT, "village.json")
-MAP_FILE = os.path.join(HERE, "maps", "village.txt")
-SOLID_FILE = os.path.join(HERE, "maps", "village_solid.txt")
+MAP_FILE = os.path.join(HERE, "village.txt")
+SOLID_FILE = os.path.join(HERE, "village_solid.txt")
 
 SEED = 20261021                    # the one seed the tile texture uses
 LICENCE = "this repository"
@@ -90,7 +90,7 @@ PALETTES = {
     ],
 }
 
-BANKS = {"farmer": 1, "slime": 2, "props": 3, "ground": 4}
+BANKS = {"farmer": 5, "slime": 6, "props": 7, "ground": 4}
 
 # The palette indices the drawing code names.
 OUT = 1               # the outline colour, in every bank
@@ -471,7 +471,7 @@ def main():
         json.dump(doc, f, indent=1, ensure_ascii=False)
         f.write("\n")
     print("  manifest %s (%d sprites, %d animations, %d map(s))"
-          % (MANIFEST, len(sprites), len(animations), len(maps)))
+          % (MANIFEST, len(sprites), len(animations), 0))
     return 0
 
 

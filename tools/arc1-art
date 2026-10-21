@@ -516,9 +516,12 @@ def main(argv=None):
     p.add_argument("--key", metavar="#RRGGBB",
                    help="the transparent key colour (default #000000)")
     p.add_argument("--role", default="sprite",
-                   choices=("sprite", "tileset", "layer", "effect"),
+                   choices=("sprite", "tileset", "layer", "effect",
+                            "overlay"),
                    help="what the asset is: a sprite is graded on its "
-                        "silhouette, the others are not")
+                        "silhouette, the others are not (an overlay is "
+                        "drawn on top of another asset — a face on a "
+                        "rig's head)")
     p.add_argument("--skip-outline", action="store_true",
                    help="do not grade the outline or the contrast (for a "
                         "tileset or a background layer)")

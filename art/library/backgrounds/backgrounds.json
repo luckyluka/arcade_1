@@ -22,6 +22,27 @@
     "#EFBA5A",
     "#FFE3A5"
    ]
+  },
+  "day16": {
+   "bank": 16,
+   "colors": [
+    "#000000",
+    "#101410",
+    "#184984",
+    "#295D9C",
+    "#3971B5",
+    "#4A8ACE",
+    "#6BA2DE",
+    "#9CC7EF",
+    "#CEDFF7",
+    "#EFE3D6",
+    "#F7DBB5",
+    "#EFC394",
+    "#DEAA7B",
+    "#C68A5A",
+    "#A56942",
+    "#EFF3FF"
+   ]
   }
  },
  "roles": {
@@ -31,7 +52,8 @@
   "stars": "layer",
   "cloud": "layer",
   "moon": "layer",
-  "sky_bands": "tileset"
+  "sky_bands": "tileset",
+  "sky_bands_day": "tileset"
  },
  "sprites": [
   {
@@ -152,6 +174,23 @@
     "seed": 20261021,
     "licence": "this repository"
    }
+  },
+  {
+   "name": "sky_bands_day",
+   "file": "strips/sky_bands_day.png",
+   "palette": "day16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
   }
  ],
  "animations": [],
@@ -160,6 +199,39 @@
    "name": "sky_dusk",
    "file": "maps/sky_dusk.txt",
    "tileset": "sky_bands",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "a": 0,
+    "b": 1,
+    "c": 2,
+    "d": 3,
+    "e": 4,
+    "f": 5,
+    "g": 6,
+    "h": 7,
+    "i": 8,
+    "j": 9,
+    "k": 10,
+    "l": 11,
+    "m": 12,
+    "n": 13,
+    "o": 14,
+    "p": 15,
+    "q": 16
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "sky_day",
+   "file": "maps/sky_day.txt",
+   "tileset": "sky_bands_day",
    "tile_w": 16,
    "tile_h": 16,
    "legend": {

@@ -136,15 +136,24 @@ SKY_TILE = 16
 SKY_COLS = 30
 SKY_ROWS = len(SKY_BANDS)
 
+# The DAY sky: the same seventeen bands over the day ramp — the deep blue
+# at the top, the pale blue in the middle, the warm haze at the horizon.
+DAY_PALETTE = "day16"
+DAY_BANDS = [
+    (2, 2), (3, 3), (3, 4), (4, 4), (4, 5), (5, 5), (5, 6), (6, 6),
+    (6, 7), (7, 7), (7, 8), (8, 9), (9, 9), (9, 10), (10, 11), (11, 12),
+    (13, 14),
+]
 
-def sky_bands():
+
+def sky_bands(bands=None):
     """The band tiles: 16x16 each, dithered between two palette indices.
 
     The dither is what makes the banding disappear: a solid band would
     show seventeen steps, a dithered one shows a gradient.
     """
     tiles = []
-    for (a, b) in SKY_BANDS:
+    for (a, b) in (bands or SKY_BANDS):
         t = C.Canvas(SKY_TILE, SKY_TILE)
         for y in range(SKY_TILE):
             for x in range(SKY_TILE):
@@ -191,7 +200,7 @@ def main():
         },
         "roles": {name: "layer" for name, _b, _h, _c, _c2 in RIDGES} |
                  {"stars": "layer", "cloud": "layer", "moon": "layer",
-                  "sky_bands": "tileset"},
+                  "sky_bands": "tileset", "sky_bands_day": "tileset"},
         "sprites": [],
         "animations": [],
         "maps": [],
@@ -260,6 +269,48 @@ def main():
         },
     })
     print("backgrounds: sky_dusk    %dx%d cells" % (SKY_COLS, SKY_ROWS))
+
+    # --- the day sky: the same bands, another ramp -----------------------
+    with open(os.path.join(ROOT, "art", "palettes",
+                           "%s.json" % DAY_PALETTE)) as f:
+        day_preset = json.load(f)
+    fragment["palettes"][DAY_PALETTE] = {"bank": BANK + 1,
+                                         "colors": list(day_preset["colors"])}
+    day_bands = sky_bands(DAY_BANDS)
+    out = os.path.join(strips, "sky_bands_day.png")
+    C.to_strip([day_bands], day_preset["colors"], out)
+    fragment["sprites"].append({
+        "name": "sky_bands_day",
+        "file": "strips/sky_bands_day.png",
+        "palette": DAY_PALETTE,
+        "frames": 1,
+        "origin": [0, 0],
+        "provenance": {
+            "tool": "procedural", "model": "",
+            "prompt": "the backgrounds pack: "
+                      "art/library/backgrounds/gen_backgrounds.py",
+            "seed": SEED, "licence": "this repository",
+        },
+    })
+    print("backgrounds: sky_bands_day %dx%d (%d band(s))"
+          % (day_bands.w, day_bands.h, len(DAY_BANDS)))
+    with open(os.path.join(maps, "sky_day.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(sky_map()) + "\n")
+    fragment["maps"].append({
+        "name": "sky_day",
+        "file": "maps/sky_day.txt",
+        "tileset": "sky_bands_day",
+        "tile_w": SKY_TILE,
+        "tile_h": SKY_TILE,
+        "legend": dict((chr(ord("a") + r), r) for r in range(SKY_ROWS)),
+        "provenance": {
+            "tool": "procedural", "model": "",
+            "prompt": "the backgrounds pack: "
+                      "art/library/backgrounds/gen_backgrounds.py",
+            "seed": SEED, "licence": "this repository",
+        },
+    })
+    print("backgrounds: sky_day      %dx%d cells" % (SKY_COLS, SKY_ROWS))
 
     fragment_path = os.path.join(out_dir, "backgrounds.json")
     with open(fragment_path, "w", encoding="utf-8") as f:

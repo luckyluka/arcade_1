@@ -39,7 +39,7 @@ from arc1_art import canvas as C                              # noqa: E402
 from arc1_art import rig as rigmod                            # noqa: E402
 
 PALETTE = "enemy16"
-BANK = 16
+BANK = 7
 SEED = 20261021
 
 # The palette's indices.
