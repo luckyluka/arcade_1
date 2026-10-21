@@ -69,6 +69,22 @@ one — is in
 short version: **the rig is better at consistency and editability, worse
 at beauty at 28×40 pixels.**
 
+## The shipped games' art
+
+Each game brings its own art pipeline, beside its source:
+
+| game | the art | the generator |
+|---|---|---|
+| Petal Blade | `programs/petalblade_art/` | `gen_art.py` (the round-5 art) |
+| Petal Blade (rig) | `programs/petalblade_rig/` | `tools/build_petalblade_rig.py` |
+| **TEMPEST** | `programs/shmup_art/` | `gen_art.py` (18 sprites, 8 banks) |
+
+TEMPEST's generator paints a fighter, a drone, an attack helicopter, a
+bomber, a cruiser, an AA turret, a tank, a missile launcher, a debris
+chunk, a 120x88 boss with a damaged variant, the shots, the missiles,
+the explosions, the pickups and the terrain band — all procedurally,
+all deterministic, all with the provenance recorded in the manifest.
+
 ## The library
 
 `art/library/` is the **catalogue of reusable art**: packs, each one a

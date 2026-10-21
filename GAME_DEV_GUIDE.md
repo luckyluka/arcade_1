@@ -388,3 +388,12 @@ its art pipeline (`programs/petalblade_art/`), its generated headers as
 the build truth, a scripted session that dies, restarts and wins
 (`tests/inputs/petalblade.txt`), and a golden of 1202 frames. See
 `round5/README.md` and `docs/experiments/round5-petalblade.md`.
+
+`shmup` is Game #4: TEMPEST, a vertical shoot-'em-up. Its art pipeline
+lives in `programs/shmup_art/` (the generator paints every sprite and
+writes the manifest) and the compiled header `programs/shmup_assets.h`
+is the build truth. Its scripted session (`tests/inputs/shmup.txt`)
+plays the title, the first stage's waves, the boss and the start of
+stage 2, and its golden is 2,600 frames. The D-pad flies, **A** fires,
+**B** is the focus (a slower shot, and the hitbox on screen) and
+**START** starts and restarts.

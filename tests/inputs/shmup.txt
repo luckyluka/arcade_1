@@ -1,0 +1,50 @@
+# TEMPEST session: the title, the first stage's waves, the boss and the
+# start of stage 2. The ship weaves at the edge through the waves (the
+# formations come down the middle), then crosses to the centre to shoot
+# the boss, whose sweep is smooth enough to line a shot up with.
+0    9    none
+10   11   start
+12   14   none
+15   44   a right
+45   60   a right
+61   86   a left
+87   102  a right
+103  128  a left
+129  144  a right
+145  170  a left
+171  186  a right
+187  212  a left
+213  228  a right
+229  254  a left
+255  270  a right
+271  296  a left
+297  312  a right
+313  338  a left
+339  354  a right
+355  380  a left
+381  396  a right
+397  422  a left
+423  438  a right
+439  464  a left
+465  480  a right
+481  506  a left
+507  522  a right
+523  548  a left
+549  564  a right
+565  590  a left
+591  606  a right
+607  632  a left
+633  648  a right
+649  674  a left
+675  690  a right
+691  716  a left
+717  732  a right
+733  758  a left
+759  774  a right
+775  800  a left
+801  816  a right
+817  842  a left
+843  858  a right
+859  884  a left
+885  954  a right
+955  2999 a

@@ -218,6 +218,7 @@ All builds use `-Wall -Wextra` and must stay warning-free.
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-21 | TEMPEST (Game #4) | 1 m 52 s (112 s) |
 | 2026-10-21 | the library's day sky and faces | 1 m 48 s (108 s) |
 | 2026-10-20 | card 4.9 | **1 m 28 s** (88 s) |
 | 2026-10-20 | `22fdb0d` (card 4.8) | 1 m 22 s (82 s) |
@@ -234,6 +235,39 @@ Test strategy (per `docs.md` testing philosophy): milestone tests link the real
 link the sources directly with no libretro at all, proving frontend
 independence. Pixel/audio values are verified deterministically (e.g. the
 square is a unique orange `0xFD00` so tests can locate it by scanning).
+
+## TEMPEST (Game #4) — the vertical shoot-'em-up
+
+A classic arcade shmup, modernised: the player flies a cyan interceptor
+continuously upward through a scrolling battlefield while formations of
+fighters, diving drones, attack helicopters, heavy bombers and a cruiser
+come down, and anti-aircraft turrets, tanks and missile launchers work
+the ground below. Every stage ends in a multi-phase boss with a weak
+point in its core.
+
+* **The game**: `programs/shmup.c` (freestanding C for RV32IM, no libc).
+* **The art**: `programs/shmup_art/gen_art.py` paints every sprite
+  procedurally (18 strips, 8 palette banks) and writes the manifest;
+  `programs/shmup_assets.h` is the compiled header and the build truth
+  (`make shmup-art` regenerates both).
+* **The controls**: the D-pad flies, **A** fires, **B** is the FOCUS (a
+  slower, tighter shot and the hitbox on screen — the classic
+  bullet-hell bargain), **START** starts and restarts.
+* **The shape**: a 4x4 hitbox (the classic tiny target), three lives,
+  the screen clears when the ship dies (the classic mercy), a weapon
+  level of 1..4 from the power-ups, a shield pickup, a kill combo, an
+  extra life at 50,000, and a boss that gets angrier as it dies (three
+  phases: aimed shots, fans plus drones, then a fan and a spiral).
+* **The sound**: the audio device's one tone generator, driven straight
+  from the guest's MMIO (the first shipped game to make a sound — the
+  cheat sheet now documents the guest side).
+* **The test**: `tests/test_shmup.sh` with the scripted session
+  `tests/inputs/shmup.txt` — the title, the waves, the boss (all three
+  phases) and the start of stage 2 — plus a 2,600-frame golden
+  (`tests/golden/shmup.txt`) and a committed ROM.
+* **Cost**: 8,665 instructions and 166,296 pixels a frame (1.28 screens)
+  — under 1 % of the instruction cap and leaner than Petal Blade's 2.59
+  screens.
 
 ## Housekeeping
 

@@ -1,0 +1,607 @@
+{
+ "format": 1,
+ "palettes": {
+  "boss": {
+   "bank": 6,
+   "colors": [
+    "#000000",
+    "#100C18",
+    "#292442",
+    "#423C6B",
+    "#6359A5",
+    "#8C82DE",
+    "#CEC3FF",
+    "#B53042",
+    "#E75163",
+    "#39384A",
+    "#6B6984",
+    "#A5A2BD",
+    "#F7D363",
+    "#FF9263",
+    "#63E3E7",
+    "#8C1021"
+   ]
+  },
+  "foe": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#180C10",
+    "#5A1421",
+    "#942429",
+    "#CE3831",
+    "#F76939",
+    "#FFC76B",
+    "#EFE7DE",
+    "#6B6973",
+    "#ADAEBD",
+    "#292831",
+    "#394952",
+    "#FFDB8C",
+    "#7B1C18",
+    "#B5BAC6",
+    "#521018"
+   ]
+  },
+  "fx": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#181010",
+    "#7B2410",
+    "#C64918",
+    "#F78221",
+    "#FFC342",
+    "#FFF3C6",
+    "#EFEBF7",
+    "#949AAD",
+    "#42C363",
+    "#84EB94",
+    "#4261D6",
+    "#94C3FF",
+    "#391821",
+    "#C6CBD6",
+    "#E74163"
+   ]
+  },
+  "ground": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#101408",
+    "#293821",
+    "#4A5929",
+    "#6B8242",
+    "#8C9A5A",
+    "#39414A",
+    "#5A656B",
+    "#8C969C",
+    "#B5BAC6",
+    "#CEB273",
+    "#8C7142",
+    "#E7DBB5",
+    "#182418",
+    "#6B3821",
+    "#ADB294"
+   ]
+  },
+  "hero": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#081421",
+    "#10344A",
+    "#215D7B",
+    "#399AC6",
+    "#7BE3F7",
+    "#EFFBFF",
+    "#FFC34A",
+    "#FF7929",
+    "#082431",
+    "#ADEBFF",
+    "#5A798C",
+    "#29495A",
+    "#FFFFFF",
+    "#182C39",
+    "#7B3818"
+   ]
+  },
+  "rock": {
+   "bank": 5,
+   "colors": [
+    "#000000",
+    "#101418",
+    "#393842",
+    "#5A5963",
+    "#7B7D8C",
+    "#A5A2AD",
+    "#6B594A",
+    "#8C715A",
+    "#292831",
+    "#C6B69C",
+    "#42454A",
+    "#8C8E94",
+    "#E7E3EF",
+    "#212029",
+    "#524D42",
+    "#AD9A84"
+   ]
+  },
+  "shot": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#081018",
+    "#104152",
+    "#187194",
+    "#31B2DE",
+    "#73EBFF",
+    "#EFFFFF",
+    "#E7A221",
+    "#F76121",
+    "#C63018",
+    "#FFD363",
+    "#A51810",
+    "#2992B5",
+    "#082839",
+    "#FFF3C6",
+    "#943010"
+   ]
+  },
+  "sky": {
+   "bank": 7,
+   "colors": [
+    "#000000",
+    "#000808",
+    "#182439",
+    "#293852",
+    "#42597B",
+    "#6B86AD",
+    "#9CB6D6",
+    "#DEE7F7",
+    "#FFFFFF",
+    "#102031",
+    "#21344A",
+    "#31496B",
+    "#5A79A5",
+    "#8CAACE",
+    "#C6D3E7",
+    "#6B7994"
+   ]
+  }
+ },
+ "roles": {
+  "boom": "effect",
+  "fshot": "effect",
+  "ground": "layer"
+ },
+ "sprites": [
+  {
+   "name": "bomber",
+   "file": "art/bomber.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    24,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    6,
+    4,
+    36,
+    24
+   ]
+  },
+  {
+   "name": "boom",
+   "file": "art/boom.png",
+   "palette": "fx",
+   "frames": 4,
+   "origin": [
+    12,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "boss",
+   "file": "art/boss.png",
+   "palette": "boss",
+   "frames": 2,
+   "origin": [
+    60,
+    44
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    8,
+    8,
+    104,
+    72
+   ]
+  },
+  {
+   "name": "boss_core",
+   "file": "art/boss_core.png",
+   "palette": "boss",
+   "frames": 2,
+   "origin": [
+    8,
+    8
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    3,
+    3,
+    10,
+    10
+   ]
+  },
+  {
+   "name": "copter",
+   "file": "art/copter.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    16,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    4,
+    4,
+    24,
+    16
+   ]
+  },
+  {
+   "name": "cruiser",
+   "file": "art/cruiser.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    32,
+    20
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    8,
+    6,
+    48,
+    28
+   ]
+  },
+  {
+   "name": "debris",
+   "file": "art/debris.png",
+   "palette": "rock",
+   "frames": 1,
+   "origin": [
+    8,
+    8
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    3,
+    3,
+    10,
+    10
+   ]
+  },
+  {
+   "name": "drone",
+   "file": "art/drone.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    6,
+    6
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    3,
+    3,
+    6,
+    6
+   ]
+  },
+  {
+   "name": "fighter",
+   "file": "art/fighter.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    8,
+    8
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    3,
+    3,
+    10,
+    10
+   ]
+  },
+  {
+   "name": "fshot",
+   "file": "art/fshot.png",
+   "palette": "shot",
+   "frames": 1,
+   "origin": [
+    3,
+    3
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    4,
+    4
+   ]
+  },
+  {
+   "name": "ground",
+   "file": "art/ground.png",
+   "palette": "ground",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "launcher",
+   "file": "art/launcher.png",
+   "palette": "ground",
+   "frames": 1,
+   "origin": [
+    12,
+    10
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    2,
+    2,
+    20,
+    10
+   ]
+  },
+  {
+   "name": "missile",
+   "file": "art/missile.png",
+   "palette": "foe",
+   "frames": 1,
+   "origin": [
+    4,
+    4
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    2,
+    2,
+    4,
+    4
+   ]
+  },
+  {
+   "name": "pickup_power",
+   "file": "art/pickup_power.png",
+   "palette": "fx",
+   "frames": 1,
+   "origin": [
+    6,
+    6
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "name": "pickup_shield",
+   "file": "art/pickup_shield.png",
+   "palette": "fx",
+   "frames": 1,
+   "origin": [
+    6,
+    6
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    10,
+    10
+   ]
+  },
+  {
+   "name": "player",
+   "file": "art/player.png",
+   "palette": "hero",
+   "frames": 2,
+   "origin": [
+    12,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    10,
+    8,
+    4,
+    4
+   ]
+  },
+  {
+   "name": "pshot",
+   "file": "art/pshot.png",
+   "palette": "shot",
+   "frames": 1,
+   "origin": [
+    3,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    2,
+    4,
+    10
+   ]
+  },
+  {
+   "name": "tank",
+   "file": "art/tank.png",
+   "palette": "ground",
+   "frames": 1,
+   "origin": [
+    12,
+    10
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    2,
+    2,
+    20,
+    10
+   ]
+  },
+  {
+   "name": "turret",
+   "file": "art/turret.png",
+   "palette": "ground",
+   "frames": 1,
+   "origin": [
+    8,
+    14
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the shmup's art: programs/shmup_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    2,
+    6,
+    12,
+    10
+   ]
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

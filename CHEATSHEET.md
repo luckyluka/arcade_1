@@ -140,6 +140,37 @@ y + row*tile_h), clipped like a sprite.
 cell carries its own. Tile N is at tiles + (N-1) * (tile_w/2 * tile_h);
 tile_w/tile_h are written to REG_W/REG_H by the command.
 
+## Sound (the audio device)
+
+The machine has one tone generator: a square wave at the frequency you
+write, on while you enable it. There is no SDK header for it — the
+registers are two MMIO words (the guest side of `SPEC.md` §6):
+
+```c
+#include "arcade1.h"
+#define AUDIO_FREQ (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x300u))
+#define AUDIO_CTRL (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x304u))
+void tone_on(int hz) {
+    AUDIO_FREQ = (unsigned int)hz;   /* the tone's frequency, in Hz */
+    AUDIO_CTRL = 1;                  /* bit0 = the tone is on */
+}
+void tone_off(void) {
+    AUDIO_CTRL = 0;                  /* silence */
+}
+```
+
+The tone is **one at a time**: a second sound overwrites the first. A
+game that wants more than one voice keeps its own queue and writes the
+registers once per frame. A **pitch sweep** is just writing `AUDIO_FREQ`
+again with a new value — that is how the game's explosion falls in pitch
+(`programs/shmup.c`).
+
+The audio is rendered **after** the guest has run a frame, so a register
+written this frame is heard from this frame on ✓. A register write is a
+plain store — but the frequency must reach the device *before* the
+enable does, so put a compiler barrier between the two writes if the
+compiler might reorder them.
+
 ## Map collision layer (asset.h)
 `arc1-assetc` compiles a map's ASCII grid into cells, and — when the
 manifest declares one — a collision layer: `<MAP>_solid[]`, one byte per

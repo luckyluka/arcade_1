@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -67,7 +67,7 @@ ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
-                  m29game asteroid_run flappy petalblade petalblade_rig
+                  m29game asteroid_run flappy petalblade petalblade_rig shmup
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -148,6 +148,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
+        test-shmup \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
         test-art-rig test-art-ingest test-art-qa test-art-faces \
         test-doc-gaps
@@ -1201,6 +1202,32 @@ $(GUEST_BUILD)/petalblade_rig.elf: programs/petalblade_rig.c \
 # hero and the .px props.
 test-petalblade_rig: $(CLI_BIN) $(ARC1_ROM_DIR)/petalblade_rig.arc1 | $(TESTDIR)
 	sh tests/test_petalblade_rig.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
+# --- TEMPEST (Game #4) -------------------------------------------------------
+# The vertical shoot-'em-up. Its art pipeline lives in programs/shmup_art/
+# (gen_art.py writes the strips and the manifest) and the generated header
+# programs/shmup_assets.h is the build truth.
+SHMUP_ART_DIR  := programs/shmup_art
+SHMUP_MANIFEST := $(SHMUP_ART_DIR)/shmup_assets.json
+
+shmup-art:
+	python3 $(SHMUP_ART_DIR)/gen_art.py --dir $(SHMUP_ART_DIR) \
+	    --manifest shmup_assets.json
+	python3 tools/arc1_assetc.py --assets $(SHMUP_MANIFEST) --out-dir programs --report
+
+programs/shmup_assets.h: $(SHMUP_MANIFEST) $(wildcard $(SHMUP_ART_DIR)/art/*.png) \
+        tools/arc1_assetc.py
+	python3 tools/arc1_assetc.py --assets $(SHMUP_MANIFEST) --out-dir programs
+
+$(GUEST_BUILD)/shmup.elf: programs/shmup.c programs/shmup_assets.h \
+        programs/asset.h programs/arcade1.h programs/gfx.h programs/text.h \
+        programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $@ programs/crt0.S $<
+
+test-shmup: $(CLI_BIN) $(ARC1_ROM_DIR)/shmup.arc1 | $(TESTDIR)
+	sh tests/test_shmup.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
 # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
