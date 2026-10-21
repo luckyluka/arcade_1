@@ -1,0 +1,12 @@
+# round6 — the scripted session: the farmer walks the road east, climbs
+# into the village square, gathers the four harvests and wins.
+#   frames 0-10    idle
+#   11-101         east along the road (to the square's east side)
+#   102-123        north, two rows (past the carrot and the apple)
+#   124-171        west along the square's top row (past the coin)
+#   172-182        south one row (the cabbage) — the last harvest
+0   10   none
+11  101  right
+102 123  up
+124 171  left
+172 182  down

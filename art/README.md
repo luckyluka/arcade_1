@@ -59,6 +59,16 @@ one — is in
 short version: **the rig is better at consistency and editability, worse
 at beauty at 28×40 pixels.**
 
+## The clean-room round
+
+`round6/` holds the round that measured this pipeline: a fresh agent, the
+brief, the tools, and one game (a fantasy village) to build from nothing.
+It passed every objective check and found **seven** places where the
+documentation did not tell the agent what to do — five of them in the
+art documents, one in a check, one in the optimiser's habits. The report,
+with every gap classified (docs / tool / pipeline / game), is in
+[docs/experiments/round6-art.md](../docs/experiments/round6-art.md).
+
 ## The visual review
 
 Two halves, and both are needed:
@@ -153,15 +163,15 @@ from arc1_art import canvas as C
 ```
 
 That is the shape every generator in the repository uses (see
-`programs/petalblade_art/gen_art.py` and `round4/gen_art.py`). **It
-assumes the generator lives two directories below the repository root** —
-`<repo>/<folder>/<script>.py` — and that the repository's `tools/`
-directory is a sibling of that folder's parent. Two ways out when the art
-lives elsewhere:
+`programs/petalblade_art/gen_round6.py` and `round4/gen_art.py`). **It
+assumes the generator lives in a folder whose parent's parent is the
+repository root** — `<repo>/<folder>/<script>.py`, where `<folder>` is
+the art's own folder (`<repo>/round6/art/gen_round6.py` is three levels
+below the root, and `dirname(dirname(HERE))` lands on it). Two ways out
+when the art lives elsewhere:
 
-* keep the generator two levels below the root (`<repo>/roundN/art/…`), or
+* keep the generator at that depth (`<repo>/roundN/art/…`), or
 * set `ARCADE1_ROOT` and use it instead of the `dirname` guess:
-
 ```python
 ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
     os.path.dirname(HERE))

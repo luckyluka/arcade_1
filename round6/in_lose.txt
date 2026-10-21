@@ -1,0 +1,11 @@
+# round6 — the losing session: the farmer walks north until the pond's
+# edge blocks him, idles there, and the slime takes him three times.
+# Then START restarts the game.
+#   frames 0-10    idle
+#   11-58          north (the collision layer stops him under the pond)
+#   59-419         stand still — the slime comes
+#   420-421        START (the restart edge)
+0   10   none
+11  58   up
+59  419  none
+420 421  start

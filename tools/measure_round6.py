@@ -82,7 +82,8 @@ def check_regenerated(round_dir):
     copy = os.path.join(tmp, "round")
     shutil.copytree(round_dir, copy)
     try:
-        for dirpath, _dirs, files in os.walk(copy):
+        for dirpath, dirs, files in os.walk(copy):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
             for name in sorted(files):
                 if name.endswith(".py"):
                     run(sys.executable, os.path.join(dirpath, name),
@@ -95,10 +96,11 @@ def check_regenerated(round_dir):
         # the files that are NOT generated: the agent's own work
         skip = ("game.c", "ROUND_LOG.md", "BRIEF.md", "in.txt")
         found = []
-        for dirpath, _dirs, files in os.walk(copy):
+        for dirpath, dirs, files in os.walk(copy):
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
             for name in sorted(files):
                 if name in skip or name.endswith((".arc1", ".syms", ".golden",
-                                                   ".elf", ".log")):
+                                                   ".elf", ".log", ".pyc")):
                     continue
                 fresh = os.path.join(dirpath, name)
                 orig = os.path.join(round_dir, os.path.relpath(fresh, copy))
@@ -204,7 +206,9 @@ def main():
         if not golden["ok"]:
             sys.stderr.write("  golden: %s\n" % golden["why"])
         for g in regenerated:
-            sys.stderr.write("  generator %s: %s\n" % (g["generator"], g["why"]))
+            sys.stderr.write("  generated %s: %s\n"
+                             % (g.get("file", g.get("generator", "?")),
+                                g["why"]))
         return 1
     return 0
 

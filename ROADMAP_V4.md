@@ -243,12 +243,11 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 1. Read §0-§2 and `docs/experiments/round3-cleanroom.md`, `docs/experiments/round5-petalblade.md`.
 2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
    the status table in §9.
-3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.7
-   are done. **7.8** is prepared and instrumented (the brief, the log
-   template and `tools/measure_round6.py`), but the CLEAN-ROOM RUN is
-   pending: the fresh-agent sessions were killed by server restarts four
-   times over, and one of them was taking the machine down with it. The
-   operator runs the round — see docs/experiments/round6-art.md.
+3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.8
+   are done: **7.8's clean-room run happened** (a fresh agent, the brief,
+   the tools) — the game builds, plays, is golden-locked, every asset
+   passes `arc1-art check`, and the round found SEVEN documentation
+   gaps. See docs/experiments/round6-art.md.
 
 ## 9. Status
 
@@ -274,7 +273,7 @@ that carried it, and the day it landed.
 | 7.5 | raster ingest — LOCAL ONLY, stdlib only (PNG, no JPG) | `5f4321d` | 2026-10-21 |
 | 7.6 | the visual QA tool and the critique protocol | `cd3ae95` | 2026-10-21 |
 | 7.7 | the art pass on Petal Blade (the rig variant) | `0f804a1` | 2026-10-21 |
-| 7.8 | the clean-room art round — prepared + instrumented, the run pending | (this commit) | 2026-10-21 |
+| 7.8 | the clean-room art round — RUN, 7 DOC GAPs, the game is compliant | (this commit) | 2026-10-21 |
 | 8.1-8.3 | audio observability | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 
