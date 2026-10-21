@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -67,7 +67,7 @@ ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
-                  m29game asteroid_run flappy petalblade
+                  m29game asteroid_run flappy petalblade petalblade_rig
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -94,7 +94,8 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
-        test-petalblade test-agents-md test-art-palettes test-art-canvas \
+        test-petalblade test-petalblade_rig test-agents-md test-art-palettes \
+        test-art-canvas \
         test-art-pixmap test-art-rig test-art-ingest test-art-qa
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
@@ -1138,6 +1139,25 @@ $(GUEST_BUILD)/petalblade.elf: programs/petalblade.c programs/petalblade_assets.
 test-petalblade: $(CLI_BIN) $(ARC1_ROM_DIR)/petalblade.arc1 | $(TESTDIR)
 	sh tests/test_petalblade.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
+# PETAL BLADE (rig variant) — the art pass (ROADMAP_V4 card 7.7). One
+# command builds every asset: the rig hero, the five .px props, the
+# manifest and the header.
+art-petalblade:
+	python3 tools/build_petalblade_rig.py
+
+$(GUEST_BUILD)/petalblade_rig.elf: programs/petalblade_rig.c \
+        programs/petalblade_rig/assets.h programs/petalblade_level.h \
+        programs/asset.h programs/arcade1.h programs/gfx.h programs/text.h \
+        programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -Iprograms/petalblade_rig \
+	    -T programs/link.ld -o $@ programs/crt0.S $<
+
+# The rig variant (the art pass, card 7.7): the same game with the rig
+# hero and the .px props.
+test-petalblade_rig: $(CLI_BIN) $(ARC1_ROM_DIR)/petalblade_rig.arc1 | $(TESTDIR)
+	sh tests/test_petalblade_rig.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
 # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
 # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
 # (<name>.syms) the golden regression runs against (tests/golden/,
@@ -1147,7 +1167,7 @@ test-petalblade: $(CLI_BIN) $(ARC1_ROM_DIR)/petalblade.arc1 | $(TESTDIR)
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
 GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
-                  m29game flappy petalblade
+                  m29game flappy petalblade petalblade_rig
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)

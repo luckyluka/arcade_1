@@ -44,6 +44,21 @@ art/
    [docs/art/PROVENANCE.md](../docs/art/PROVENANCE.md) for the schema and
    `art/ART_LICENSES.md` for the generated summary.
 
+## The art pass (Petal Blade)
+
+`make art-petalblade` builds the **rig variant** of Petal Blade: the hero
+rebuilt with the rig animator (`art/rigs/samurai.json`), five props from
+`.px` pixmaps (`art/px/props/`), the world's own procedural art reused, and
+the manifest that ties them together. The variant is a separate game
+(`programs/petalblade_rig.c`) with its own golden; the promoted game is
+untouched.
+
+The honest comparison — the rig hero against the hand-drawn procedural
+one — is in
+[docs/experiments/art-pass.md](../docs/experiments/art-pass.md). The
+short version: **the rig is better at consistency and editability, worse
+at beauty at 28×40 pixels.**
+
 ## The visual review
 
 Two halves, and both are needed:

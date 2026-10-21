@@ -1,0 +1,24 @@
+{
+  "name": "hero16",
+  "description": "Petal Blade's hand-built hero palette (the round-5 palette, verbatim): indigo armour, a crimson sash, the skin and the gold of the maedate.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+  ]
+}

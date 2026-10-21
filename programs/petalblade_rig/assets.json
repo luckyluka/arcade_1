@@ -1,0 +1,786 @@
+{
+ "format": 1,
+ "palettes": {
+  "oni": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#180C10",
+    "#6B1C21",
+    "#A53431",
+    "#CE5942",
+    "#EF8A63",
+    "#E7D7AD",
+    "#AD9263",
+    "#F7CF4A",
+    "#211018",
+    "#293C6B",
+    "#42598C",
+    "#392821",
+    "#9C8A7B",
+    "#F7E7CE",
+    "#CEA239"
+   ]
+  },
+  "beetle": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#081410",
+    "#183821",
+    "#296131",
+    "#4A9642",
+    "#84C75A",
+    "#5A4129",
+    "#DE4529",
+    "#F7AA84",
+    "#102018",
+    "#214129",
+    "#EFF3E7",
+    "#CEB242",
+    "#103018",
+    "#101C10",
+    "#7B694A"
+   ]
+  },
+  "terrain": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#100C18",
+    "#292029",
+    "#423039",
+    "#5A4142",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#7BAA5A",
+    "#393442",
+    "#52515A",
+    "#73717B",
+    "#8C8273",
+    "#6B6573",
+    "#ADA2B5",
+    "#AD7952"
+   ]
+  },
+  "ridge": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#101029",
+    "#181439",
+    "#211C4A",
+    "#292852",
+    "#393063",
+    "#423C73",
+    "#524584",
+    "#5A5594",
+    "#6B61A5",
+    "#7B71B5",
+    "#8C82C6",
+    "#9C92CE",
+    "#B5AAD6",
+    "#E7AA7B",
+    "#CE8A63"
+   ]
+  },
+  "sky": {
+   "bank": 5,
+   "colors": [
+    "#000000",
+    "#F7EBCE",
+    "#DECFAD",
+    "#BDAE8C",
+    "#AD9A7B",
+    "#EFC3A5",
+    "#DEAA9C",
+    "#4A4563",
+    "#6B5D7B",
+    "#94869C",
+    "#C6AAB5",
+    "#E7B69C",
+    "#CE927B",
+    "#FFFFFF",
+    "#211831",
+    "#7B6D8C"
+   ]
+  },
+  "mid": {
+   "bank": 6,
+   "colors": [
+    "#000000",
+    "#080C21",
+    "#101431",
+    "#181839",
+    "#212042",
+    "#292852",
+    "#31305A",
+    "#393863",
+    "#42416B",
+    "#4A497B",
+    "#525184",
+    "#6B4952",
+    "#8C5952",
+    "#A5695A",
+    "#080818",
+    "#6361A5"
+   ]
+  },
+  "near": {
+   "bank": 7,
+   "colors": [
+    "#000000",
+    "#080818",
+    "#080C18",
+    "#101021",
+    "#181831",
+    "#211C39",
+    "#212042",
+    "#29284A",
+    "#39305A",
+    "#4A3439",
+    "#734542",
+    "#8C594A",
+    "#101018",
+    "#423C6B",
+    "#29244A",
+    "#5A557B"
+   ]
+  },
+  "fx": {
+   "bank": 8,
+   "colors": [
+    "#000000",
+    "#181421",
+    "#8C6921",
+    "#C69A31",
+    "#EFD36B",
+    "#FFF3B5",
+    "#8C385A",
+    "#C6698C",
+    "#EFA2B5",
+    "#FFE3EF",
+    "#EFF7FF",
+    "#9CB6D6",
+    "#C63842",
+    "#7B2431",
+    "#FFFFFF",
+    "#392C42"
+   ]
+  },
+  "goal": {
+   "bank": 9,
+   "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#EF8A5A",
+    "#211821",
+    "#DEB65A",
+    "#393842",
+    "#5A5563",
+    "#847984",
+    "#A5A2AD",
+    "#CEB27B",
+    "#ADE3DE",
+    "#F7EBE7",
+    "#100C10"
+   ]
+  },
+  "hero16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  },
+  "props16": {
+   "bank": 10,
+   "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#CEB27B",
+    "#8C8273",
+    "#73717B",
+    "#6B6573",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#DEB65A",
+    "#211821",
+    "#ADA2B5",
+    "#100C18"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "oni",
+   "file": "../petalblade_art/art/oni.png",
+   "palette": "oni",
+   "frames": 4,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    14,
+    36
+   ],
+   "collision": [
+    6,
+    18,
+    16,
+    18
+   ]
+  },
+  {
+   "name": "beetle",
+   "file": "../petalblade_art/art/beetle.png",
+   "palette": "beetle",
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    10,
+    12
+   ],
+   "collision": [
+    5,
+    2,
+    14,
+    10
+   ]
+  },
+  {
+   "name": "tiles",
+   "file": "../petalblade_art/art/tiles.png",
+   "palette": "terrain",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "ridge",
+   "file": "../petalblade_art/art/bg_ridge.png",
+   "palette": "ridge",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "mid",
+   "file": "../petalblade_art/art/bg_mid.png",
+   "palette": "mid",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "near",
+   "file": "../petalblade_art/art/bg_near.png",
+   "palette": "near",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "moon",
+   "file": "../petalblade_art/art/moon.png",
+   "palette": "sky",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "slash",
+   "file": "../petalblade_art/art/slash.png",
+   "palette": "fx",
+   "frames": 3,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "fx",
+   "file": "../petalblade_art/art/fx.png",
+   "palette": "fx",
+   "frames": 4,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "coin",
+   "file": "../petalblade_art/art/coin.png",
+   "palette": "fx",
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "goal",
+   "file": "../petalblade_art/art/goal.png",
+   "palette": "goal",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_attack",
+   "file": "hero_attack.png",
+   "palette": "hero16",
+   "frames": 4,
+   "collision": [
+    0,
+    0,
+    28,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_dead",
+   "file": "hero_dead.png",
+   "palette": "hero16",
+   "frames": 1,
+   "collision": [
+    0,
+    7,
+    27,
+    33
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_fall",
+   "file": "hero_fall.png",
+   "palette": "hero16",
+   "frames": 1,
+   "collision": [
+    0,
+    0,
+    26,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_hurt",
+   "file": "hero_hurt.png",
+   "palette": "hero16",
+   "frames": 1,
+   "collision": [
+    0,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_idle",
+   "file": "hero_idle.png",
+   "palette": "hero16",
+   "frames": 4,
+   "collision": [
+    2,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_jump",
+   "file": "hero_jump.png",
+   "palette": "hero16",
+   "frames": 1,
+   "collision": [
+    2,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_run",
+   "file": "hero_run.png",
+   "palette": "hero16",
+   "frames": 8,
+   "collision": [
+    0,
+    0,
+    28,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_walk",
+   "file": "hero_walk.png",
+   "palette": "hero16",
+   "frames": 8,
+   "collision": [
+    1,
+    0,
+    26,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "bamboo",
+   "file": "prop_bamboo.png",
+   "palette": "props16",
+   "frames": 1,
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "banner",
+   "file": "prop_banner.png",
+   "palette": "props16",
+   "frames": 1,
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "lantern",
+   "file": "prop_lantern.png",
+   "palette": "props16",
+   "frames": 1,
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "stone",
+   "file": "prop_stone.png",
+   "palette": "props16",
+   "frames": 1,
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "torii",
+   "file": "prop_torii.png",
+   "palette": "props16",
+   "frames": 1,
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "oniwalk",
+   "sprite": "oni",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 140,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "oniattack",
+   "sprite": "oni",
+   "frames": [
+    2,
+    3
+   ],
+   "ms": 90,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "crawl",
+   "sprite": "beetle",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 150,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "attack",
+   "sprite": "samurai_attack",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 100
+  },
+  {
+   "name": "dead",
+   "sprite": "samurai_dead",
+   "frames": [
+    0
+   ],
+   "ms": 300
+  },
+  {
+   "name": "fall",
+   "sprite": "samurai_fall",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "hurt",
+   "sprite": "samurai_hurt",
+   "frames": [
+    0
+   ],
+   "ms": 200
+  },
+  {
+   "name": "idle",
+   "sprite": "samurai_idle",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 200
+  },
+  {
+   "name": "jump",
+   "sprite": "samurai_jump",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "run",
+   "sprite": "samurai_run",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 80
+  },
+  {
+   "name": "walk",
+   "sprite": "samurai_walk",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 120
+  }
+ ],
+ "maps": [
+  {
+   "name": "level1",
+   "file": "../petalblade_art/level1.txt",
+   "tileset": "tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "#": 1,
+    "d": 2,
+    "D": 3,
+    "s": 4,
+    "b": 5,
+    "w": 6,
+    "B": 7,
+    "g": 8,
+    "f": 9,
+    "r": 10,
+    "m": 11,
+    "p": 12,
+    "l": 13,
+    "t": 14,
+    "v": 15
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ]
+}

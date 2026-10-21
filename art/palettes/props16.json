@@ -1,0 +1,24 @@
+{
+  "name": "props16",
+  "description": "The scenery palette: Petal Blade's vermilion, tan, stone greys and the greens of the bamboo.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#CEB27B",
+    "#8C8273",
+    "#73717B",
+    "#6B6573",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#DEB65A",
+    "#211821",
+    "#ADA2B5",
+    "#100C18"
+  ]
+}

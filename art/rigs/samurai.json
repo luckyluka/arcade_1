@@ -1,0 +1,720 @@
+{
+  "name": "samurai",
+  "description": "Petal Blade's hero, rebuilt with the rig animator (ROADMAP_V4 card 7.7): a kabuto with a gold maedate, indigo armour with a crimson sash, a hakama and a katana.",
+  "width": 28,
+  "height": 40,
+  "origin": [
+    14,
+    40
+  ],
+  "baseline": 39,
+  "palette": "hero16",
+  "bank": 0,
+  "outline": 1,
+  "parts": [
+    {
+      "name": "root",
+      "parent": "root",
+      "pivot": [
+        0,
+        0
+      ],
+      "shape": "root",
+      "color": 1
+    },
+    {
+      "name": "hip",
+      "parent": "root",
+      "pivot": [
+        0,
+        -16
+      ],
+      "shape": "root",
+      "color": 1
+    },
+    {
+      "name": "leg_l",
+      "parent": "hip",
+      "pivot": [
+        -4,
+        0
+      ],
+      "shape": "capsule",
+      "size": [
+        9,
+        9
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          13
+        ]
+      ],
+      "color": 3,
+      "shade": 2,
+      "z": 0
+    },
+    {
+      "name": "leg_r",
+      "parent": "hip",
+      "pivot": [
+        4,
+        0
+      ],
+      "shape": "capsule",
+      "size": [
+        9,
+        9
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          13
+        ]
+      ],
+      "color": 3,
+      "shade": 2,
+      "z": 0
+    },
+    {
+      "name": "sash",
+      "parent": "hip",
+      "pivot": [
+        0,
+        -1
+      ],
+      "shape": "capsule",
+      "size": [
+        12,
+        12
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "color": 5,
+      "z": 1
+    },
+    {
+      "name": "torso",
+      "parent": "hip",
+      "pivot": [
+        0,
+        -2
+      ],
+      "shape": "capsule",
+      "size": [
+        11,
+        11
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -13
+        ]
+      ],
+      "color": 4,
+      "shade": 3,
+      "z": 2
+    },
+    {
+      "name": "sode",
+      "parent": "torso",
+      "pivot": [
+        0,
+        -11
+      ],
+      "shape": "capsule",
+      "size": [
+        17,
+        7
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "color": 4,
+      "shade": 3,
+      "z": 3
+    },
+    {
+      "name": "katana",
+      "parent": "arm_r",
+      "pivot": [
+        0,
+        11
+      ],
+      "shape": "capsule",
+      "size": [
+        3,
+        3
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          13
+        ]
+      ],
+      "color": 14,
+      "z": 4
+    },
+    {
+      "name": "arm_l",
+      "parent": "torso",
+      "pivot": [
+        -7,
+        -10
+      ],
+      "shape": "capsule",
+      "size": [
+        6,
+        6
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          11
+        ]
+      ],
+      "color": 4,
+      "shade": 3,
+      "z": 5
+    },
+    {
+      "name": "arm_r",
+      "parent": "torso",
+      "pivot": [
+        7,
+        -10
+      ],
+      "shape": "capsule",
+      "size": [
+        6,
+        6
+      ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          11
+        ]
+      ],
+      "color": 4,
+      "shade": 3,
+      "z": 5
+    },
+    {
+      "name": "head",
+      "parent": "torso",
+      "pivot": [
+        0,
+        -13
+      ],
+      "shape": "ellipse",
+      "size": [
+        11,
+        12
+      ],
+      "color": 7,
+      "z": 6
+    },
+    {
+      "name": "kabuto",
+      "parent": "head",
+      "pivot": [
+        0,
+        -4
+      ],
+      "shape": "ellipse",
+      "size": [
+        13,
+        7
+      ],
+      "color": 2,
+      "z": 7
+    },
+    {
+      "name": "maedate",
+      "parent": "kabuto",
+      "pivot": [
+        0,
+        -4
+      ],
+      "shape": "ellipse",
+      "size": [
+        4,
+        4
+      ],
+      "color": 10,
+      "z": 8
+    }
+  ],
+  "animations": {
+    "idle": {
+      "frames": 4,
+      "ms": 200,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "torso": {
+              "angle": 0
+            },
+            "arm_l": {
+              "angle": 3
+            },
+            "arm_r": {
+              "angle": -3
+            },
+            "head": {
+              "angle": 0
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "torso": {
+              "angle": 0
+            },
+            "arm_l": {
+              "angle": -3
+            },
+            "arm_r": {
+              "angle": 3
+            },
+            "head": {
+              "angle": 0
+            }
+          }
+        }
+      ]
+    },
+    "walk": {
+      "frames": 8,
+      "ms": 120,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": 14
+            },
+            "leg_r": {
+              "angle": -14
+            },
+            "arm_l": {
+              "angle": -14
+            },
+            "arm_r": {
+              "angle": 14
+            }
+          }
+        },
+        {
+          "t": 0.5,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                -1
+              ]
+            },
+            "leg_l": {
+              "angle": 0
+            },
+            "leg_r": {
+              "angle": 0
+            },
+            "arm_l": {
+              "angle": 0
+            },
+            "arm_r": {
+              "angle": 0
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": -14
+            },
+            "leg_r": {
+              "angle": 14
+            },
+            "arm_l": {
+              "angle": 14
+            },
+            "arm_r": {
+              "angle": -14
+            }
+          }
+        }
+      ]
+    },
+    "run": {
+      "frames": 8,
+      "ms": 80,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": 26
+            },
+            "leg_r": {
+              "angle": -22
+            },
+            "arm_l": {
+              "angle": -38
+            },
+            "arm_r": {
+              "angle": 34
+            }
+          }
+        },
+        {
+          "t": 0.5,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                -2
+              ]
+            },
+            "leg_l": {
+              "angle": 0
+            },
+            "leg_r": {
+              "angle": 0
+            },
+            "arm_l": {
+              "angle": 0
+            },
+            "arm_r": {
+              "angle": 0
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": -22
+            },
+            "leg_r": {
+              "angle": 26
+            },
+            "arm_l": {
+              "angle": 34
+            },
+            "arm_r": {
+              "angle": -38
+            }
+          }
+        }
+      ]
+    },
+    "jump": {
+      "frames": 1,
+      "ms": 150,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                -1
+              ]
+            },
+            "leg_l": {
+              "angle": -20
+            },
+            "leg_r": {
+              "angle": 12
+            },
+            "arm_l": {
+              "angle": -55
+            },
+            "arm_r": {
+              "angle": 45
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                -1
+              ]
+            },
+            "leg_l": {
+              "angle": -20
+            },
+            "leg_r": {
+              "angle": 12
+            },
+            "arm_l": {
+              "angle": -55
+            },
+            "arm_r": {
+              "angle": 45
+            }
+          }
+        }
+      ]
+    },
+    "fall": {
+      "frames": 1,
+      "ms": 150,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": -12
+            },
+            "leg_r": {
+              "angle": 18
+            },
+            "arm_l": {
+              "angle": -65
+            },
+            "arm_r": {
+              "angle": 55
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "hip": {
+              "offset": [
+                0,
+                0
+              ]
+            },
+            "leg_l": {
+              "angle": -12
+            },
+            "leg_r": {
+              "angle": 18
+            },
+            "arm_l": {
+              "angle": -65
+            },
+            "arm_r": {
+              "angle": 55
+            }
+          }
+        }
+      ]
+    },
+    "attack": {
+      "frames": 4,
+      "ms": 100,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "torso": {
+              "angle": -10
+            },
+            "arm_r": {
+              "angle": -80
+            },
+            "arm_l": {
+              "angle": 24
+            },
+            "head": {
+              "angle": -4
+            }
+          }
+        },
+        {
+          "t": 0.5,
+          "pose": {
+            "torso": {
+              "angle": 8
+            },
+            "arm_r": {
+              "angle": 36
+            },
+            "arm_l": {
+              "angle": -12
+            },
+            "head": {
+              "angle": 4
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "torso": {
+              "angle": 0
+            },
+            "arm_r": {
+              "angle": 0
+            },
+            "arm_l": {
+              "angle": 0
+            },
+            "head": {
+              "angle": 0
+            }
+          }
+        }
+      ]
+    },
+    "hurt": {
+      "frames": 1,
+      "ms": 200,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "torso": {
+              "angle": -16
+            },
+            "arm_l": {
+              "angle": -38
+            },
+            "arm_r": {
+              "angle": 30
+            },
+            "head": {
+              "angle": -10
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "torso": {
+              "angle": -16
+            },
+            "arm_l": {
+              "angle": -38
+            },
+            "arm_r": {
+              "angle": 30
+            },
+            "head": {
+              "angle": -10
+            }
+          }
+        }
+      ]
+    },
+    "dead": {
+      "frames": 1,
+      "ms": 300,
+      "keyframes": [
+        {
+          "t": 0.0,
+          "pose": {
+            "torso": {
+              "angle": -70
+            },
+            "head": {
+              "angle": 12
+            },
+            "arm_l": {
+              "angle": -24
+            },
+            "arm_r": {
+              "angle": 24
+            }
+          }
+        },
+        {
+          "t": 1.0,
+          "pose": {
+            "torso": {
+              "angle": -70
+            },
+            "head": {
+              "angle": 12
+            },
+            "arm_l": {
+              "angle": -24
+            },
+            "arm_r": {
+              "angle": 24
+            }
+          }
+        }
+      ]
+    }
+  }
+}
