@@ -23,6 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from arc1_art import ingest as ingest_mod              # noqa: E402
 from arc1_art import pixmap, rig                        # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -168,6 +169,169 @@ def cmd_rig(args):
     return 0
 
 
+def cmd_ingest(args):
+    """A messy sheet -> clean, aligned, quantized strips (LOCAL ONLY)."""
+    try:
+        grid = ingest_mod.parse_grid(args.grid) if args.grid else None
+        cell = ingest_mod.parse_cell(args.cell) if args.cell else None
+        palette = None
+        if args.palette:
+            with open(args.palette) as f:
+                preset = json.load(f)
+            palette = [c for c in preset["colors"]]
+        result = ingest_mod.ingest(
+            args.sheet, grid=grid, cell=cell, target_h=args.target_h,
+            tolerance=args.tolerance, min_blob=args.min_blob,
+            anchor=args.anchor, palette=palette, dither=args.dither,
+            outline=args.outline, name=args.name)
+    except (ingest_mod.IngestError, OSError, ValueError) as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    key = result["key_colours"][0] if result["key_colours"] else (0, 0, 0)
+    colours = ["#%02X%02X%02X" % key] + \
+        ["#%02X%02X%02X" % c for c in result["colours"]]
+
+    # the strip: the frames side by side, in the palette's own colours
+    frames = []
+    for idx in result["frames"]:
+        c = _canvas_obj(result["size"][0], result["size"][1])
+        for y, row in enumerate(idx):
+            for x, v in enumerate(row):
+                c.p[y][x] = v
+        frames.append(c)
+    strip = os.path.join(args.out_dir, result["name"] + ".png")
+    ingest_mod._canvas.to_strip(frames, colours, strip)
+
+    # the manifest fragment
+    fragment = {
+        "format": 1,
+        "palettes": {result["name"]: {"bank": args.bank, "colors": colours}},
+        "sprites": [{
+            "name": result["name"],
+            "file": result["name"] + ".png",
+            "palette": result["name"],
+            "frames": len(result["frames"]),
+            "provenance": {
+                "tool": "local-ingest",
+                "model": "",
+                "prompt": "raster ingest of %s (LOCAL ONLY — never commit)"
+                          % os.path.basename(args.sheet),
+                "seed": 0,
+                "licence": "local reference only — not for distribution",
+            },
+        }],
+    }
+    fragment_path = os.path.join(args.out_dir, "assets.json")
+    with open(fragment_path, "w", encoding="utf-8") as f:
+        json.dump(fragment, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+    # the before/after sheet
+    sheet = os.path.join(args.out_dir, result["name"] + "_ingest.png")
+    _write_before_after(sheet, result, colours, args.scale)
+
+    # the report
+    report = {
+        "name": result["name"],
+        "source": os.path.basename(args.sheet),
+        "cells": result["cells"],
+        "size": list(result["size"]),
+        "colours": [list(c) for c in result["colours"]],
+        "colour_count": len(result["colours"]),
+        "bbox_jitter": [list(b) for b in result["bbox_jitter"]],
+        "orphans": result["orphans"],
+        "blobs_removed": result["blobs_removed"],
+        "key_colours": [list(c) for c in result["key_colours"]],
+        "local_only": True,
+    }
+    report_path = os.path.join(args.out_dir, "report.json")
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+    print("ingest: %s (%d frame(s), %d colour(s))" % (strip, len(result["frames"]),
+                                                     len(result["colours"])))
+    print("ingest: %s" % fragment_path)
+    print("ingest: %s" % sheet)
+    print("ingest: %s (orphans %d, blobs removed %d)"
+          % (report_path, result["orphans"], result["blobs_removed"]))
+    return 0
+
+
+def _canvas_obj(w, h):
+    from arc1_art import canvas
+    return canvas.Canvas(w, h)
+
+
+def _write_before_after(path, result, colours, scale):
+    """The sheet: the raw cells on the left, the ingested frames on the
+    right."""
+    from arc1_art import canvas
+    fw, fh = result["size"]
+    before = result["before"]
+    bw = max((len(f[0]) for f in before if f), default=1)
+    bh = max((len(f) for f in before if f), default=1)
+    gap = 2
+    n = max(len(before), len(result["frames"]))
+    sheet_w = gap + n * (bw * scale + gap) + n * (fw * scale + gap) + gap
+    sheet_h = gap + max(bh, fh) * scale + gap
+    pixels = [[0] * sheet_w for _ in range(sheet_h)]
+
+    def put(x, y, index):
+        if 0 <= y < sheet_h and 0 <= x < sheet_w:
+            pixels[y][x] = index
+
+    for i, frame in enumerate(before):
+        for y, row in enumerate(frame):
+            for x, p in enumerate(row):
+                if p[3] < 128:
+                    continue
+                idx = _nearest(p, colours)
+                for sy in range(scale):
+                    for sx in range(scale):
+                        put(gap + i * (bw * scale + gap) + x * scale + sx,
+                            gap + y * scale + sy, idx)
+    off = gap + n * (bw * scale + gap)
+    for i, frame in enumerate(result["frames"]):
+        for y, row in enumerate(frame):
+            for x, v in enumerate(row):
+                if not v:
+                    continue
+                for sy in range(scale):
+                    for sx in range(scale):
+                        put(off + i * (fw * scale + gap) + x * scale + sx,
+                            gap + y * scale + sy, v)
+
+    raw = bytearray()
+    rgb = [(0, 0, 0)] * 16
+    for i, hexcolor in enumerate(colours[:16]):
+        v = int(hexcolor.lstrip("#"), 16)
+        rgb[i] = ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+    for y in range(sheet_h):
+        raw.append(0)
+        for x in range(sheet_w):
+            v = pixels[y][x]
+            raw += bytes(rgb[v] if v < len(rgb) and rgb[v] else (0, 0, 0))
+    return canvas.write_indexed_png(path, raw, sheet_w, sheet_h)
+
+
+def _nearest(p, colours):
+    """The palette index of the colour nearest to p."""
+    best, best_d = 1, None
+    for i, hexcolor in enumerate(colours):
+        if i == 0:
+            continue
+        v = int(hexcolor.lstrip("#"), 16)
+        d = ((((v >> 16) & 255) - p[0]) ** 2 +
+             (((v >> 8) & 255) - p[1]) ** 2 +
+             ((v & 255) - p[2]) ** 2)
+        if best_d is None or d < best_d:
+            best, best_d = i, d
+    return best
+
+
 def cmd_info(args):
     pm = _load(args.file)
     print("name %s" % pm["name"])
@@ -200,6 +364,24 @@ def main(argv=None):
     p.add_argument("--out-dir", required=True, metavar="DIR")
     p.add_argument("--scale", type=int, default=4)
     p.set_defaults(func=cmd_rig)
+
+    p = sub.add_parser("ingest", help="a messy sheet -> clean strips "
+                                       "(LOCAL ONLY)")
+    p.add_argument("sheet", metavar="FILE.png")
+    p.add_argument("--out-dir", required=True, metavar="DIR")
+    p.add_argument("--grid", metavar="CxR")
+    p.add_argument("--cell", metavar="WxH")
+    p.add_argument("--target-h", type=int, metavar="N")
+    p.add_argument("--tolerance", type=int, default=0, metavar="N")
+    p.add_argument("--min-blob", type=int, default=1, metavar="N")
+    p.add_argument("--anchor", choices=("feet", "center"), default="feet")
+    p.add_argument("--palette", metavar="FILE.json")
+    p.add_argument("--dither", choices=("bayer2", "bayer4"))
+    p.add_argument("--outline", type=int, metavar="N")
+    p.add_argument("--bank", type=int, default=0)
+    p.add_argument("--name", default="sheet")
+    p.add_argument("--scale", type=int, default=4)
+    p.set_defaults(func=cmd_ingest)
 
     p = sub.add_parser("info", help="what a pixmap declares")
     p.add_argument("file", metavar="FILE.px")

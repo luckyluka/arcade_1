@@ -129,7 +129,7 @@ fragment and the compiled header — the build truth).
 | 7.2 | `tools/arc1_art/canvas.py` | the drawing library (primitives, ramps, PNG) |
 | 7.3 | `tools/arc1_art/pixmap.py` | the `.px` text pixmap format and the sprite lab |
 | 7.4 | `tools/arc1_art/rig.py` | the rig animator (parts, keyframes, strips) — see `art/rigs/humanoid.json` and the review in `art/reports/humanoid.md` |
-| 7.5 | `tools/arc1_art/ingest.py` | raster ingest — **local only, stdlib only** |
+| 7.5 | `tools/arc1_art/ingest.py` | raster ingest — **local only, stdlib only** (PNG, no JPG); see [docs/art/INGEST.md](../docs/art/INGEST.md) |
 | 7.6 | `tools/arc1_art/qa.py` | `arc1-art check`: the automated visual checks |
 
 Two decisions shape this pipeline (the owner's, 2026-10-21):

@@ -243,8 +243,8 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 1. Read §0-§2 and `docs/experiments/round3-cleanroom.md`, `docs/experiments/round5-petalblade.md`.
 2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
    the status table in §9.
-3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.4
-   are done; **7.5** (raster ingest — local only, stdlib only) is next.
+3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.5
+   are done; **7.6** (the visual QA tool) is next.
 
 ## 9. Status
 
@@ -266,8 +266,9 @@ that carried it, and the day it landed.
 | 7.1 | the art workspace: presets, style template, provenance | `ae8f234` | 2026-10-21 |
 | 7.2 | the drawing library, extracted without changing a byte | `f55e3db` | 2026-10-21 |
 | 7.3 | the .px text pixmaps and the sprite lab | `4297e2f` | 2026-10-21 |
-| 7.4 | the rig animator (the humanoid preset) | (this commit) | 2026-10-21 |
-| 7.5-7.8 | the AI art pipeline | — | not started |
+| 7.4 | the rig animator (the humanoid preset) | `d12e20d` | 2026-10-21 |
+| 7.5 | raster ingest — LOCAL ONLY, stdlib only (PNG, no JPG) | (this commit) | 2026-10-21 |
+| 7.6-7.8 | the AI art pipeline | — | not started |
 | 8.1-8.3 | audio observability | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 

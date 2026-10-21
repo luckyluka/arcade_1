@@ -95,7 +95,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
         test-petalblade test-agents-md test-art-palettes test-art-canvas \
-        test-art-pixmap test-art-rig
+        test-art-pixmap test-art-rig test-art-ingest
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -145,7 +145,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
-        test-art-rig
+        test-art-rig test-art-ingest
 
 all: $(TARGET)
 
@@ -406,6 +406,12 @@ rig-samples:
 # within 25 % of its mean, at most 15 colours a frame, and the review.
 test-art-rig: tests/test_art_rig.sh
 	sh tests/test_art_rig.sh .
+
+# ROADMAP_V4 card 7.5: raster ingest (LOCAL ONLY, stdlib only — PNG, no
+# JPG). The test synthesizes a messy sheet with the canvas library; no
+# third-party image is committed.
+test-art-ingest: tests/test_art_ingest.sh
+	sh tests/test_art_ingest.sh .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:
