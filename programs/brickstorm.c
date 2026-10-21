@@ -100,6 +100,19 @@ int balls = 0;            /* the balls in play */
 int ball_vx = 0;          /* the first ball's velocity, 1/16 px a frame */
 int ball_vy = 0;
 
+/* The last contact with the paddle, published so the tools can RECORD
+ * it: which frame, where the ball landed, which side of the centre that
+ * was, and which way the ball left. `arcade1 run --vars ... --var-every 1`
+ * turns these into a per-frame trace; tools/record_hits.py turns the
+ * trace into a contact log. */
+/* volatile: the game only ever WRITES these, and at -Os a global
+ * nothing reads is deleted — the tools read them, not the game. */
+volatile int hit_frame = 0;   /* the frame of the last contact */
+volatile int hit_off = 0;     /* where it landed, 1/16 px from the centre */
+volatile int hit_side = 0;    /* -1 left of centre, 0 dead centre, +1 right */
+volatile int hit_vx = 0;      /* the horizontal velocity it left with */
+volatile int hit_count = 0;   /* the contacts so far */
+
 /* ------------------------------------------------------------------------ */
 /* the entities                                                             */
 /* ------------------------------------------------------------------------ */
@@ -144,6 +157,7 @@ static int clear_timer;
 static int shake;
 static int boss_x, boss_y;
 static int boss_cleared;      /* the boss is down: the stage is over */
+static int hits;               /* the paddle contacts so far */
 static int boss_timer;
 static int title_t;
 static int title_level = 1;     /* the level the title screen starts at */
@@ -837,7 +851,7 @@ static void ball_vs_paddle(Ball *b)
 {
     int px = b->x / FP;
     int py = b->y / FP;
-    int prev_top, now_top, frac, cross_x, off, step, k;
+    int prev_top, now_top, frac, cross_x, off, step, pos_step, k;
     if (b->vy <= 0)
         return;
     if (py + BALL_S < PADDLE_Y || py > PADDLE_Y + PADDLE_H)
@@ -871,7 +885,8 @@ static void ball_vs_paddle(Ball *b)
      * the ball's line flattens the return and sweeping against it
      * steepens it — the way a moving surface actually works.) */
     off = cross_x - paddle_x * FP;
-    step = (off * 6) / (paddle_w * FP / 2);
+    pos_step = (off * 6) / (paddle_w * FP / 2);
+    step = pos_step;
     {
         int eng = paddle_vx / 5;
         int want = step + eng;
@@ -887,9 +902,22 @@ static void ball_vs_paddle(Ball *b)
     if (k > 6)
         k = 6;
     step = step < 0 ? -k : k;
-    b->vx = (ball_speed * ang_x[k]) >> 8;
+    /* the step's SIGN is the direction: the table holds magnitudes, and
+     * without this the paddle always kicked the ball to the right —
+     * whatever side it was caught on. (The contact recorder found it.) */
+    {
+        int vx = (ball_speed * ang_x[k]) >> 8;
+        b->vx = (step < 0) ? -vx : vx;
+    }
     b->vy = -(ball_speed * ang_y[k]) >> 8;
     b->y = (PADDLE_Y - BALL_S) * FP;
+    /* publish the contact */
+    hit_frame = (int)frames;
+    hit_off = off;
+    hit_side = pos_step < 0 ? -1 : (pos_step > 0 ? 1 : 0);
+    hit_vx = b->vx;
+    hits++;
+    hit_count = hits;             /* published for the tools */
     paddle_squash = 3;
     spawn_sparks(cross_x / FP, PADDLE_Y, 3, 5);
     sfx(440 + k * 90, 300 + k * 60, 6);

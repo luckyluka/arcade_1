@@ -305,6 +305,16 @@ ROM are exactly as they were.
   The ball's velocity is observable (`ball_vx`, `ball_vy`) so the
   invariants can be checked: over a whole session the ball is never
   flatter than 60 degrees.
+* **The contact recorder.** The game publishes every paddle contact (the
+  frame, where the ball landed, which side of the centre that was, and
+  the velocity it left with), and `tools/record_hits.py` turns the
+  CLI's per-frame `--vars` trace into a contact log — one line per
+  contact, with the exact frame — and checks the catch-point rule over
+  the whole log. It is a regression: it caught the bug where the
+  paddle's launch step lost its SIGN, so the paddle always kicked the
+  ball to the right, whatever side it was caught on. That bug is why
+  the game "did not feel ok", and it is why the rule now has a machine
+  check on it.
 * **Four brick kinds**: normal, tough (two hits — it cracks first),
   steel (the ball bounces off it) and bomb (it takes its neighbours with
   it, three links deep).

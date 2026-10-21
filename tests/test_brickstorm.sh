@@ -4,7 +4,11 @@
 #   1. determinism      — two identical sessions, identical output
 #   2. the story        — the title, level 1 played to the game over, the
 #                         level picker, the boss and the win
-#   3. record -> replay — the recorded session replays bit-identically
+#   3. the catch-point rule — every paddle contact left the way the
+#                         catch point asked (the game publishes the
+#                         contacts; tools/record_hits.py logs and checks
+#                         them)
+#   4. record -> replay — the recorded session replays bit-identically
 #
 # The stage-to-stage progression (clearing a stage of bricks and moving on
 # to the next) is NOT covered here: with the new physics a scripted
@@ -35,7 +39,9 @@ GAME=$ROM/brickstorm.arc1
 [ -f "$GAME" ] || fail "missing $GAME"
 
 SCRIPT=$(dirname "$0")/inputs/brickstorm.txt
+HITS=$(dirname "$0")/inputs/brickstorm_hits.txt
 [ -f "$SCRIPT" ] || fail "missing $SCRIPT"
+[ -f "$HITS" ] || fail "missing $HITS"
 
 FRAMES=2600
 
@@ -94,7 +100,21 @@ if [ -f "$SYMS" ]; then
         fail "the session should end with the boss beaten"
     note "story ok — the title, level 1, the game over, the boss, the win"
 
-    # --- 3) record -> replay round trip ------------------------------------
+    # --- 3) the catch-point rule -------------------------------------------
+    # The game publishes every paddle contact (the frame, where the ball
+    # landed, which side of the centre that was, and the velocity it left
+    # with). The recorder turns the trace into a log and checks the rule:
+    # a ball caught on the left leaves to the left, one caught on the
+    # right leaves to the right, one caught dead centre leaves straight
+    # up. This is the regression for the bug that made the paddle always
+    # kick the ball to the right, whatever side it was caught on.
+    python3 "$(dirname "$0")/../tools/record_hits.py" "$GAME" \
+        --input "$HITS" --frames 1500 --syms "$SYMS" --check \
+        --out "$OUT/hits.txt" > /dev/null ||
+        fail "a paddle contact broke the catch-point rule"
+    note "rule ok — every contact left the way the catch point asked"
+
+    # --- 4) record -> replay round trip ------------------------------------
     "$CLI" run "$GAME" --frames 700 --input "$SCRIPT" \
         --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
     "$CLI" run "$GAME" --frames 700 --input "$OUT/rec.txt" \
@@ -110,4 +130,4 @@ else
     note "named variables skipped — no brickstorm.syms and no riscv nm to make one"
 fi
 
-echo "test-brickstorm: brickstorm ok (determinism, story, record-replay)"
+echo "test-brickstorm: brickstorm ok (determinism, story, rule, record-replay)"
