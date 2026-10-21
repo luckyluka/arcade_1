@@ -1,0 +1,246 @@
+{
+ "format": 1,
+ "description": "Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig).",
+ "roles": {
+  "skeleton_idle": "sprite",
+  "skeleton_walk": "sprite",
+  "skeleton_hurt": "sprite",
+  "skeleton_dead": "sprite"
+ },
+ "palettes": {
+  "enemy16": {
+   "bank": 16,
+   "colors": [
+    "#000000",
+    "#101410",
+    "#293821",
+    "#4A7939",
+    "#7BB25A",
+    "#392418",
+    "#5A3821",
+    "#8C6542",
+    "#181C29",
+    "#4A495A",
+    "#8C8A9C",
+    "#CECBD6",
+    "#F7F3F7",
+    "#6B2021",
+    "#C63839",
+    "#EFC363"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "slime",
+   "file": "strips/slime.png",
+   "palette": "enemy16",
+   "frames": 2,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the enemies pack: art/library/enemies/gen_enemies.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "bat",
+   "file": "strips/bat.png",
+   "palette": "enemy16",
+   "frames": 2,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the enemies pack: art/library/enemies/gen_enemies.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "rat",
+   "file": "strips/rat.png",
+   "palette": "enemy16",
+   "frames": 2,
+   "origin": [
+    8,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the enemies pack: art/library/enemies/gen_enemies.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "spider",
+   "file": "strips/spider.png",
+   "palette": "enemy16",
+   "frames": 2,
+   "origin": [
+    6,
+    12
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the enemies pack: art/library/enemies/gen_enemies.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "skeleton_idle",
+   "file": "strips/skeleton_idle.png",
+   "palette": "enemy16",
+   "frames": 2,
+   "origin": [
+    12,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/skeleton.json",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "skeleton_walk",
+   "file": "strips/skeleton_walk.png",
+   "palette": "enemy16",
+   "frames": 4,
+   "origin": [
+    12,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/skeleton.json",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "skeleton_hurt",
+   "file": "strips/skeleton_hurt.png",
+   "palette": "enemy16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/skeleton.json",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "skeleton_dead",
+   "file": "strips/skeleton_dead.png",
+   "palette": "enemy16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/skeleton.json",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "slime_anim",
+   "sprite": "slime",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 160
+  },
+  {
+   "name": "bat_anim",
+   "sprite": "bat",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 110
+  },
+  {
+   "name": "rat_anim",
+   "sprite": "rat",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 150
+  },
+  {
+   "name": "spider_anim",
+   "sprite": "spider",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 130
+  },
+  {
+   "name": "skeleton_idle_anim",
+   "sprite": "skeleton_idle",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 220
+  },
+  {
+   "name": "skeleton_walk_anim",
+   "sprite": "skeleton_walk",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 140
+  },
+  {
+   "name": "skeleton_hurt_anim",
+   "sprite": "skeleton_hurt",
+   "frames": [
+    0
+   ],
+   "ms": 200
+  },
+  {
+   "name": "skeleton_dead_anim",
+   "sprite": "skeleton_dead",
+   "frames": [
+    0
+   ],
+   "ms": 300
+  }
+ ],
+ "maps": []
+}

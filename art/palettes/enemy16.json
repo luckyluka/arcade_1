@@ -1,0 +1,24 @@
+{
+  "name": "enemy16",
+  "description": "The enemies palette: the slime's greens, the rodents' browns, the spider's blacks, the skeleton's bones and the eyes' red.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#101410",
+    "#293821",
+    "#4A7939",
+    "#7BB25A",
+    "#392418",
+    "#5A3821",
+    "#8C6542",
+    "#181C29",
+    "#4A495A",
+    "#8C8A9C",
+    "#CECBD6",
+    "#F7F3F7",
+    "#6B2021",
+    "#C63839",
+    "#EFC363"
+  ]
+}

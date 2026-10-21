@@ -66,6 +66,7 @@ PACKS = [
     "effects",
     "ui",
     "backgrounds",
+    "enemies",
 ]
 
 

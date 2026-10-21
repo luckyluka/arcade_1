@@ -1,0 +1,56 @@
+{
+  "name": "skeleton",
+  "description": "A walking skeleton — the rig animator's enemy. Bone-white plates on a dark frame.",
+  "width": 24,
+  "height": 32,
+  "origin": [12, 30],
+  "baseline": 31,
+  "palette": "enemy16",
+  "bank": 16,
+  "outline": 1,
+  "parts": [
+    { "name": "root",  "parent": "root",  "pivot": [0, 0],     "shape": "root",    "color": 1 },
+    { "name": "hip",   "parent": "root",  "pivot": [0, -14],   "shape": "root",    "color": 1 },
+    { "name": "leg_l", "parent": "hip",   "pivot": [-3, 0],    "shape": "capsule", "size": [4, 4], "points": [[0, 0], [0, 11]], "color": 11, "z": 0 },
+    { "name": "leg_r", "parent": "hip",   "pivot": [3, 0],     "shape": "capsule", "size": [4, 4], "points": [[0, 0], [0, 11]], "color": 11, "z": 0 },
+    { "name": "torso", "parent": "hip",   "pivot": [0, -1],    "shape": "capsule", "size": [8, 8], "points": [[0, 0], [0, -10]], "color": 12, "z": 1 },
+    { "name": "arm_l", "parent": "torso", "pivot": [-5, -9],   "shape": "capsule", "size": [3, 3], "points": [[0, 0], [0, 9]], "color": 11, "z": 2 },
+    { "name": "arm_r", "parent": "torso", "pivot": [5, -9],    "shape": "capsule", "size": [3, 3], "points": [[0, 0], [0, 9]], "color": 11, "z": 2 },
+    { "name": "head",  "parent": "torso", "pivot": [0, -10],   "shape": "ellipse", "size": [9, 9], "color": 12, "z": 3 }
+  ],
+  "animations": {
+    "idle": {
+      "frames": 2,
+      "ms": 220,
+      "keyframes": [
+        { "t": 0.0, "pose": { "torso": { "angle": 0 }, "arm_l": { "angle": 4 }, "arm_r": { "angle": -4 } } },
+        { "t": 1.0, "pose": { "torso": { "angle": 0 }, "arm_l": { "angle": -4 }, "arm_r": { "angle": 4 } } }
+      ]
+    },
+    "walk": {
+      "frames": 4,
+      "ms": 140,
+      "keyframes": [
+        { "t": 0.0, "pose": { "leg_l": { "angle": 16 }, "leg_r": { "angle": -16 }, "arm_l": { "angle": -16 }, "arm_r": { "angle": 16 } } },
+        { "t": 0.5, "pose": { "leg_l": { "angle": 0 }, "leg_r": { "angle": 0 }, "arm_l": { "angle": 0 }, "arm_r": { "angle": 0 } } },
+        { "t": 1.0, "pose": { "leg_l": { "angle": -16 }, "leg_r": { "angle": 16 }, "arm_l": { "angle": 16 }, "arm_r": { "angle": -16 } } }
+      ]
+    },
+    "hurt": {
+      "frames": 1,
+      "ms": 200,
+      "keyframes": [
+        { "t": 0.0, "pose": { "torso": { "angle": -14 }, "head": { "angle": -8 }, "arm_l": { "angle": -30 }, "arm_r": { "angle": 20 } } },
+        { "t": 1.0, "pose": { "torso": { "angle": -14 }, "head": { "angle": -8 }, "arm_l": { "angle": -30 }, "arm_r": { "angle": 20 } } }
+      ]
+    },
+    "dead": {
+      "frames": 1,
+      "ms": 300,
+      "keyframes": [
+        { "t": 0.0, "pose": { "torso": { "angle": -72 }, "head": { "angle": 14 }, "arm_l": { "angle": -30 }, "arm_r": { "angle": 26 } } },
+        { "t": 1.0, "pose": { "torso": { "angle": -72 }, "head": { "angle": 14 }, "arm_l": { "angle": -30 }, "arm_r": { "angle": 26 } } }
+      ]
+    }
+  }
+}

@@ -20,8 +20,9 @@ arc1-art merge <pack>...  # compose packs into a game's manifest
 | `effects` | Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame. | 10 |
 | `ui` | The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip. | 6 |
 | `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 6 |
+| `enemies` | Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig). | 16 |
 
-**82 assets in 8 packs.**
+**98 assets in 9 packs.**
 
 ## `icons`
 
@@ -250,4 +251,38 @@ What is behind the game: three seamless parallax ridge strips, a tileable star f
 | `moon` | layer | 16x16 | 1 | dusk16 |
 
 **Review:** **The ridges are the useful part, and they work.** Each is a seamless
+
+## `enemies`
+
+Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig).
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `slime` | sprite | 16x16 | 2 | enemy16 |
+| `bat` | sprite | 16x16 | 2 | enemy16 |
+| `rat` | sprite | 16x12 | 2 | enemy16 |
+| `spider` | sprite | 12x12 | 2 | enemy16 |
+| `skeleton_idle` | sprite | 24x32 | 2 | enemy16 |
+| `skeleton_walk` | sprite | 24x32 | 4 | enemy16 |
+| `skeleton_hurt` | sprite | 24x32 | 1 | enemy16 |
+| `skeleton_dead` | sprite | 24x32 | 1 | enemy16 |
+| `slime_anim` | animation | — | 2 | 160 ms |
+| `bat_anim` | animation | — | 2 | 110 ms |
+| `rat_anim` | animation | — | 2 | 150 ms |
+| `spider_anim` | animation | — | 2 | 130 ms |
+| `skeleton_idle_anim` | animation | — | 2 | 220 ms |
+| `skeleton_walk_anim` | animation | — | 4 | 140 ms |
+| `skeleton_hurt_anim` | animation | — | 1 | 200 ms |
+| `skeleton_dead_anim` | animation | — | 1 | 300 ms |
+
+**Review:** **The skeleton is the one that matters, and it works.** A walking enemy is
 
