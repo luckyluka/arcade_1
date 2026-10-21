@@ -1,109 +1,25 @@
 {
  "format": 1,
  "palettes": {
-  "forest16": {
-   "bank": 7,
+  "props16": {
+   "bank": 11,
    "colors": [
     "#000000",
-    "#101808",
-    "#182810",
-    "#293C18",
-    "#315129",
-    "#426531",
-    "#4A7942",
-    "#5A8E4A",
-    "#6BA25A",
-    "#7BB66B",
-    "#8CCB7B",
-    "#A5DF94",
-    "#C6EFB5",
-    "#6B4929",
-    "#8C6539",
-    "#AD8652"
-   ]
-  },
-  "warm16": {
-   "bank": 3,
-   "colors": [
-    "#000000",
-    "#211408",
-    "#392410",
-    "#523418",
-    "#6B4521",
-    "#845931",
-    "#9C7142",
-    "#B58A52",
-    "#C6A263",
-    "#DEBA7B",
-    "#EFD394",
-    "#F7E7B5",
-    "#FFF3D6",
-    "#C66931",
-    "#E78A42",
-    "#F7C373"
-   ]
-  },
-  "ui16": {
-   "bank": 4,
-   "colors": [
-    "#000000",
-    "#101018",
-    "#181C29",
-    "#292C39",
-    "#393C52",
-    "#52516B",
-    "#6B6984",
-    "#84869C",
-    "#A5A2B5",
-    "#C6C3CE",
-    "#E7E3EF",
-    "#FFFFFF",
-    "#C63839",
-    "#E7A639",
-    "#39C77B",
-    "#398AC6"
-   ]
-  },
-  "neutral16": {
-   "bank": 5,
-   "colors": [
-    "#000000",
-    "#101410",
-    "#212421",
-    "#313431",
-    "#4A494A",
-    "#5A595A",
-    "#6B6D6B",
-    "#7B7D7B",
-    "#949294",
-    "#A5A2A5",
-    "#B5B6B5",
-    "#C6C7C6",
-    "#DEDBDE",
-    "#EFEBEF",
-    "#F7F3F7",
-    "#FFFFFF"
-   ]
-  },
-  "cool16": {
-   "bank": 6,
-   "colors": [
-    "#000000",
-    "#081421",
-    "#102039",
-    "#183052",
-    "#21416B",
-    "#295184",
-    "#31619C",
-    "#3971B5",
-    "#4A82C6",
-    "#5A96CE",
-    "#73A6DE",
-    "#84BAE7",
-    "#9CCBF7",
-    "#B5DFFF",
-    "#5AC3B5",
-    "#8CE3D6"
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#CEB27B",
+    "#8C8273",
+    "#73717B",
+    "#6B6573",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#DEB65A",
+    "#211821",
+    "#ADA2B5",
+    "#100C18"
    ]
   }
  },
@@ -111,7 +27,7 @@
   {
    "name": "arrow",
    "file": "arrow.png",
-   "palette": "forest16",
+   "palette": "props16",
    "frames": 1,
    "provenance": {
     "tool": "agent-authored",
@@ -124,7 +40,7 @@
   {
    "name": "coin",
    "file": "coin.png",
-   "palette": "warm16",
+   "palette": "props16",
    "frames": 1,
    "provenance": {
     "tool": "agent-authored",
@@ -137,7 +53,7 @@
   {
    "name": "heart",
    "file": "heart.png",
-   "palette": "ui16",
+   "palette": "props16",
    "frames": 1,
    "provenance": {
     "tool": "agent-authored",
@@ -150,7 +66,7 @@
   {
    "name": "key",
    "file": "key.png",
-   "palette": "neutral16",
+   "palette": "props16",
    "frames": 1,
    "provenance": {
     "tool": "agent-authored",
@@ -163,7 +79,7 @@
   {
    "name": "potion",
    "file": "potion.png",
-   "palette": "cool16",
+   "palette": "props16",
    "frames": 1,
    "provenance": {
     "tool": "agent-authored",

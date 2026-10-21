@@ -33,7 +33,7 @@ CHECKS=0
 # --- 1) the round trip -----------------------------------------------------
 # The samples are the sources; the build output in programs/px/ is the
 # truth. Regenerate into a temp dir and compare with the committed one.
-"$ART" px2assets "$ROOT"/art/px/*.px --out-dir "$OUT/px" > /dev/null || \
+"$ART" px2assets "$ROOT"/art/library/icons/pixmaps/*.px --out-dir "$OUT/px" > /dev/null || \
     fail "px2assets failed"
 for f in assets.json coin.png heart.png key.png potion.png arrow.png; do
     cmp -s "$OUT/px/$f" "$ROOT/programs/px/$f" || \
@@ -53,10 +53,10 @@ echo "  ok: the manifest compiles to the committed header"
 # non-transparent pixels (counted from the .px file itself).
 "$CLI" run "$GUEST/px_probe.bin" --frames 3 --capture "$OUT/scene.ppm" \
     --quiet > /dev/null 2>&1 || fail "the probe guest did not run"
-want=$(grep -v '^#' "$ROOT/art/px/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
-total=$(grep -v '^#' "$ROOT/art/px/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
-opaque=$(grep -v '^#' "$ROOT/art/px/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
-chars=$(grep -v '^#' "$ROOT/art/px/heart.px" | tr -d '\n' | tr -cd '0-9a-f' | wc -c)
+want=$(grep -v '^#' "$ROOT/art/library/icons/pixmaps/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
+total=$(grep -v '^#' "$ROOT/art/library/icons/pixmaps/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
+opaque=$(grep -v '^#' "$ROOT/art/library/icons/pixmaps/heart.px" | tr -d '\n' | tr -cd '.' | wc -c)
+chars=$(grep -v '^#' "$ROOT/art/library/icons/pixmaps/heart.px" | tr -d '\n' | tr -cd '0-9a-f' | wc -c)
 want=$chars
 # count the painted pixels in the 8x8 box at (20,20)
 painted=$(tail -c $((480 * 270 * 3)) "$OUT/scene.ppm" | od -An -v -tu1 | awk \
@@ -123,7 +123,7 @@ CHECKS=$((CHECKS + 1))
 echo "  ok: every teaching error is pinned (character, row, frame, field)"
 
 # --- 3) determinism --------------------------------------------------------
-"$ART" px2assets "$ROOT"/art/px/*.px --out-dir "$OUT/px2" > /dev/null
+"$ART" px2assets "$ROOT"/art/library/icons/pixmaps/*.px --out-dir "$OUT/px2" > /dev/null
 for f in assets.json coin.png heart.png key.png potion.png arrow.png; do
     cmp -s "$OUT/px/$f" "$OUT/px2/$f" || fail "two runs differ: $f"
 done
@@ -132,7 +132,7 @@ echo "  ok: two runs of arc1-art are identical"
 
 # --- 4) the five samples, with provenance ---------------------------------
 for s in coin heart key potion arrow; do
-    f="$ROOT/art/px/$s.px"
+    f="$ROOT/art/library/icons/pixmaps/$s.px"
     [ -f "$f" ] || fail "missing the sample $s"
     grep -q '^# provenance:' "$f" || fail "the sample $s has no provenance"
     grep -q '"tool": "agent-authored"' "$f" || \

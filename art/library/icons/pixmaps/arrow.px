@@ -1,10 +1,10 @@
-# name: heart   size: 8x8   palette: ui16   bank: 4
+# name: arrow   size: 8x8   palette: props16   bank: 11
 # provenance: {"tool": "agent-authored", "model": "", "prompt": "hand-authored by agent as a .px pixmap", "seed": 0, "licence": "this repository"}
-.11..11.
-11444411
-14444441
-14444441
-14444441
-.1444441
-..14441.
-...111..
+......11
+.....144
+11111144
+14444444
+14444444
+11111144
+.....144
+......11

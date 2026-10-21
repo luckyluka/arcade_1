@@ -20,7 +20,7 @@ int main(void)
         int i;
 
         for (i = 0; i < 16; i++)
-            arcade1_pal(heart_frames[0].bank * 16 + i, ui16_palette[i]);
+            arcade1_pal(heart_frames[0].bank * 16 + i, props16_palette[i]);
 
         arcade1_clear(0x0000u);
         arcade1_sprite4(AT_X, AT_Y, heart_frames[0].data,

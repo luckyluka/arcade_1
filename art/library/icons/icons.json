@@ -1,0 +1,116 @@
+{
+ "format": 1,
+ "description": "Five small gameplay icons (coin, heart, key, potion, arrow) — the HUD's vocabulary.",
+ "palettes": {
+  "props16": {
+   "bank": 11,
+   "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#CEB27B",
+    "#8C8273",
+    "#73717B",
+    "#6B6573",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#DEB65A",
+    "#211821",
+    "#ADA2B5",
+    "#100C18"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "coin",
+   "file": "strips/coin.png",
+   "palette": "props16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/icons/pixmaps/coin.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "heart",
+   "file": "strips/heart.png",
+   "palette": "props16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/icons/pixmaps/heart.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "key",
+   "file": "strips/key.png",
+   "palette": "props16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/icons/pixmaps/key.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "potion",
+   "file": "strips/potion.png",
+   "palette": "props16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/icons/pixmaps/potion.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "arrow",
+   "file": "strips/arrow.png",
+   "palette": "props16",
+   "frames": 1,
+   "origin": [
+    4,
+    8
+   ],
+   "provenance": {
+    "tool": "agent-authored",
+    "model": "",
+    "prompt": "hand-authored by agent as a .px pixmap (art/library/icons/pixmaps/arrow.px)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

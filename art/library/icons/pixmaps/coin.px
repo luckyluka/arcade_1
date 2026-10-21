@@ -1,10 +1,10 @@
-# name: arrow   size: 8x8   palette: forest16   bank: 7
+# name: coin   size: 8x8   palette: props16   bank: 11
 # provenance: {"tool": "agent-authored", "model": "", "prompt": "hand-authored by agent as a .px pixmap", "seed": 0, "licence": "this repository"}
-......11
-.....144
-11111144
-14444444
-14444444
-11111144
-.....144
-......11
+..1111..
+.144441.
+14455441
+14455441
+14444441
+14444441
+.144441.
+..1111..

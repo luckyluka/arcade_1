@@ -95,6 +95,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
         test-petalblade test-petalblade_rig test-agents-md test-art-palettes \
+        test-art-library \
         test-art-canvas \
         test-art-pixmap test-art-rig test-art-ingest test-art-qa
 
@@ -370,11 +371,12 @@ test-art-palettes: tests/test_art_palettes.sh
 test-art-canvas: tests/test_art_canvas.sh tests/test_art_canvas.py
 	sh tests/test_art_canvas.sh .
 
-# ROADMAP_V4 card 7.3: the .px text pixmaps. The samples in art/px/ are
+# ROADMAP_V4 card 7.3: the .px text pixmaps. The samples live in the
+# library's icons pack (art/library/icons/pixmaps/) and are
 # the sources; the strips, the manifest fragment and the compiled header in
 # programs/px/ are the build truth (regenerate, never hand-edit).
 px-samples:
-	tools/arc1-art px2assets art/px/*.px --out-dir programs/px
+	tools/arc1-art px2assets art/library/icons/pixmaps/*.px --out-dir programs/px
 	python3 tools/arc1_assetc.py --assets programs/px/assets.json \
 	    --out-dir programs/px --report
 
@@ -423,6 +425,20 @@ test-art-qa: tests/test_art_qa.sh
 # one pinned so it cannot come back.
 test-doc-gaps: $(CLI_BIN) tests/test_doc_gaps.sh
 	sh tests/test_doc_gaps.sh .
+
+# The asset library (ROADMAP_V4, after the clean-room rounds): regenerate
+# every pack, or prove that a fresh build is byte-identical.
+art-library:
+	tools/arc1-art library
+
+art-library-check:
+	tools/arc1-art library --check
+
+# The library's own test: the packs regenerate, the assets pass the checks,
+# every pack has a style sheet and a review, the index is complete, and the
+# packs merge into a manifest.
+test-art-library: tests/test_art_library.sh
+	sh tests/test_art_library.sh .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

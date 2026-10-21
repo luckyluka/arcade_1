@@ -1,0 +1,282 @@
+{
+ "format": 1,
+ "description": "A village's cast and ground: a farmer, a slime, four harvests and a three-tile ground (grass, a paved square, a pond).",
+ "palettes": {
+  "farmer": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  },
+  "slime": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#101808",
+    "#182810",
+    "#293C18",
+    "#315129",
+    "#426531",
+    "#4A7942",
+    "#5A8E4A",
+    "#6BA25A",
+    "#7BB66B",
+    "#8CCB7B",
+    "#A5DF94",
+    "#C6EFB5",
+    "#6B4929",
+    "#8C6539",
+    "#AD8652"
+   ]
+  },
+  "props": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#1A1218",
+    "#7A5410",
+    "#B8860F",
+    "#E8B93A",
+    "#F7E07A",
+    "#8E1B22",
+    "#C8302F",
+    "#F0604F",
+    "#A8500F",
+    "#E07A1E",
+    "#F2A94A",
+    "#2C5A1E",
+    "#4E8C2A",
+    "#8FC65A",
+    "#F5EEDD"
+   ]
+  },
+  "ground": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#1B1B22",
+    "#2E5A22",
+    "#3F7A2C",
+    "#58A03A",
+    "#7CC154",
+    "#4A2F16",
+    "#6B4520",
+    "#8C6030",
+    "#B08A4E",
+    "#16324F",
+    "#215080",
+    "#3573AC",
+    "#6BA3D6",
+    "#A9D4E8",
+    "#24461A"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "farmer",
+   "file": "strips/farmer.png",
+   "palette": "farmer",
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    8,
+    24
+   ],
+   "collision": [
+    3,
+    12,
+    10,
+    11
+   ]
+  },
+  {
+   "name": "slime",
+   "file": "strips/slime.png",
+   "palette": "slime",
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    8,
+    16
+   ],
+   "collision": [
+    3,
+    8,
+    10,
+    6
+   ]
+  },
+  {
+   "name": "coin",
+   "file": "strips/coin.png",
+   "palette": "props",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    6,
+    12
+   ],
+   "collision": [
+    2,
+    2,
+    8,
+    9
+   ]
+  },
+  {
+   "name": "apple",
+   "file": "strips/apple.png",
+   "palette": "props",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    6,
+    12
+   ],
+   "collision": [
+    3,
+    4,
+    6,
+    7
+   ]
+  },
+  {
+   "name": "carrot",
+   "file": "strips/carrot.png",
+   "palette": "props",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    6,
+    12
+   ],
+   "collision": [
+    4,
+    3,
+    5,
+    8
+   ]
+  },
+  {
+   "name": "cabbage",
+   "file": "strips/cabbage.png",
+   "palette": "props",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    6,
+    12
+   ],
+   "collision": [
+    2,
+    4,
+    8,
+    7
+   ]
+  },
+  {
+   "name": "ground",
+   "file": "strips/ground.png",
+   "palette": "ground",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "origin": [
+    0,
+    0
+   ]
+  }
+ ],
+ "animations": [
+  {
+   "name": "farmer_walk",
+   "sprite": "farmer",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 160,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "slime_hop",
+   "sprite": "slime",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 240,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round6/art/gen_round6.py — the round 6 village generator",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "maps": []
+}

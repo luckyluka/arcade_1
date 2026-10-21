@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from arc1_art import ingest as ingest_mod              # noqa: E402
+from arc1_art import library as library_mod            # noqa: E402
 from arc1_art import preview as preview_mod            # noqa: E402
 from arc1_art import qa as qa_mod                      # noqa: E402
 from arc1_art import pixmap, rig                        # noqa: E402
@@ -405,6 +406,50 @@ def cmd_preview(args):
     return 0
 
 
+def cmd_library(args):
+    """The asset library: regenerate the packs, or check them."""
+    try:
+        if args.check:
+            problems = []
+            for name in library_mod.PACKS:
+                ok, diffs = library_mod.check_pack(name)
+                if not ok:
+                    problems.extend("%s: %s" % (name, d) for d in diffs)
+            if problems:
+                for p in problems:
+                    sys.stderr.write("arc1-art: %s\n" % p)
+                return 1
+            print("library: every pack regenerates byte for byte")
+            return 0
+        for name in library_mod.PACKS:
+            out = os.path.join(ROOT, "art", "library", name)
+            library_mod.regenerate_pack(name, out)
+            print("library: %s" % name)
+        index = os.path.join(ROOT, "art", "library", "INDEX.md")
+        with open(index, "w", encoding="utf-8") as f:
+            f.write(library_mod.build_index())
+            f.write("\n")
+        print("library: %s" % index)
+        return 0
+    except library_mod.LibraryError as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+
+
+def cmd_merge(args):
+    """Compose the library's packs into a game's manifest."""
+    try:
+        manifest = library_mod.merge_packs(args.packs, args.out)
+    except library_mod.LibraryError as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+    print("merge: %s (%d palette(s), %d sprite(s), %d animation(s), "
+          "%d map(s))" % (args.out, len(manifest["palettes"]),
+                          len(manifest["sprites"]), len(manifest["animations"]),
+                          len(manifest["maps"])))
+    return 0
+
+
 def cmd_info(args):
     pm = _load(args.file)
     print("name %s" % pm["name"])
@@ -483,6 +528,19 @@ def main(argv=None):
                    help="preview the manifest's MAPS (the composed world), "
                         "not its sprites")
     p.set_defaults(func=cmd_preview)
+
+    p = sub.add_parser("library", help="the asset library: regenerate the "
+                                       "packs, or check them")
+    p.add_argument("--check", action="store_true",
+                   help="regenerate every pack into a temporary directory "
+                        "and prove it is byte-identical")
+    p.set_defaults(func=cmd_library)
+
+    p = sub.add_parser("merge", help="compose the library's packs into a "
+                                       "game's manifest")
+    p.add_argument("packs", nargs="+", metavar="PACK")
+    p.add_argument("--out", required=True, metavar="assets.json")
+    p.set_defaults(func=cmd_merge)
 
     p = sub.add_parser("info", help="what a pixmap declares")
     p.add_argument("file", metavar="FILE.px")

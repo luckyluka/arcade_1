@@ -1,4 +1,4 @@
-# name: key   size: 8x8   palette: neutral16   bank: 5
+# name: key   size: 8x8   palette: props16   bank: 11
 # provenance: {"tool": "agent-authored", "model": "", "prompt": "hand-authored by agent as a .px pixmap", "seed": 0, "licence": "this repository"}
 .111111.
 .144441.

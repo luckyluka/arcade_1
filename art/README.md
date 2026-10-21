@@ -58,7 +58,7 @@ art/
 
 `make art-petalblade` builds the **rig variant** of Petal Blade: the hero
 rebuilt with the rig animator (`art/rigs/samurai.json`), five props from
-`.px` pixmaps (`art/px/props/`), the world's own procedural art reused, and
+`.px` pixmaps, the world's own procedural art reused, and
 the manifest that ties them together. The variant is a separate game
 (`programs/petalblade_rig.c`) with its own golden; the promoted game is
 untouched.
@@ -68,6 +68,30 @@ one — is in
 [docs/experiments/art-pass.md](../docs/experiments/art-pass.md). The
 short version: **the rig is better at consistency and editability, worse
 at beauty at 28×40 pixels.**
+
+## The library
+
+`art/library/` is the **catalogue of reusable art**: packs, each one a
+generator, a manifest fragment, a style sheet and the strips it produces.
+`art/library/INDEX.md` is the index; `make art-library` regenerates every
+pack and `make art-library-check` proves that a fresh build is byte for
+byte the committed one.
+
+```sh
+arc1-art merge icons characters village --out game/assets.json
+    # compose the packs a game wants into one manifest
+```
+
+A pack is *code*, not a folder of PNGs: the generator is the master, the
+strips are the build truth, and every asset carries its provenance. A
+pack also says how it is meant to be used (its style sheet: the sizes, the
+anchor, the collision convention, the palette bank) and carries a review
+(`art/reports/<pack>.md`).
+
+The four packs that are there now are the art the two clean-room rounds
+made — the icons, the two rigged characters, the village and the lighthouse
+— tidied, with the games' own maps dropped (a map belongs to a game, not
+to a library).
 
 ## The clean-room round
 
@@ -157,7 +181,8 @@ was changed — is in **[art/reports/humanoid.md](reports/humanoid.md)**.
 ## The `.px` format (text pixmaps)
 
 A pixmap is a sprite written as text — the one thing an agent writes
-well. The samples live in `art/px/`:
+well. The samples live in the library's `icons` pack
+(`art/library/icons/pixmaps/`):
 
 ```
 # name: coin   size: 8x8   palette: warm16   bank: 3
@@ -184,10 +209,10 @@ well. The samples live in `art/px/`:
 The tools:
 
 ```sh
-tools/arc1-art px2assets art/px/*.px --out-dir programs/px
+tools/arc1-art px2assets art/library/icons/pixmaps/*.px --out-dir programs/px
     # the strip PNGs + the assets.json fragment (arc1-assetc compiles it)
 
-tools/arc1-art sheet art/px/coin.px --scale 8 --out preview.png
+tools/arc1-art sheet art/library/icons/pixmaps/coin.px --scale 8 --out preview.png
     # the preview sheet: every frame at 1x and at 8x, with the numbers
 
 tools/arc1-art preview assets.json --out sheet.png --scale 4
@@ -199,7 +224,7 @@ tools/arc1-art preview assets.json --out world.png --maps
 tools/arc1-art check assets.json --manifest
     # the manifest's MAPS: the legend, the tiles, the collision layer
 
-tools/arc1-art info art/px/coin.px
+tools/arc1-art info art/library/icons/pixmaps/coin.px
     # what the file declares
 ```
 

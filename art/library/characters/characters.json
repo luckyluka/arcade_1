@@ -1,0 +1,589 @@
+{
+ "format": 1,
+ "description": "Two rigged characters (the humanoid reference and the samurai) — eight states each, built from parts and keyframes rather than drawn frame by frame.",
+ "palettes": {
+  "dusk16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#080C18",
+    "#181831",
+    "#21244A",
+    "#31306B",
+    "#424184",
+    "#5255A5",
+    "#7371BD",
+    "#9492D6",
+    "#B5B6EF",
+    "#7B2839",
+    "#A5384A",
+    "#C6595A",
+    "#EF8E73",
+    "#EFBA5A",
+    "#FFE3A5"
+   ]
+  },
+  "hero16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "humanoid_attack",
+   "file": "strips/humanoid_attack.png",
+   "palette": "dusk16",
+   "frames": 4,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    1,
+    2,
+    23,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_dead",
+   "file": "strips/humanoid_dead.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    0,
+    4,
+    20,
+    28
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_fall",
+   "file": "strips/humanoid_fall.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    4,
+    2,
+    20,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_hurt",
+   "file": "strips/humanoid_hurt.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    2,
+    0,
+    18,
+    32
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_idle",
+   "file": "strips/humanoid_idle.png",
+   "palette": "dusk16",
+   "frames": 4,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    3,
+    1,
+    19,
+    31
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_jump",
+   "file": "strips/humanoid_jump.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    4,
+    2,
+    20,
+    30
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_run",
+   "file": "strips/humanoid_run.png",
+   "palette": "dusk16",
+   "frames": 8,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    1,
+    3,
+    22,
+    29
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "humanoid_walk",
+   "file": "strips/humanoid_walk.png",
+   "palette": "dusk16",
+   "frames": 8,
+   "origin": [
+    12,
+    32
+   ],
+   "collision": [
+    3,
+    1,
+    19,
+    31
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/humanoid.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_attack",
+   "file": "strips/samurai_attack.png",
+   "palette": "hero16",
+   "frames": 4,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    0,
+    0,
+    28,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_dead",
+   "file": "strips/samurai_dead.png",
+   "palette": "hero16",
+   "frames": 1,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    0,
+    7,
+    27,
+    33
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_fall",
+   "file": "strips/samurai_fall.png",
+   "palette": "hero16",
+   "frames": 1,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    0,
+    0,
+    26,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_hurt",
+   "file": "strips/samurai_hurt.png",
+   "palette": "hero16",
+   "frames": 1,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    0,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_idle",
+   "file": "strips/samurai_idle.png",
+   "palette": "hero16",
+   "frames": 4,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    2,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_jump",
+   "file": "strips/samurai_jump.png",
+   "palette": "hero16",
+   "frames": 1,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    2,
+    0,
+    24,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_run",
+   "file": "strips/samurai_run.png",
+   "palette": "hero16",
+   "frames": 8,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    0,
+    0,
+    28,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "samurai_walk",
+   "file": "strips/samurai_walk.png",
+   "palette": "hero16",
+   "frames": 8,
+   "origin": [
+    14,
+    40
+   ],
+   "collision": [
+    1,
+    0,
+    26,
+    40
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: art/rigs/samurai.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "humanoid_attack",
+   "sprite": "humanoid_attack",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 100
+  },
+  {
+   "name": "humanoid_dead",
+   "sprite": "humanoid_dead",
+   "frames": [
+    0
+   ],
+   "ms": 300
+  },
+  {
+   "name": "humanoid_fall",
+   "sprite": "humanoid_fall",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "humanoid_hurt",
+   "sprite": "humanoid_hurt",
+   "frames": [
+    0
+   ],
+   "ms": 200
+  },
+  {
+   "name": "humanoid_idle",
+   "sprite": "humanoid_idle",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 200
+  },
+  {
+   "name": "humanoid_jump",
+   "sprite": "humanoid_jump",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "humanoid_run",
+   "sprite": "humanoid_run",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 80
+  },
+  {
+   "name": "humanoid_walk",
+   "sprite": "humanoid_walk",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 120
+  },
+  {
+   "name": "samurai_attack",
+   "sprite": "samurai_attack",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 100
+  },
+  {
+   "name": "samurai_dead",
+   "sprite": "samurai_dead",
+   "frames": [
+    0
+   ],
+   "ms": 300
+  },
+  {
+   "name": "samurai_fall",
+   "sprite": "samurai_fall",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "samurai_hurt",
+   "sprite": "samurai_hurt",
+   "frames": [
+    0
+   ],
+   "ms": 200
+  },
+  {
+   "name": "samurai_idle",
+   "sprite": "samurai_idle",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 200
+  },
+  {
+   "name": "samurai_jump",
+   "sprite": "samurai_jump",
+   "frames": [
+    0
+   ],
+   "ms": 150
+  },
+  {
+   "name": "samurai_run",
+   "sprite": "samurai_run",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 80
+  },
+  {
+   "name": "samurai_walk",
+   "sprite": "samurai_walk",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "ms": 120
+  }
+ ],
+ "maps": []
+}
