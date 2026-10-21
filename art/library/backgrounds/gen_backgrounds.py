@@ -118,6 +118,52 @@ def moon():
     return c
 
 
+
+
+# --------------------------------------------------------------------------
+# The sky
+# --------------------------------------------------------------------------
+
+# The dusk sky's bands, top to horizon: the night's indigo, the violets,
+# the crimson and the gold. Each band is one tile, dithered against its
+# neighbour, so seventeen bands read as one smooth gradient.
+SKY_BANDS = [
+    (2, 2), (3, 3), (3, 4), (4, 4), (4, 5), (5, 5), (5, 6), (6, 6),
+    (7, 7), (7, 8), (8, 9), (10, 10), (10, 11), (11, 12), (12, 13),
+    (13, 14), (14, 15),
+]
+SKY_TILE = 16
+SKY_COLS = 30
+SKY_ROWS = len(SKY_BANDS)
+
+
+def sky_bands():
+    """The band tiles: 16x16 each, dithered between two palette indices.
+
+    The dither is what makes the banding disappear: a solid band would
+    show seventeen steps, a dithered one shows a gradient.
+    """
+    tiles = []
+    for (a, b) in SKY_BANDS:
+        t = C.Canvas(SKY_TILE, SKY_TILE)
+        for y in range(SKY_TILE):
+            for x in range(SKY_TILE):
+                t.px(x, y, b if C.ordered_dither(x, y, 4) > 0.5 else a)
+        tiles.append(t)
+    sheet = C.Canvas(SKY_TILE * len(tiles), SKY_TILE)
+    for i, t in enumerate(tiles):
+        sheet.stamp(t, i * SKY_TILE, 0)
+    return sheet
+
+
+def sky_map():
+    """The map that lays the bands out: 30x17 cells, one row per band."""
+    rows = []
+    for r in range(SKY_ROWS):
+        rows.append("".join(chr(ord("a") + r) for _ in range(SKY_COLS)))
+    return rows
+
+
 RIDGES = [
     ("ridge_far", 15, 9, INDIGO, VIOLET),
     ("ridge_mid", 13, 7, DEEP, INDIGO),
@@ -144,7 +190,8 @@ def main():
             PALETTE: {"bank": BANK, "colors": list(preset["colors"])},
         },
         "roles": {name: "layer" for name, _b, _h, _c, _c2 in RIDGES} |
-                 {"stars": "layer", "cloud": "layer", "moon": "layer"},
+                 {"stars": "layer", "cloud": "layer", "moon": "layer",
+                  "sky_bands": "tileset"},
         "sprites": [],
         "animations": [],
         "maps": [],
@@ -173,6 +220,46 @@ def main():
     add("stars", stars(SEED + 9), "")
     add("cloud", cloud(), "")
     add("moon", moon(), "")
+
+    # --- the sky: a band tileset and the map that lays it out -----------
+    bands = sky_bands()
+    out = os.path.join(strips, "sky_bands.png")
+    C.to_strip([bands], preset["colors"], out)
+    fragment["sprites"].append({
+        "name": "sky_bands",
+        "file": "strips/sky_bands.png",
+        "palette": PALETTE,
+        "frames": 1,
+        "origin": [0, 0],
+        "provenance": {
+            "tool": "procedural", "model": "",
+            "prompt": "the backgrounds pack: "
+                      "art/library/backgrounds/gen_backgrounds.py",
+            "seed": SEED, "licence": "this repository",
+        },
+    })
+    print("backgrounds: sky_bands   %dx%d (%d band(s))"
+          % (bands.w, bands.h, len(SKY_BANDS)))
+
+    maps = os.path.join(out_dir, "maps")
+    os.makedirs(maps, exist_ok=True)
+    with open(os.path.join(maps, "sky_dusk.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(sky_map()) + "\n")
+    fragment["maps"].append({
+        "name": "sky_dusk",
+        "file": "maps/sky_dusk.txt",
+        "tileset": "sky_bands",
+        "tile_w": SKY_TILE,
+        "tile_h": SKY_TILE,
+        "legend": dict((chr(ord("a") + r), r) for r in range(SKY_ROWS)),
+        "provenance": {
+            "tool": "procedural", "model": "",
+            "prompt": "the backgrounds pack: "
+                      "art/library/backgrounds/gen_backgrounds.py",
+            "seed": SEED, "licence": "this repository",
+        },
+    })
+    print("backgrounds: sky_dusk    %dx%d cells" % (SKY_COLS, SKY_ROWS))
 
     fragment_path = os.path.join(out_dir, "backgrounds.json")
     with open(fragment_path, "w", encoding="utf-8") as f:

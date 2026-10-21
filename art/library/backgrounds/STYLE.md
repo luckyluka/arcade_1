@@ -55,6 +55,27 @@ field, a cloud and a moon.
 * **Baseline**: the ridges sit on the bottom row of their strip
 * **Facing**: n/a
 
+## The sky
+
+`sky_bands` is seventeen 16x16 **band tiles**, each dithered against its
+neighbour, and `sky_dusk` is the map that stacks them (30x17 cells — the
+screen's width and height in tiles). The dither is the point: seventeen
+solid bands would show seventeen steps, and seventeen dithered bands read
+as one gradient.
+
+**How the sky is drawn.** The device cannot stretch a sprite, so a
+gradient is a *tilemap*, not a scaled picture:
+
+```c
+arcade1_cam(0, 0);            /* the sky is screen-space */
+arcade1_tilemap4(0, 0, sky_dusk_cells, sky_dusk_tiles,
+                 SKY_DUSK_COLS, SKY_DUSK_ROWS, 16, 16);
+/* ... then the world, with the camera where the game wants it */
+```
+
+One draw call for the whole sky. (The camera is a register, so it can be
+set for the sky and set again for the world.)
+
 ## How the ridges are used
 
 A parallax layer is drawn twice: at the camera's offset and at the

@@ -95,6 +95,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
         test-petalblade test-petalblade_rig test-agents-md test-art-palettes \
+        test-art-flip \
         test-art-library \
         test-art-canvas \
         test-art-pixmap test-art-rig test-art-ingest test-art-qa
@@ -439,6 +440,20 @@ art-library-check:
 # packs merge into a manifest.
 test-art-library: tests/test_art_library.sh
 	sh tests/test_art_library.sh .
+
+# The flip probe: the device mirrors a sprite, so a pack of sprites counts
+# twice.
+$(GUEST_BUILD)/flip_probe.elf: tests/guests/flip_probe.c programs/arcade1.h \
+        programs/gfx.h programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $@ programs/crt0.S $<
+
+$(GUEST_BUILD)/flip_probe.bin: $(GUEST_BUILD)/flip_probe.elf
+	$(RISCV_OBJCOPY) -O binary $< $@
+
+test-art-flip: $(CLI_BIN) $(GUEST_BUILD)/flip_probe.bin tests/test_art_flip.sh
+	sh tests/test_art_flip.sh $(CLI_BIN) $(GUEST_BUILD)
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

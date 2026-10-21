@@ -4,7 +4,8 @@ What is behind the game: three parallax ridge strips, a tileable star
 field, a cloud and a moon.
 
 * **Sheet**: `art/library/backgrounds/strips/` (three 64x16 ridges, a
-  32x32 star field, a 32x16 cloud, a 16x16 moon)
+  32x32 star field, a 32x16 cloud, a 16x16 moon, and the sky's seventeen
+  band tiles) and `art/library/backgrounds/maps/sky_dusk.txt`
 * **Style sheet**: `art/library/backgrounds/STYLE.md`
 * **Reviewed**: 2026-10-21, by the implementing agent
 
@@ -48,6 +49,14 @@ place — a single blob in a strip of sky.
 All six strips pass `arc1-art check` and the pack regenerates byte for
 byte (`make art-library-check`).
 
-**What I would do next**: a **sky** piece — the gradient is the one
-thing every game draws by hand — and a second cloud shape, so a sky is
-not one blob.
+**The sky came with this review** (it was the pack's missing piece): the
+seventeen band tiles are dithered against their neighbours, so the
+gradient has no steps, and the map stacks them — one `gfx_tilemap4` call
+for a whole sky, instead of the seventeen `gfx_rect` calls every game was
+writing by hand. The bands' colours are the dusk ramp the round-5 world
+already used, so the sky and the ridges agree.
+
+**What I would do next**: a second cloud shape (a sky should not be one
+blob) and a **day** sky — the same seventeen bands over a different ramp
+would be a new map and a new tileset, and it is the piece every game
+after the first one asks for.

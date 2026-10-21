@@ -55,6 +55,14 @@ rig animator is for.
 * **Never**: an enemy that reads as a character (the eyes are the only
   face a blob gets)
 
+## Facing
+
+Every enemy is drawn **facing right**. The device mirrors a sprite for
+free (`sprite4`'s flags bit0 = flip X), so one sprite is two facings —
+`tests/test_art_flip.sh` proves the flip with a guest that draws an
+asymmetric shape plain and mirrored. Nothing in this pack needs a second
+drawing.
+
 ## Animation
 
 * **Frame counts**: 2 for the four critters, 4 for the skeleton's walk

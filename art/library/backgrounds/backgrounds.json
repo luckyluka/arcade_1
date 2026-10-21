@@ -30,7 +30,8 @@
   "ridge_near": "layer",
   "stars": "layer",
   "cloud": "layer",
-  "moon": "layer"
+  "moon": "layer",
+  "sky_bands": "tileset"
  },
  "sprites": [
   {
@@ -134,8 +135,59 @@
     "seed": 20261021,
     "licence": "this repository"
    }
+  },
+  {
+   "name": "sky_bands",
+   "file": "strips/sky_bands.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
   }
  ],
  "animations": [],
- "maps": []
+ "maps": [
+  {
+   "name": "sky_dusk",
+   "file": "maps/sky_dusk.txt",
+   "tileset": "sky_bands",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "a": 0,
+    "b": 1,
+    "c": 2,
+    "d": 3,
+    "e": 4,
+    "f": 5,
+    "g": 6,
+    "h": 7,
+    "i": 8,
+    "j": 9,
+    "k": 10,
+    "l": 11,
+    "m": 12,
+    "n": 13,
+    "o": 14,
+    "p": 15,
+    "q": 16
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ]
 }

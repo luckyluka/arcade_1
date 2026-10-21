@@ -19,10 +19,10 @@ arc1-art merge <pack>...  # compose packs into a game's manifest
 | `tiles` | Twelve seamless 16x16 surface tiles in one tileset: grass, dirt, stone, brick, wood, sand, water, roof, floor, road, snow, lava. | 1 |
 | `effects` | Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame. | 10 |
 | `ui` | The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip. | 6 |
-| `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 6 |
+| `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 8 |
 | `enemies` | Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig). | 16 |
 
-**98 assets in 9 packs.**
+**100 assets in 9 packs.**
 
 ## `icons`
 
@@ -238,6 +238,7 @@ What is behind the game: three seamless parallax ridge strips, a tileable star f
 * palette
 * silhouette rules
 * animation
+* the sky
 * how the ridges are used
 * provenance
 
@@ -249,6 +250,8 @@ What is behind the game: three seamless parallax ridge strips, a tileable star f
 | `stars` | layer | 32x32 | 1 | dusk16 |
 | `cloud` | layer | 32x16 | 1 | dusk16 |
 | `moon` | layer | 16x16 | 1 | dusk16 |
+| `sky_bands` | tileset | 272x16 | 1 | dusk16 |
+| `sky_dusk` | map | — | 0 | — |
 
 **Review:** **The ridges are the useful part, and they work.** Each is a seamless
 
@@ -262,6 +265,7 @@ Five opponents: a slime, a bat, a rat, a spider and a walking skeleton (a rig).
 * shading steps
 * palette
 * silhouette rules
+* facing
 * animation
 * provenance
 
