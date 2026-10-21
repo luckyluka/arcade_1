@@ -1,0 +1,74 @@
+# BRICKSTORM session: the level picker to stage 8, which a paddle sweep
+# clears — the session that covers the stage-clear path.
+0    9    none
+10   10   right
+11   11   none
+12   12   right
+13   13   none
+14   14   right
+15   15   none
+16   16   right
+17   17   none
+18   18   right
+19   19   none
+20   20   right
+21   21   none
+22   22   right
+23   23   none
+24   33   none
+34   35   start
+36   45   none
+46   85   a left
+86   125  a right
+126  165  a left
+166  205  a right
+206  245  a left
+246  285  a right
+286  325  a left
+326  365  a right
+366  405  a left
+406  445  a right
+446  485  a left
+486  525  a right
+526  565  a left
+566  605  a right
+606  645  a left
+646  685  a right
+686  725  a left
+726  765  a right
+766  805  a left
+806  845  a right
+846  885  a left
+886  925  a right
+926  965  a left
+966  1005 a right
+1006 1045 a left
+1046 1085 a right
+1086 1125 a left
+1126 1165 a right
+1166 1205 a left
+1206 1245 a right
+1246 1285 a left
+1286 1325 a right
+1326 1365 a left
+1366 1405 a right
+1406 1445 a left
+1446 1485 a right
+1486 1525 a left
+1526 1565 a right
+1566 1605 a left
+1606 1645 a right
+1646 1685 a left
+1686 1725 a right
+1726 1765 a left
+1766 1805 a right
+1806 1845 a left
+1846 1885 a right
+1886 1925 a left
+1926 1965 a right
+1966 2005 a left
+2006 2045 a right
+2046 2085 a left
+2086 2125 a right
+2126 2165 a left
+2166 2205 a right

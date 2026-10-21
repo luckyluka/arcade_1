@@ -218,6 +218,7 @@ All builds use `-Wall -Wextra` and must stay warning-free.
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-21 | BRICKSTORM (Game #5) | 1 m 57 s (117 s) |
 | 2026-10-21 | TEMPEST (Game #4) | 1 m 52 s (112 s) |
 | 2026-10-21 | the library's day sky and faces | 1 m 48 s (108 s) |
 | 2026-10-20 | card 4.9 | **1 m 28 s** (88 s) |
@@ -268,6 +269,49 @@ point in its core.
 * **Cost**: 8,665 instructions and 166,296 pixels a frame (1.28 screens)
   — under 1 % of the instruction cap and leaner than Petal Blade's 2.59
   screens.
+
+## BRICKSTORM (Game #5) — the breakout remake
+
+The milestone-15 Breakout, done again from nothing: the machine's native
+480×270 instead of the old 320×240, sprite art instead of flat
+rectangles, and a modern arcade's worth of feel on the classic bones.
+**The original is untouched** — `programs/breakout.c`, its golden and its
+ROM are exactly as they were.
+
+* **The game**: `programs/brickstorm.c` (freestanding C for RV32IM).
+* **Twelve brick layouts and a boss** (thirteen stages): FIRST LIGHT,
+  PYRAMID, CHECKER, FORTRESS, DIAMOND, HIVE, COLUMNS, STAIRCASE,
+  GAUNTLET, CROSS, LATTICE, CROWN and THE CORE. The title screen's
+  **level picker** (left/right) lets a player jump to any stage.
+* **The feel**: the paddle returns the ball at an angle that depends on
+  where you hit it (thirteen steps from -60° to +60°), the ball speeds up
+  with every paddle hit, a **lost ball costs a life and not the bricks
+  you have already broken** (the classic rule — the first cut reloaded
+  the field and that was wrong), and the screen clears when you die.
+* **Four brick kinds**: normal, tough (two hits — it cracks first),
+  steel (the ball bounces off it) and bomb (it takes its neighbours with
+  it, three links deep).
+* **Six power-ups**: EXPAND, MULTI (three balls), SLOW, FAST, LASER (the
+  paddle shoots) and CATCH (the ball sticks until you release it).
+* **The boss**: a 200×72 dreadnought whose underside is the weak strip
+  and whose three cores are worth double. It sweeps smoothly (a square
+  wave could never be lined up with) and it shoots.
+* **The art**: `programs/brickstorm_art/gen_art.py` paints 20 sprites in
+  11 palette banks — the paddle in three widths, the ball, the five brick
+  rows, the tough, steel and bomb bricks, the six power-up capsules, the
+  boss and its core. The compiled header
+  `programs/brickstorm_assets.h` is the build truth (`make
+  brickstorm-art` regenerates both).
+* **The sound**: the audio device's tone, pitched by where the ball hit
+  the paddle and by which row of brick it broke.
+* **The test**: `tests/test_brickstorm.sh` with two scripted sessions —
+  `tests/inputs/brickstorm.txt` (the title, level 1 played to the game
+  over, the level picker, the boss and the win) and
+  `tests/inputs/brickstorm_clear.txt` (a stage cleared, so the
+  progression is covered too) — plus a 2,600-frame golden and a
+  committed ROM.
+* **Cost**: 7,155 instructions and 167,541 pixels a frame (1.29 screens)
+  — under 1 % of the instruction cap.
 
 ## Housekeeping
 

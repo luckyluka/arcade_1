@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup brickstorm
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -67,7 +67,8 @@ ARC1_ROM_DIR  ?= $(GUEST_BUILD)
 GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
-                  m29game asteroid_run flappy petalblade petalblade_rig shmup
+                  m29game asteroid_run flappy petalblade petalblade_rig shmup \
+                  brickstorm
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -148,7 +149,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-shmup \
+        test-shmup test-brickstorm \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
         test-art-rig test-art-ingest test-art-qa test-art-faces \
         test-doc-gaps
@@ -1229,6 +1230,33 @@ $(GUEST_BUILD)/shmup.elf: programs/shmup.c programs/shmup_assets.h \
 test-shmup: $(CLI_BIN) $(ARC1_ROM_DIR)/shmup.arc1 | $(TESTDIR)
 	sh tests/test_shmup.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
+# --- BRICKSTORM (Game #5) ---------------------------------------------------
+# The breakout remake: twelve brick layouts and a boss, its own art
+# pipeline in programs/brickstorm_art/ and the compiled header
+# programs/brickstorm_assets.h as the build truth.
+BRICKSTORM_ART_DIR  := programs/brickstorm_art
+BRICKSTORM_MANIFEST := $(BRICKSTORM_ART_DIR)/brickstorm_assets.json
+
+brickstorm-art:
+	python3 $(BRICKSTORM_ART_DIR)/gen_art.py --dir $(BRICKSTORM_ART_DIR) \
+	    --manifest brickstorm_assets.json
+	python3 tools/arc1_assetc.py --assets $(BRICKSTORM_MANIFEST) \
+	    --out-dir programs --report
+
+programs/brickstorm_assets.h: $(BRICKSTORM_MANIFEST) \
+        $(wildcard $(BRICKSTORM_ART_DIR)/art/*.png) tools/arc1_assetc.py
+	python3 tools/arc1_assetc.py --assets $(BRICKSTORM_MANIFEST) --out-dir programs
+
+$(GUEST_BUILD)/brickstorm.elf: programs/brickstorm.c programs/brickstorm_assets.h \
+        programs/asset.h programs/arcade1.h programs/gfx.h programs/text.h \
+        programs/crt0.S programs/link.ld
+	@mkdir -p $(GUEST_BUILD)
+	$(RISCV_GCC) $(GUEST_CFLAGS) -Iprograms -T programs/link.ld \
+	    -o $@ programs/crt0.S $<
+
+test-brickstorm: $(CLI_BIN) $(ARC1_ROM_DIR)/brickstorm.arc1 | $(TESTDIR)
+	sh tests/test_brickstorm.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
 # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
 # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
 # (<name>.syms) the golden regression runs against (tests/golden/,
@@ -1238,7 +1266,7 @@ test-shmup: $(CLI_BIN) $(ARC1_ROM_DIR)/shmup.arc1 | $(TESTDIR)
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
 GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
-                  m29game flappy petalblade petalblade_rig
+                  m29game flappy petalblade petalblade_rig shmup brickstorm
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)

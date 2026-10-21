@@ -78,12 +78,17 @@ Each game brings its own art pipeline, beside its source:
 | Petal Blade | `programs/petalblade_art/` | `gen_art.py` (the round-5 art) |
 | Petal Blade (rig) | `programs/petalblade_rig/` | `tools/build_petalblade_rig.py` |
 | **TEMPEST** | `programs/shmup_art/` | `gen_art.py` (18 sprites, 8 banks) |
+| **BRICKSTORM** | `programs/brickstorm_art/` | `gen_art.py` (20 sprites, 11 banks) |
 
 TEMPEST's generator paints a fighter, a drone, an attack helicopter, a
 bomber, a cruiser, an AA turret, a tank, a missile launcher, a debris
 chunk, a 120x88 boss with a damaged variant, the shots, the missiles,
 the explosions, the pickups and the terrain band — all procedurally,
 all deterministic, all with the provenance recorded in the manifest.
+
+BRICKSTORM's paints the paddle in three widths, the ball, the five brick
+rows, the tough, steel and bomb bricks, the six power-up capsules, the
+200x72 boss and its core — the same rules, the same pipeline.
 
 ## The library
 

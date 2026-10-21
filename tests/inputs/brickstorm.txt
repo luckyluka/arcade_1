@@ -1,0 +1,87 @@
+# BRICKSTORM session: the title, the default level played to the game
+# over, then the level picker to the boss stage and the boss itself.
+#   0    - the title, then level 1 (the default), swept with the paddle
+#   1900 - the level picker: level 13, the boss
+0    9    none
+10   11   start
+12   14   none
+15   64   a left
+65   114  a right
+115  164  a left
+165  214  a right
+215  264  a left
+265  314  a right
+315  364  a left
+365  414  a right
+415  464  a left
+465  514  a right
+515  564  a left
+565  614  a right
+615  664  a left
+665  714  a right
+715  764  a left
+765  814  a right
+815  864  a left
+865  914  a right
+915  964  a left
+965  1014 a right
+1015 1064 a left
+1065 1114 a right
+1115 1164 a left
+1165 1214 a right
+1215 1264 a left
+1265 1314 a right
+1315 1364 a left
+1365 1414 a right
+1415 1464 a left
+1465 1514 a right
+1515 1564 a left
+1565 1614 a right
+1615 1664 a left
+1665 1714 a right
+1715 1764 a left
+1760 1899 none
+1900 1901 start
+1902 1919 none
+1920 1920 right
+1921 1921 none
+1922 1922 right
+1923 1923 none
+1924 1924 right
+1925 1925 none
+1926 1926 right
+1927 1927 none
+1928 1928 right
+1929 1929 none
+1930 1930 right
+1931 1931 none
+1932 1932 right
+1933 1933 none
+1934 1934 right
+1935 1935 none
+1936 1936 right
+1937 1937 none
+1938 1938 right
+1939 1939 none
+1940 1940 right
+1941 1941 none
+1942 1942 right
+1943 1943 none
+1944 1953 none
+1954 1955 start
+1956 1965 none
+1966 2010 a left
+2011 2055 a right
+2056 2100 a left
+2101 2145 a right
+2146 2190 a left
+2191 2235 a right
+2236 2280 a left
+2281 2325 a right
+2326 2370 a left
+2371 2415 a right
+2416 2460 a left
+2461 2505 a right
+2506 2550 a left
+2551 2595 a right
+2596 2640 a left

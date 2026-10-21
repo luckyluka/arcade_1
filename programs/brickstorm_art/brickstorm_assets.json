@@ -1,0 +1,629 @@
+{
+ "format": 1,
+ "palettes": {
+  "boss": {
+   "bank": 9,
+   "colors": [
+    "#000000",
+    "#080818",
+    "#211C39",
+    "#393463",
+    "#5A4D8C",
+    "#8479BD",
+    "#C6B6EF",
+    "#CE3852",
+    "#EF6173",
+    "#39384A",
+    "#63657B",
+    "#9C9EB5",
+    "#EFCF63",
+    "#FF9263",
+    "#63E3E7",
+    "#8C1021"
+   ]
+  },
+  "fx": {
+   "bank": 10,
+   "colors": [
+    "#000000",
+    "#181010",
+    "#7B2410",
+    "#C64918",
+    "#F78221",
+    "#FFC342",
+    "#FFF3C6",
+    "#EFEBF7",
+    "#949AAD",
+    "#42C363",
+    "#84EB94",
+    "#4261D6",
+    "#94C3FF",
+    "#391821",
+    "#C6CBD6",
+    "#E74163"
+   ]
+  },
+  "hero": {
+   "bank": 5,
+   "colors": [
+    "#000000",
+    "#081018",
+    "#183852",
+    "#29698C",
+    "#4AAACE",
+    "#8CE3FF",
+    "#EFFFFF",
+    "#FFFFFF",
+    "#102431",
+    "#184963",
+    "#29759C",
+    "#52B2DE",
+    "#94DFF7",
+    "#D6F7FF",
+    "#183C52",
+    "#081821"
+   ]
+  },
+  "pow_a": {
+   "bank": 6,
+   "colors": [
+    "#000000",
+    "#101408",
+    "#396918",
+    "#63AA29",
+    "#9CE342",
+    "#DEFFA5",
+    "#F7FFE7",
+    "#FFFFFF",
+    "#183008",
+    "#295110",
+    "#4A8A21",
+    "#7BC331",
+    "#B5EB63",
+    "#EFFFC6",
+    "#397118",
+    "#102408"
+   ]
+  },
+  "pow_b": {
+   "bank": 7,
+   "colors": [
+    "#000000",
+    "#100818",
+    "#39186B",
+    "#6B28AD",
+    "#9C41E7",
+    "#D686FF",
+    "#F7D7FF",
+    "#FFFFFF",
+    "#181029",
+    "#29104A",
+    "#4A1C84",
+    "#7330BD",
+    "#AD61EF",
+    "#E7B2FF",
+    "#391873",
+    "#100821"
+   ]
+  },
+  "pow_c": {
+   "bank": 8,
+   "colors": [
+    "#000000",
+    "#180810",
+    "#6B1829",
+    "#AD2842",
+    "#E74163",
+    "#FF829C",
+    "#FFD3DE",
+    "#FFFFFF",
+    "#211018",
+    "#421829",
+    "#732039",
+    "#AD3052",
+    "#DE5173",
+    "#FF9AAD",
+    "#521029",
+    "#391018"
+   ]
+  },
+  "row0": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#180810",
+    "#7B1829",
+    "#BD2839",
+    "#EF495A",
+    "#FF8A94",
+    "#FFD3D6",
+    "#FFFFFF",
+    "#291018",
+    "#521829",
+    "#942031",
+    "#C63042",
+    "#F76173",
+    "#FFA2AD",
+    "#942839",
+    "#521018"
+   ]
+  },
+  "row1": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#181008",
+    "#7B3810",
+    "#BD6118",
+    "#EF8A31",
+    "#FFB252",
+    "#FFE3B5",
+    "#FFFFFF",
+    "#291808",
+    "#522C10",
+    "#945118",
+    "#C67929",
+    "#F7A24A",
+    "#FFCB8C",
+    "#945929",
+    "#523010"
+   ]
+  },
+  "row2": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#181808",
+    "#6B7110",
+    "#ADAE18",
+    "#DEDF31",
+    "#F7FB63",
+    "#FFFBC6",
+    "#FFFFFF",
+    "#292808",
+    "#4A4D10",
+    "#8C8E18",
+    "#BDBA29",
+    "#E7E742",
+    "#F7FB84",
+    "#5A5D18",
+    "#4A4D08"
+   ]
+  },
+  "row3": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#081810",
+    "#106939",
+    "#189E4A",
+    "#29D363",
+    "#7BEB8C",
+    "#CEFBD6",
+    "#FFFFFF",
+    "#102810",
+    "#184121",
+    "#217939",
+    "#29B252",
+    "#52D36B",
+    "#9CEB9C",
+    "#184921",
+    "#104121"
+   ]
+  },
+  "row4": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#081021",
+    "#183C7B",
+    "#2159B5",
+    "#3182E7",
+    "#73AAF7",
+    "#C6DFFF",
+    "#FFFFFF",
+    "#101829",
+    "#18284A",
+    "#214173",
+    "#2961A5",
+    "#428AD6",
+    "#8CB6EF",
+    "#18305A",
+    "#102042"
+   ]
+  }
+ },
+ "roles": {},
+ "sprites": [
+  {
+   "name": "ball",
+   "file": "art/ball.png",
+   "palette": "hero",
+   "frames": 2,
+   "origin": [
+    4,
+    4
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    6,
+    6
+   ]
+  },
+  {
+   "name": "boss",
+   "file": "art/boss.png",
+   "palette": "boss",
+   "frames": 2,
+   "origin": [
+    100,
+    36
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "boss_core",
+   "file": "art/boss_core.png",
+   "palette": "boss",
+   "frames": 2,
+   "origin": [
+    10,
+    10
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    2,
+    2,
+    16,
+    16
+   ]
+  },
+  {
+   "name": "brick0",
+   "file": "art/brick0.png",
+   "palette": "row0",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick1",
+   "file": "art/brick1.png",
+   "palette": "row1",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick2",
+   "file": "art/brick2.png",
+   "palette": "row2",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick3",
+   "file": "art/brick3.png",
+   "palette": "row3",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick4",
+   "file": "art/brick4.png",
+   "palette": "row4",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick_bomb",
+   "file": "art/brick_bomb.png",
+   "palette": "fx",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick_steel",
+   "file": "art/brick_steel.png",
+   "palette": "hero",
+   "frames": 1,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "brick_tough",
+   "file": "art/brick_tough.png",
+   "palette": "row2",
+   "frames": 2,
+   "origin": [
+    22,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "paddle_l",
+   "file": "art/paddle_l.png",
+   "palette": "hero",
+   "frames": 1,
+   "origin": [
+    36,
+    5
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "paddle_m",
+   "file": "art/paddle_m.png",
+   "palette": "hero",
+   "frames": 1,
+   "origin": [
+    28,
+    5
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "paddle_s",
+   "file": "art/paddle_s.png",
+   "palette": "hero",
+   "frames": 1,
+   "origin": [
+    20,
+    5
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "pow_catch",
+   "file": "art/pow_catch.png",
+   "palette": "pow_c",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  },
+  {
+   "name": "pow_expand",
+   "file": "art/pow_expand.png",
+   "palette": "pow_a",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  },
+  {
+   "name": "pow_fast",
+   "file": "art/pow_fast.png",
+   "palette": "pow_c",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  },
+  {
+   "name": "pow_laser",
+   "file": "art/pow_laser.png",
+   "palette": "pow_b",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  },
+  {
+   "name": "pow_multi",
+   "file": "art/pow_multi.png",
+   "palette": "pow_b",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  },
+  {
+   "name": "pow_slow",
+   "file": "art/pow_slow.png",
+   "palette": "pow_a",
+   "frames": 1,
+   "origin": [
+    7,
+    7
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the brickstorm art: programs/brickstorm_art/gen_art.py",
+    "seed": 0,
+    "licence": "this repository"
+   },
+   "collision": [
+    1,
+    1,
+    12,
+    12
+   ]
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

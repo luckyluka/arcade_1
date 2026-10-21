@@ -389,6 +389,14 @@ the build truth, a scripted session that dies, restarts and wins
 (`tests/inputs/petalblade.txt`), and a golden of 1202 frames. See
 `round5/README.md` and `docs/experiments/round5-petalblade.md`.
 
+`brickstorm` is Game #5: BRICKSTORM, the breakout remake — the same game
+as the milestone-15 Breakout, done again on the machine's native
+480×270 with twelve brick layouts and a boss (the original `breakout` is
+untouched). Its art pipeline lives in `programs/brickstorm_art/` and the
+compiled header `programs/brickstorm_assets.h` is the build truth. The
+D-pad steers, **A** launches (and releases a caught ball), **START**
+starts, and the title screen's left/right pick the stage.
+
 `shmup` is Game #4: TEMPEST, a vertical shoot-'em-up. Its art pipeline
 lives in `programs/shmup_art/` (the generator paints every sprite and
 writes the manifest) and the compiled header `programs/shmup_assets.h`
