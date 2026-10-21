@@ -158,13 +158,70 @@ grep -q "optimised away" "$ROOT/tools/arcade1.c" || \
 CHECKS=$((CHECKS + 1))
 echo "  ok: the round's seven gaps are closed and pinned"
 
-# --- 6) the pipeline gap: a preview of a manifest ------------------------
+# --- 5) the round 7 gaps: the system-level ones ---------------------------
+# The second round (a lighthouse keeper) found nine; these are the ones
+# about the system rather than the art.
+
+# the outline GROWS the shape: the contract has to be written down
+grep -q "GROWS the shape" "$ROOT/tools/arc1_art/canvas.py" || \
+    fail "the outline's contract (it grows the shape) is not documented"
+grep -q "grow_outline" "$ROOT/tools/arc1_art/canvas.py" || \
+    fail "there is no grow_outline (the name that says what it does)"
+
+# an odd 4-bit width draws NOTHING, silently: say the consequence
+grep -q "draws NOTHING" "$ROOT/CHEATSHEET.md" || \
+    fail "the cheat sheet does not say that an odd width draws nothing"
+grep -q "draws NOTHING" "$ROOT/programs/gfx.h" || \
+    fail "gfx.h does not say that an odd width draws nothing"
+
+# the machine's shape: pixel-bound, and the tilemap is windowed
+grep -q "pixel-bound" "$ROOT/CHEATSHEET.md" || \
+    fail "the cheat sheet does not say the device is pixel-bound"
+grep -q "windowed" "$ROOT/CHEATSHEET.md" || \
+    fail "the cheat sheet does not say the tilemap is windowed"
+grep -q "pixel-bound" "$ROOT/SPEC.md" || \
+    fail "SPEC.md does not say the device is pixel-bound"
+
+# the checks' numbers are in the docs, not only in the source
+grep -q "0.55" "$ROOT/art/README.md" || \
+    fail "the art docs do not give the checks' numbers"
+grep -q "75 %" "$ROOT/art/README.md" || \
+    fail "the art docs do not give the outline coverage rule"
+
+# the exact quantisation is a hard error: write the rule down
+grep -q "EXACTLY the bank" "$ROOT/art/README.md" || \
+    fail "the art docs do not state the exact-quantisation rule"
+
+# the check's frame-size error teaches
+grep -q "must divide the strip" "$ROOT/tools/arc1_art/qa.py" || \
+    fail "the frame-size error does not teach the rule"
+
+# the outline checks can be skipped for a background layer
+grep -q "skip-outline" "$ROOT/tools/arc1-art" || \
+    fail "there is no --skip-outline for a tileset"
+
+# the brief and the documentation must not contradict each other
+grep -q "asset_demo.c" "$ROOT/round6/BRIEF.md" || \
+    fail "round 6's brief forbids the example the documentation points at"
+grep -q "asset_demo.c" "$ROOT/round7/BRIEF.md" || \
+    fail "round 7's brief forbids the example the documentation points at"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the round 7 system-level gaps are closed and pinned"
+
+# --- 6) the pipeline gaps: the preview and the map checks -----------------
 [ -f "$ROOT/tools/arc1_art/preview.py" ] || \
     fail "the pipeline has no preview of a manifest (the round wrote its own)"
 rc=0
 "$ART" preview --help > /dev/null 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "arc1-art has no preview command"
+rc=0
+"$ART" check --help > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "arc1-art has no check command"
+grep -q "preview_maps" "$ROOT/tools/arc1_art/preview.py" || \
+    fail "the preview cannot compose the maps (the world)"
+grep -q "check_manifest" "$ROOT/tools/arc1_art/qa.py" || \
+    fail "the checks do not read the manifest's maps"
 CHECKS=$((CHECKS + 1))
-echo "  ok: the pipeline can make the contact sheet a review looks at"
+echo "  ok: the pipeline can show a world and check its maps"
 
 echo "test-doc-gaps: ok ($CHECKS checks, card 7.8)"

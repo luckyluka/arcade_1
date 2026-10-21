@@ -271,6 +271,11 @@ class Canvas:
                 if c:
                     self.px(dx + x, dy + y, c)
 
+    def grow_outline(self, c, only=0, neighbours=4):
+        """`outline` under the name that says what it does: the ring is
+        painted OUTSIDE the silhouette, so the shape grows."""
+        return self.outline(c, only, neighbours)
+
     def stamp(self, src, x, y):
         """Draw `src` onto this canvas at (x, y). The transparent pixels of
         `src` leave the canvas alone."""
@@ -278,6 +283,15 @@ class Canvas:
 
     def outline(self, c, only=0, neighbours=4):
         """Paint `c` into the `only` pixels that touch an opaque pixel.
+
+        **This GROWS the shape, it does not inset it.** The ring is painted
+        OUTSIDE the silhouette, into the transparent pixels around it, so
+        the sprite comes out 1 px larger in every direction and its
+        outermost pixels are the outline colour. That is what makes the
+        machine's outline check pass (the silhouette's *edge* is the
+        outline) — and it is why a sprite's anchor and collision box have
+        to allow for the extra pixel. `grow_outline` is the same call
+        under a name that says what it does.
 
         `neighbours` is 4 (the four sides — the machine's own outline
         rule) or 8 (the sides and the corners)."""

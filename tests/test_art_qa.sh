@@ -138,4 +138,27 @@ done
 CHECKS=$((CHECKS + 1))
 echo "  ok: the humanoid rig's strips pass the checks"
 
+# --- 5) the manifest's maps are checked ------------------------------------
+# A manifest whose legend cannot draw one of the tileset's tiles: a warning
+# (a spare tile is legitimate) — and the check reads the manifest at all.
+python3 "$ROOT/tests/fixtures/manifest_fixture.py" "$OUT" || exit 1
+rc=0
+"$ART" check "$OUT/assets.json" --manifest > "$OUT/man.json" 2>"$OUT/man.err" || rc=$?
+[ "$rc" -eq 0 ] || fail "the manifest with a spare tile should pass: $(cat "$OUT/man.err")"
+grep -q "never uses 1" "$OUT/man.err" || \
+    fail "the unused tile is not reported: $(cat "$OUT/man.err")"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the manifest's maps are checked (a spare tile is a warning)"
+
+# --- 6) the world preview --------------------------------------------------
+rc=0
+"$ART" preview "$OUT/assets.json" --out "$OUT/world.png" --maps > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "the world preview failed"
+[ -s "$OUT/world.png" ] || fail "the world preview is empty"
+rc=0
+"$ART" preview "$ROOT/round7/assets.json" --out "$OUT/world7.png" --maps > /dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "the world preview of the round-7 manifest failed"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the pipeline can compose the world"
+
 echo "test-art-qa: ok ($CHECKS checks, card 7.6)"

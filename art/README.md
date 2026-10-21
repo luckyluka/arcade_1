@@ -79,6 +79,44 @@ art documents, one in a check, one in the optimiser's habits. The report,
 with every gap classified (docs / tool / pipeline / game), is in
 [docs/experiments/round6-art.md](../docs/experiments/round6-art.md).
 
+## What the checks measure (the numbers, so you do not have to guess)
+
+`arc1-art check` counts these. They are the numbers an artist designs
+against — a sprite is "good" by them, so they are written down here
+rather than only in `tools/arc1_art/qa.py`:
+
+| check | the rule |
+|---|---|
+| **colour count** | at most 15 colours plus the transparent key, per frame |
+| **palette distinctness** | two colours that collapse under the 5/6/5 quantisation are the SAME colour on the machine — the check fails |
+| **orphan pixels** | an opaque pixel with no opaque neighbour (4-connected) is a speck: fail |
+| **components** | the silhouette must be ONE connected piece (4-connected); `--allow-components N` for sprites that are legitimately several |
+| **baseline** | every frame of a state must stand on the same row (the lowest opaque row) |
+| **jitter** | the spread of the bounding boxes' **centres** (not their edges — a swinging limb changes the width, not the anchor). At most 2 px |
+| **outline coverage** | the silhouette's **edge** (the opaque pixels that touch a transparent one) must be the outline colour, at least 75 % of them. The outline colour is inferred as the **darkest of the edge pixels** and then used for every frame of the strip; `--outline-colour #RRGGBB` says it outright |
+| **fill-to-outline contrast** | the outline's luminance over the mean fill's: at most 0.55 |
+| **readability** | the frame's bounding box must be at least 8 px tall |
+
+Two things the checks do **not** apply to:
+
+* a **fully opaque** frame (a background layer, a tileset) has no edge at
+  all — the outline and contrast checks do not apply, and the report says
+  so (`"outline_check": "does not apply ..."`). A tileset with one
+  transparent cell, though, *is* graded like a character; pass
+  `--skip-outline` for those;
+* a **map**: the strip checks read sprites, so the maps are checked
+  separately — `arc1-art check <assets.json> --manifest` reads the
+  manifest's maps and reports: a character the map uses with no legend
+  entry, a map that draws nothing, a collision layer of the wrong size,
+  and (as a **warning**) a tile of the tileset that no character can
+  draw — a tile added to the art but not given a character is invisible in
+  the game. The composed world is `arc1-art preview <assets.json> --maps`.
+
+**The frame size** (`--frame WxH`) is the size of ONE frame: the strip's
+width divided by the frame count. For a one-frame tileset it is the whole
+image. A width that does not divide the strip is an error ("the image
+holds no frame") — the frame size is the frame, not the strip.
+
 ## The visual review
 
 Two halves, and both are needed:
@@ -155,6 +193,12 @@ tools/arc1-art sheet art/px/coin.px --scale 8 --out preview.png
 tools/arc1-art preview assets.json --out sheet.png --scale 4
     # the contact sheet of a whole manifest — what a review looks at
 
+tools/arc1-art preview assets.json --out world.png --maps
+    # the composed WORLD: the manifest's map layers, each on its row
+
+tools/arc1-art check assets.json --manifest
+    # the manifest's MAPS: the legend, the tiles, the collision layer
+
 tools/arc1-art info art/px/coin.px
     # what the file declares
 ```
@@ -208,8 +252,10 @@ A generator that cannot import `arc1_art` dies with
 
 ## The presets
 
-`art/palettes/*.json` — six 16-entry banks, ready to paste into an
-`assets.json` manifest (add the `bank` number there):
+`art/palettes/*.json` — the 16-entry banks, ready to paste into an
+`assets.json` manifest (add the `bank` number there). The six general
+ones are below; `hero16` and `props16` are the two the shipped games
+use:
 
 | preset | for |
 |---|---|
@@ -298,6 +344,18 @@ Outside the map is **solid**: a player must not walk off the world.
 * **Every path is relative to the `assets.json` file**, not to the
   repository root: a sprite's `"file"`, a map's `"file"`, and the
   collision layer's file.
+* **The PNG's pixels must be EXACTLY the bank's colours.** The default
+  quantisation is `"exact"`: a pixel that is not one of the bank's
+  colours is a hard error, not a warning. Either paint with the bank's
+  own hex values (`canvas.to_strip(frames, palette["colors"], path)`
+  does exactly that) or set `"quantize": "nearest"` on the sprite — and
+  then the colours are *moved*, not preserved.
+* **A legend key is exactly one character** — the map's characters are
+  the tile types, so a key of two characters is an error.
+* **A map draws a fixed rectangle**, so a world that is taller (or wider)
+  than the screen is several maps drawn in world space under one camera:
+  one for the sky, one for the cliff, one for the tower, one for the sea.
+  Each carries its own palette bank and its own collision layer.
 * **A manifest may define its own palette.** The presets are a starting
   point, not a limit: write a new 16-entry bank in the manifest's
   `"palettes"` when the art needs colours no preset holds (four pickups

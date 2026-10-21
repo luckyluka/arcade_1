@@ -20,10 +20,14 @@ here and in the tools.
   and the source of the tools you use.
 * The guest SDK headers: `programs/arcade1.h`, `programs/gfx.h`,
   `programs/asset.h`, `programs/text.h`.
-* The example guests: `programs/example_*.c`.
+* The example guests: `programs/example_*.c`, and the one end-to-end
+  asset example the documentation points at,
+  `programs/experimental/asset_demo.c` (GAME_DEV_GUIDE.md calls it "a
+  working end-to-end example" — the documentation and this brief must not
+  contradict each other).
 
-**Do not read** the other games' source (`programs/petalblade*.c`,
-`programs/experimental/*`), the other rounds' art (`round3/`, `round4/`,
+**Do not read** the other games' source (`programs/petalblade*.c`, the rest
+of `programs/experimental/`), the other rounds' art (`round3/`, `round4/`,
 `round5/`), or the roadmaps. The point of this round is to find out what
 the *documentation* is missing — if you read a finished example, you will
 not find that out.

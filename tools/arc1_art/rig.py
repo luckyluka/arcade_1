@@ -153,7 +153,7 @@ class Rig:
         if self.outline:
             # the outline pass runs last: the palette's outline colour
             # around every opaque pixel (the 4-neighbour rule)
-            c.outline(self.outline)
+            c.grow_outline(self.outline)
         return c
 
     def render_aligned(self, pose):

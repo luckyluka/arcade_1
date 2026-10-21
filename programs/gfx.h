@@ -193,7 +193,10 @@ static inline void gfx_flip(unsigned int flags)
 }
 
 /* Draw a 4-bit image (two pixels per byte, HIGH nibble = left pixel, width
- * even) at top-left (x, y). Pixel value 0 is transparent; value v (1..15)
+ * even) at top-left (x, y). An ODD width draws NOTHING, silently: a 4-bit
+ * row is w/2 bytes, so an odd width has no last pixel and the device
+ * returns without drawing (no error, no warning) — check the width, not
+ * the result. Pixel value 0 is transparent; value v (1..15)
  * draws PALETTE[bank*16 + v]. World-space (camera-subtracted) like
  * gfx_sprite(); clipped to the screen. flips: bit0 = flip X, bit1 = flip Y. */
 static inline void gfx_sprite4(int x, int y, const void *img, int w, int h,

@@ -283,6 +283,15 @@ for the current frame. The machine never touches host input devices directly.
   their current guest code and still draw in the top-left 320×240 region; the
   rest of the screen shows whatever their CLEAR colour leaves. Re-laying the
   guests out is not part of M25.)
+- **Device cost:** the video device is **pixel-bound, not instruction-bound**.
+  A frame's cost is what it *paints on screen*, not the size of the world:
+  the tilemap command is **windowed** (only the cells the camera leaves on
+  screen are visited or fetched — the rest cost nothing), a `CLEAR` alone
+  is one whole screen (129 600 pixels at 480×270), and every other draw
+  lands on top of that. The shipped games retire a few thousand
+  instructions per frame while painting hundreds of thousands of pixels.
+  "This game is slow" therefore almost always means "this game paints too
+  much". (Measured per game in DEVICE_BUDGET.md §0.)
 - **Audio:** **48,000 Hz** stereo; **800 stereo frames** (1,600 samples) per
   60 fps video frame.
 - **Frame protocol (present-yield).** A guest `main()` is an **infinite loop**

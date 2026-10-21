@@ -120,20 +120,33 @@ faster, all nine strips passed on the first try, the agent spent its time
 (`arc1-art preview`, and the game's own capture) existed because round 6
 asked for them.
 
-## What I would fix next
+## What I would fix next — and what is already closed
 
-1. **The map half of the review** (gap 7): `arc1-art check` should read the
-   manifest's maps — a legend character with no tile, a map layer that
-   draws nothing, a tileset that does not match its map.
-2. **A way to look at the world** (gap 4): `arc1-art preview` should compose
-   the map layers, not just the sprites.
-3. **The three docs one-liners** (1, 3, 5): the legal frame sizes, the
-   exact-quantisation rule, the preset count.
-4. **The end-to-end example** (gap 8): move the asset demo out of
-   `programs/experimental/` (or point the brief elsewhere) — a brief that
-   forbids a directory the documentation tells you to read is a trap.
-5. **Composing several map layers** (gap 9): document it in the manifest
-   section.
+The system-level gaps are closed (and pinned by `tests/test_doc_gaps.sh`):
+
+1. **The map half of the review** (gap 7) — **closed**: `arc1-art check
+   <assets.json> --manifest` reads the manifest's maps: a character the map
+   uses with no legend entry, a map that draws nothing, a collision layer of
+   the wrong size, and (as a *warning*) a tile of the tileset that no
+   character can draw — the exact bug the round hit.
+2. **A way to look at the world** (gap 4) — **closed**: `arc1-art preview
+   <assets.json> --maps` composes the map layers, the way the round's
+   agent had to write for itself.
+3. **The three docs one-liners** (1, 3, 5) — **closed**: the legal frame
+   sizes (and the tool's error now teaches them), the exact-quantisation
+   rule, the preset count.
+4. **The end-to-end example** (gap 8) — **closed**: the *brief* was wrong,
+   not the documentation — it forbade `programs/experimental/`, which
+   GAME_DEV_GUIDE.md points at as the one end-to-end asset example. Both
+   briefs now allow that one file and forbid the rest.
+5. **Composing several map layers** (gap 9) — **closed**: documented in the
+   manifest section (a map draws a fixed rectangle, so a world taller than
+   the screen is several maps under one camera).
+
+Still open, and worth a card each: the map half of the QA tool does not
+yet check that a *sprite* is reachable from a map, and the world preview
+does not compose the layers *over* each other (it stacks them) — the
+round-7 world is five layers, and the real picture is their sum.
 
 The round's metrics are recorded here and **not tuned afterwards** — the
 numbers above are what the round measured, gap for gap.

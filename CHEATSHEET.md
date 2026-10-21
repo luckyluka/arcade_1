@@ -70,6 +70,25 @@ tilemap are world-space: drawn at (x - cam_x, y - cam_y). Keep objects at
 fixed world coordinates, move only the camera (`gfx_camera(x, y)`); the
 power-on camera is (0,0), so early draws are unaffected.
 
+## What the device actually costs
+
+The device is **pixel-bound, not instruction-bound**. The frame's cost is
+what you *paint on screen*, not how big the world is:
+
+* **The tilemap is windowed.** The device walks only the cells the camera
+  leaves on screen — the others are never visited and never fetched. A
+  world of five full-screen map layers therefore costs almost nothing; a
+  game that draws 2.5 screens' worth of pixels per frame is the expensive
+  one.
+* **A `CLEAR` alone is one whole screen** (129 600 pixels at 480x270).
+  Every other draw is on top of that.
+* The CPU's share is small by comparison: the shipped games retire a few
+  thousand instructions per frame while painting hundreds of thousands of
+  pixels.
+
+So "my game is slow" almost always means "my game paints too much", and
+the fix is to paint less — not to compute less.
+
 ## Palette (256 RGB565 entries)
 `gfx_pal_upload(start, data, n)` writes n entries from `start`, auto-incrementing.
 `gfx_pal_bank(b)` sets the bank (0..15) used by sprite4: pixel v draws PALETTE[bank*16 + v].
@@ -102,6 +121,11 @@ MSB = leftmost pixel; set bits draw `color`, clear bits are transparent.
 `gfx_sprite4(x, y, img, w, h, bank, flags)`: img is h rows of w/2 bytes
 (w even), TWO pixels per byte, the LEFT pixel in the HIGH nibble. 0 is
 transparent; v draws PALETTE[bank*16+v]. flags: bit0 = flip X, bit1 = Y.
+
+**An odd `w` draws NOTHING — silently.** A 4-bit row is w/2 bytes, so an
+odd width has no last pixel: the device returns without drawing, with no
+error and no warning, and the sprite simply is not there. The same is
+true of a tilemap's `tile_w`. Check the width, not the result.
 
 ## Tilemaps, 1-bit
 `gfx_tilemap(x, y, cells, tiles, cols, rows, tile_w, tile_h)`: cells is
