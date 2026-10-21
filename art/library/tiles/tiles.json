@@ -1,0 +1,51 @@
+{
+ "format": 1,
+ "description": "Twelve seamless 16x16 surface tiles in one tileset: grass, dirt, stone, brick, wood, sand, water, roof, floor, road, snow, lava.",
+ "palettes": {
+  "terrain16": {
+   "bank": 12,
+   "colors": [
+    "#000000",
+    "#101410",
+    "#183818",
+    "#295929",
+    "#4A8A42",
+    "#392418",
+    "#5A3821",
+    "#8C6542",
+    "#292831",
+    "#4A4952",
+    "#7B7984",
+    "#4A1C18",
+    "#7B2C21",
+    "#18385A",
+    "#39699C",
+    "#EFDFC6"
+   ]
+  }
+ },
+ "roles": {
+  "tiles": "tileset"
+ },
+ "sprites": [
+  {
+   "name": "tiles",
+   "file": "strips/tiles.png",
+   "palette": "terrain16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the tiles pack: art/library/tiles/gen_tiles.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

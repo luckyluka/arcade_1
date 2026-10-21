@@ -1,0 +1,141 @@
+{
+ "format": 1,
+ "description": "What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon.",
+ "palettes": {
+  "dusk16": {
+   "bank": 15,
+   "colors": [
+    "#000000",
+    "#080C18",
+    "#181831",
+    "#21244A",
+    "#31306B",
+    "#424184",
+    "#5255A5",
+    "#7371BD",
+    "#9492D6",
+    "#B5B6EF",
+    "#7B2839",
+    "#A5384A",
+    "#C6595A",
+    "#EF8E73",
+    "#EFBA5A",
+    "#FFE3A5"
+   ]
+  }
+ },
+ "roles": {
+  "ridge_far": "layer",
+  "ridge_mid": "layer",
+  "ridge_near": "layer",
+  "stars": "layer",
+  "cloud": "layer",
+  "moon": "layer"
+ },
+ "sprites": [
+  {
+   "name": "ridge_far",
+   "file": "strips/ridge_far.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "ridge_mid",
+   "file": "strips/ridge_mid.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "ridge_near",
+   "file": "strips/ridge_near.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "stars",
+   "file": "strips/stars.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "cloud",
+   "file": "strips/cloud.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "moon",
+   "file": "strips/moon.png",
+   "palette": "dusk16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the backgrounds pack: art/library/backgrounds/gen_backgrounds.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [],
+ "maps": []
+}

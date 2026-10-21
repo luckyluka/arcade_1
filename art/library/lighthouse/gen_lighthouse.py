@@ -788,6 +788,11 @@ def main():
     # --- the manifest -----------------------------------------------------
     doc = {
         "format": 1,
+"roles": {
+            "ground": "tileset", "sky": "tileset",
+            "tower": "tileset", "rock": "tileset",
+            "sea": "tileset",
+        },
         "description": "A lighthouse's cast and tiles: the keeper (three states), the tower lamp, and four tilesets (a dusk sky, the tower, the cliff, the sea).",
         "palettes": {
             "sky16": {"bank": 0, "colors": list(SKY_P)},

@@ -102,6 +102,20 @@ STRIP_DIR = os.path.join(_OUT, "strips")''')
                s, flags=re.S)
     s = s.replace('"maps": maps,', '"maps": [],')
 
+    # --- the roles: what kind of asset each one is ----------------------
+    # A sprite is one closed shape with an outline; a tileset, a parallax
+    # layer and a particle are not, and the QA tool grades them
+    # differently (the check's "role").
+    roles = ('"roles": {\n'
+             '            "ground": "tileset", "sky": "tileset",\n'
+             '            "tower": "tileset", "rock": "tileset",\n'
+             '            "sea": "tileset",\n'
+             '        },\n')
+    s = s.replace('''        "format": 1,\n        "palettes"''',
+                  '''        "format": 1,\n''' + roles +
+                  '''        "description": %r,\n        "palettes"'''
+                  % description)
+
     # --- the manifest: a fragment, with a description --------------------
     s = s.replace('"format": 1,\n        "palettes"',
                   '"format": 1,\n        "description": %r,\n        "palettes"'

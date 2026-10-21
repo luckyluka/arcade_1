@@ -455,6 +455,11 @@ def main():
 
     doc = {
         "format": 1,
+"roles": {
+            "ground": "tileset", "sky": "tileset",
+            "tower": "tileset", "rock": "tileset",
+            "sea": "tileset",
+        },
         "description": "A village's cast and ground: a farmer, a slime, four harvests and a three-tile ground (grass, a paved square, a pond).",
         "palettes": dict((name, {"bank": BANKS[name], "colors": colors})
                          for (name, colors) in PALETTES.items()),

@@ -151,10 +151,20 @@ def _luminance(p):
 
 def check_strip(path, frame=None, allow_components=1, max_colours=15,
                 min_height=8, max_jitter=2, outline_colour=None,
-                min_contrast=0.55, key=(0, 0, 0), skip_outline=False):
-    """Run every check over the strip at `path`.
+                min_contrast=0.55, key=(0, 0, 0), skip_outline=False,
+                role="sprite"):
+    """Run the checks over the strip at `path`.
 
-    Returns a report dict: {file, frames, size, checks, failures, ok}.
+    The ROLE decides which checks apply. A **sprite** is one closed shape
+    with an outline, so it is graded on all of them. A **tileset** (a sheet
+    of tiles), a **layer** (a parallax ridge, a star field) and an
+    **effect** (a puff of dust) are NOT one silhouette: they are many
+    pieces, they have no outline ring, and a star field has twenty
+    separate stars. Grading them as sprites would be wrong, so the
+    silhouette checks are reported as "not applicable" and only the
+    basics run.
+
+    Returns a report dict: {file, frames, size, role, checks, failures, ok}.
     """
     w, h, rows = load_png(path)
     frames, fw, fh = split_frames(w, h, rows, frame)
@@ -191,19 +201,24 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
         # --- the components and the orphans -------------------------------
         groups = _components(f, fw, fh, key)
         info["components"] = len(groups)
-        if len(groups) > allow_components:
-            failures.append("frame %d has %d separate pieces (the silhouette "
-                            "should be one; use --allow-components to allow "
-                            "it)" % (i + 1, len(groups)))
-        orphans = 0
-        for g in groups:
-            if len(g) == 1:
-                orphans += 1
-        info["orphans"] = orphans
-        if orphans:
-            failures.append("frame %d has %d orphan pixel(s) — a single "
-                            "opaque pixel with no opaque neighbour"
-                            % (i + 1, orphans))
+        if role == "sprite":
+            if len(groups) > allow_components:
+                failures.append("frame %d has %d separate pieces (the "
+                                "silhouette should be one; use "
+                                "--allow-components to allow it)"
+                                % (i + 1, len(groups)))
+            orphans = 0
+            for g in groups:
+                if len(g) == 1:
+                    orphans += 1
+            info["orphans"] = orphans
+            if orphans:
+                failures.append("frame %d has %d orphan pixel(s) — a single "
+                                "opaque pixel with no opaque neighbour"
+                                % (i + 1, orphans))
+        else:
+            info["orphans"] = None
+            info["silhouette_check"] = "not applicable — the role is %r" % role
 
         # --- the bounding box, the baseline, the jitter --------------------
         box = _bbox(f, fw, fh, key)
@@ -211,7 +226,7 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
         if box:
             boxes.append(box)
             bottoms.add(box[1] + box[3] - 1)
-            if box[3] < min_height:
+            if box[3] < min_height and role == "sprite":
                 failures.append("frame %d is %d px tall (at least %d are "
                                 "readable)" % (i + 1, box[3], min_height))
         else:
@@ -236,7 +251,10 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
                 if touches:
                     edge_pixels.append(f[y][x])
         edge = len(edge_pixels)
-        if edge and skip_outline:
+        if role != "sprite":
+            edge = 0
+            info["outline_check"] = "not applicable — the role is %r" % role
+        elif edge and skip_outline:
             info["outline_check"] = "skipped (--skip-outline)"
             edge = 0
         if edge:
@@ -260,7 +278,7 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
                                     "opaque, so it has no edge"
 
         # --- the fill-to-outline contrast ----------------------------------
-        if outline_colour is not None:
+        if outline_colour is not None and role == "sprite":
             outline_lum = _luminance(outline_colour)
             fill_lum = 0.0
             n = 0
@@ -282,7 +300,10 @@ def check_strip(path, frame=None, allow_components=1, max_colours=15,
         per_frame.append(info)
 
     # --- the baseline and the jitter (over the whole strip) ----------------
-    if len(bottoms) > 1:
+    # A sprite stands on the ground: every frame of a state ends on the
+    # same row. A particle does not (it flies), so the rule is the
+    # sprite's alone.
+    if len(bottoms) > 1 and role == "sprite":
         failures.append("the frames do not share a baseline: the lowest "
                         "opaque row is %s (the feet must stand on one row)"
                         % sorted(bottoms))

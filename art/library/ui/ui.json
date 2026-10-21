@@ -1,0 +1,148 @@
+{
+ "format": 1,
+ "description": "The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip.",
+ "palettes": {
+  "ui16": {
+   "bank": 14,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#181C29",
+    "#292C39",
+    "#393C52",
+    "#52516B",
+    "#6B6984",
+    "#84869C",
+    "#A5A2B5",
+    "#C6C3CE",
+    "#E7E3EF",
+    "#FFFFFF",
+    "#C63839",
+    "#E7A639",
+    "#39C77B",
+    "#398AC6"
+   ]
+  }
+ },
+ "roles": {
+  "panel_tiles": "tileset",
+  "cursor": "sprite",
+  "pip": "sprite"
+ },
+ "sprites": [
+  {
+   "name": "panel_tiles",
+   "file": "strips/panel_tiles.png",
+   "palette": "ui16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "cursor",
+   "file": "strips/cursor.png",
+   "palette": "ui16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "pip",
+   "file": "strips/pip.png",
+   "palette": "ui16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [],
+ "maps": [
+  {
+   "name": "panel_small",
+   "file": "maps/panel_small.txt",
+   "tileset": "panel_tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "c": 0,
+    "h": 1,
+    "v": 2,
+    "f": 3
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "panel_mid",
+   "file": "maps/panel_mid.txt",
+   "tileset": "panel_tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "c": 0,
+    "h": 1,
+    "v": 2,
+    "f": 3
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "panel_big",
+   "file": "maps/panel_big.txt",
+   "tileset": "panel_tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "c": 0,
+    "h": 1,
+    "v": 2,
+    "f": 3
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the ui pack: art/library/ui/gen_ui.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ]
+}

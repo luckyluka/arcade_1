@@ -62,6 +62,10 @@ PACKS = [
     "characters",
     "village",
     "lighthouse",
+    "tiles",
+    "effects",
+    "ui",
+    "backgrounds",
 ]
 
 
@@ -157,6 +161,7 @@ def pack_assets(name, root=None):
     with open(fragment) as f:
         doc = json.load(f)
     out = []
+    roles = doc.get("roles", {})
     for sprite in doc.get("sprites", []):
         strip = os.path.join(base, sprite.get("file", ""))
         size = ""
@@ -167,7 +172,8 @@ def pack_assets(name, root=None):
                 data = f.read(24)
             w, h = struct.unpack(">II", data[16:24])
             size = "%dx%d" % (w // max(1, frames), h)
-        out.append({"kind": "sprite", "name": sprite.get("name", "?"),
+        out.append({"kind": roles.get(sprite.get("name"), "sprite"),
+                    "name": sprite.get("name", "?"),
                     "file": sprite.get("file", ""), "size": size,
                     "frames": frames,
                     "palette": sprite.get("palette", "")})

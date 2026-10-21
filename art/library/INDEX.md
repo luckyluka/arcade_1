@@ -16,8 +16,12 @@ arc1-art merge <pack>...  # compose packs into a game's manifest
 | `characters` | Two rigged characters (the humanoid reference and the samurai) — eight states each, built from parts and keyframes rather than drawn frame by frame. | 32 |
 | `village` | A village's cast and ground: a farmer, a slime, four harvests and a three-tile ground (grass, a paved square, a pond). | 9 |
 | `lighthouse` | A lighthouse's cast and tiles: the keeper (three states), the tower lamp, and four tilesets (a dusk sky, the tower, the cliff, the sea). | 13 |
+| `tiles` | Twelve seamless 16x16 surface tiles in one tileset: grass, dirt, stone, brick, wood, sand, water, roof, floor, road, snow, lava. | 1 |
+| `effects` | Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame. | 10 |
+| `ui` | The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip. | 6 |
+| `backgrounds` | What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon. | 6 |
 
-**59 assets in 4 packs.**
+**82 assets in 8 packs.**
 
 ## `icons`
 
@@ -45,6 +49,15 @@ Five small gameplay icons (coin, heart, key, potion, arrow) — the HUD's vocabu
 ## `characters`
 
 Two rigged characters (the humanoid reference and the samurai) — eight states each, built from parts and keyframes rather than drawn frame by frame.
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* provenance
 
 | asset | kind | size | frames | palette |
 |---|---|---|---:|---|
@@ -81,9 +94,20 @@ Two rigged characters (the humanoid reference and the samurai) — eight states 
 | `samurai_run` | animation | — | 8 | 80 ms |
 | `samurai_walk` | animation | — | 8 | 120 ms |
 
+**Review:** **The format is the value; the samurai's pixels are not.** A rig gives
+
 ## `village`
 
 A village's cast and ground: a farmer, a slime, four harvests and a three-tile ground (grass, a paved square, a pond).
+
+* 1. sprite grid and sizes
+* 2. outline rule
+* 3. light direction
+* 4. shading steps
+* 5. palette
+* 6. silhouette rules
+* 7. animation
+* 8. provenance
 
 | asset | kind | size | frames | palette |
 |---|---|---|---:|---|
@@ -93,20 +117,31 @@ A village's cast and ground: a farmer, a slime, four harvests and a three-tile g
 | `apple` | sprite | 12x12 | 1 | props |
 | `carrot` | sprite | 12x12 | 1 | props |
 | `cabbage` | sprite | 12x12 | 1 | props |
-| `ground` | sprite | 48x16 | 1 | ground |
+| `ground` | tileset | 48x16 | 1 | ground |
 | `farmer_walk` | animation | — | 2 | 160 ms |
 | `slime_hop` | animation | — | 2 | 240 ms |
+
+**Review:** It works: the field reads as a village at 1x (grass, a paved square, a
 
 ## `lighthouse`
 
 A lighthouse's cast and tiles: the keeper (three states), the tower lamp, and four tilesets (a dusk sky, the tower, the cliff, the sea).
 
+* 1. sprite grid and sizes
+* 2. outline rule
+* 3. light direction
+* 4. shading steps
+* 5. palette
+* 6. silhouette rules
+* 7. animation
+* 8. provenance
+
 | asset | kind | size | frames | palette |
 |---|---|---|---:|---|
-| `sky` | sprite | 224x16 | 1 | sky16 |
-| `tower` | sprite | 96x32 | 1 | tower16 |
-| `rock` | sprite | 64x32 | 1 | rock16 |
-| `sea` | sprite | 48x32 | 1 | sea16 |
+| `sky` | tileset | 224x16 | 1 | sky16 |
+| `tower` | tileset | 96x32 | 1 | tower16 |
+| `rock` | tileset | 64x32 | 1 | rock16 |
+| `sea` | tileset | 48x32 | 1 | sea16 |
 | `keeper_idle` | sprite | 24x32 | 2 | keeper16 |
 | `keeper_climb` | sprite | 24x32 | 4 | keeper16 |
 | `keeper_carry` | sprite | 24x32 | 2 | keeper16 |
@@ -116,4 +151,103 @@ A lighthouse's cast and tiles: the keeper (three states), the tower lamp, and fo
 | `keeper_climb_anim` | animation | — | 4 | 130 ms |
 | `keeper_carry_anim` | animation | — | 2 | 320 ms |
 | `lamp_on_anim` | animation | — | 2 | 140 ms |
+
+**Review:** It works: at 1x the tower reads as a tower, the cliff as rock, the sea as
+
+## `tiles`
+
+Twelve seamless 16x16 surface tiles in one tileset: grass, dirt, stone, brick, wood, sand, water, roof, floor, road, snow, lava.
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `tiles` | tileset | 64x48 | 1 | terrain16 |
+
+**Review:** **It works, and it is the most useful thing in the library.** A game needs
+
+## `effects`
+
+Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame.
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `dust` | effect | 16x16 | 3 | fx16 |
+| `smoke` | effect | 16x16 | 3 | fx16 |
+| `spark` | effect | 16x16 | 3 | fx16 |
+| `splash` | effect | 16x16 | 3 | fx16 |
+| `fire` | effect | 16x16 | 4 | fx16 |
+| `dust_anim` | animation | — | 3 | 120 ms |
+| `smoke_anim` | animation | — | 3 | 140 ms |
+| `spark_anim` | animation | — | 3 | 70 ms |
+| `splash_anim` | animation | — | 3 | 110 ms |
+| `fire_anim` | animation | — | 4 | 90 ms |
+
+**Review:** **They work.** Every effect is drawn as a *shape* rather than as a drawn
+
+## `ui`
+
+The interface kit: a panel in three sizes (a nine-piece tileset plus a map per size), a cursor and a counter pip.
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* how the panel is used
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `panel_tiles` | tileset | 48x48 | 1 | ui16 |
+| `cursor` | sprite | 8x8 | 1 | ui16 |
+| `pip` | sprite | 8x8 | 1 | ui16 |
+| `panel_small` | map | — | 0 | — |
+| `panel_mid` | map | — | 0 | — |
+| `panel_big` | map | — | 0 | — |
+
+**Review:** **The panel is the useful part, and it works.** Nine pieces (the corners,
+
+## `backgrounds`
+
+What is behind the game: three seamless parallax ridge strips, a tileable star field, a cloud and a moon.
+
+* sprite grid and sizes
+* outline rule
+* light direction
+* shading steps
+* palette
+* silhouette rules
+* animation
+* how the ridges are used
+* provenance
+
+| asset | kind | size | frames | palette |
+|---|---|---|---:|---|
+| `ridge_far` | layer | 64x16 | 1 | dusk16 |
+| `ridge_mid` | layer | 64x16 | 1 | dusk16 |
+| `ridge_near` | layer | 64x16 | 1 | dusk16 |
+| `stars` | layer | 32x32 | 1 | dusk16 |
+| `cloud` | layer | 32x16 | 1 | dusk16 |
+| `moon` | layer | 16x16 | 1 | dusk16 |
+
+**Review:** **The ridges are the useful part, and they work.** Each is a seamless
 

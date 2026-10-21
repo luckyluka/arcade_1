@@ -50,6 +50,10 @@ frag, pack_dir = sys.argv[1], sys.argv[2]
 doc = json.load(open(frag))
 root = os.path.dirname(os.path.dirname(os.path.dirname(pack_dir)))
 art = os.path.join(root, "tools", "arc1-art")
+# the role: a sprite is one closed shape with an outline; a tileset, a
+# parallax layer and a particle are not, and the checks grade them
+# differently (the check's --role)
+roles = doc.get("roles", {})
 bad = 0
 for sprite in doc.get("sprites", []):
     path = os.path.join(pack_dir, sprite["file"])
@@ -63,7 +67,8 @@ for sprite in doc.get("sprites", []):
     with open(path, "rb") as f:
         w, h = struct.unpack(">II", f.read(24)[16:24])
     r = subprocess.run([art, "check", path, "--frame",
-                        "%dx%d" % (w // frames, h)],
+                        "%dx%d" % (w // frames, h),
+                        "--role", roles.get(sprite["name"], "sprite")],
                        capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write("test-art-library: FAILED — %s: %s\n"

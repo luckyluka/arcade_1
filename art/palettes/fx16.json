@@ -1,0 +1,24 @@
+{
+  "name": "fx16",
+  "description": "The effects palette: earths and ambers for the dust, the creams for the smoke and the flash, the oranges for the flame, the blues for the splash.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#181421",
+    "#8C6921",
+    "#C69A31",
+    "#EFD36B",
+    "#FFF3B5",
+    "#8C385A",
+    "#C6698C",
+    "#EFA2B5",
+    "#FFE3EF",
+    "#EFF7FF",
+    "#9CB6D6",
+    "#C63842",
+    "#7B2431",
+    "#FFFFFF",
+    "#392C42"
+  ]
+}

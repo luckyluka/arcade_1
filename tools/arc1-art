@@ -368,7 +368,7 @@ def cmd_check(args):
                 allow_components=args.allow_components,
                 max_colours=args.max_colours, min_height=args.min_height,
                 max_jitter=args.max_jitter, outline_colour=outline, key=key,
-                skip_outline=args.skip_outline)
+                skip_outline=args.skip_outline, role=args.role)
     except (qa_mod.QaError, OSError) as e:
         sys.stderr.write("arc1-art: %s\n" % e)
         return 1
@@ -515,6 +515,10 @@ def main(argv=None):
     p.add_argument("--outline-colour", metavar="#RRGGBB")
     p.add_argument("--key", metavar="#RRGGBB",
                    help="the transparent key colour (default #000000)")
+    p.add_argument("--role", default="sprite",
+                   choices=("sprite", "tileset", "layer", "effect"),
+                   help="what the asset is: a sprite is graded on its "
+                        "silhouette, the others are not")
     p.add_argument("--skip-outline", action="store_true",
                    help="do not grade the outline or the contrast (for a "
                         "tileset or a background layer)")

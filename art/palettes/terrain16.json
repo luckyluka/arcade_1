@@ -1,0 +1,24 @@
+{
+  "name": "terrain16",
+  "description": "The surfaces palette: greens, browns, greys, brick reds and water blues, with a cream for snow and sand.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#101410",
+    "#183818",
+    "#295929",
+    "#4A8A42",
+    "#392418",
+    "#5A3821",
+    "#8C6542",
+    "#292831",
+    "#4A4952",
+    "#7B7984",
+    "#4A1C18",
+    "#7B2C21",
+    "#18385A",
+    "#39699C",
+    "#EFDFC6"
+  ]
+}

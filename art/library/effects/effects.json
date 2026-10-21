@@ -1,0 +1,175 @@
+{
+ "format": 1,
+ "description": "Five particle strips for a game's effects: dust, smoke, a spark, a splash and a flame.",
+ "palettes": {
+  "fx16": {
+   "bank": 13,
+   "colors": [
+    "#000000",
+    "#181421",
+    "#8C6921",
+    "#C69A31",
+    "#EFD36B",
+    "#FFF3B5",
+    "#8C385A",
+    "#C6698C",
+    "#EFA2B5",
+    "#FFE3EF",
+    "#EFF7FF",
+    "#9CB6D6",
+    "#C63842",
+    "#7B2431",
+    "#FFFFFF",
+    "#392C42"
+   ]
+  }
+ },
+ "roles": {
+  "dust": "effect",
+  "smoke": "effect",
+  "spark": "effect",
+  "splash": "effect",
+  "fire": "effect"
+ },
+ "sprites": [
+  {
+   "name": "dust",
+   "file": "strips/dust.png",
+   "palette": "fx16",
+   "frames": 3,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the effects pack: art/library/effects/gen_effects.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "smoke",
+   "file": "strips/smoke.png",
+   "palette": "fx16",
+   "frames": 3,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the effects pack: art/library/effects/gen_effects.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "spark",
+   "file": "strips/spark.png",
+   "palette": "fx16",
+   "frames": 3,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the effects pack: art/library/effects/gen_effects.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "splash",
+   "file": "strips/splash.png",
+   "palette": "fx16",
+   "frames": 3,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the effects pack: art/library/effects/gen_effects.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "fire",
+   "file": "strips/fire.png",
+   "palette": "fx16",
+   "frames": 4,
+   "origin": [
+    8,
+    16
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the effects pack: art/library/effects/gen_effects.py",
+    "seed": 20261021,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "dust_anim",
+   "sprite": "dust",
+   "frames": [
+    0,
+    1,
+    2
+   ],
+   "ms": 120
+  },
+  {
+   "name": "smoke_anim",
+   "sprite": "smoke",
+   "frames": [
+    0,
+    1,
+    2
+   ],
+   "ms": 140
+  },
+  {
+   "name": "spark_anim",
+   "sprite": "spark",
+   "frames": [
+    0,
+    1,
+    2
+   ],
+   "ms": 70
+  },
+  {
+   "name": "splash_anim",
+   "sprite": "splash",
+   "frames": [
+    0,
+    1,
+    2
+   ],
+   "ms": 110
+  },
+  {
+   "name": "fire_anim",
+   "sprite": "fire",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 90
+  }
+ ],
+ "maps": []
+}
