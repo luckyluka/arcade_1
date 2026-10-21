@@ -44,6 +44,22 @@ art/
    [docs/art/PROVENANCE.md](../docs/art/PROVENANCE.md) for the schema and
    `art/ART_LICENSES.md` for the generated summary.
 
+## The visual review
+
+Two halves, and both are needed:
+
+* the **machine half** — `arc1-art check file.png [--frame WxH]` counts
+  the colours, the orphan pixels, the components, the baseline, the
+  anchor's jitter, the outline coverage and the fill-to-outline
+  contrast, and prints a JSON report (exit 1 on a failure);
+* the **human half** — [CRITIQUE.md](CRITIQUE.md): the checklist for an
+  agent that can see, and the protocol for the review that follows
+  (verdict, three observations, what changed, the re-check), written to
+  `art/reports/<asset>.md`.
+
+A sprite can pass every check and still be ugly. The checks say the
+sprite is *well formed*; the review says whether it is *good*.
+
 ## The rig animator
 
 A character is a list of **parts** (a name, a parent, a pivot, a shape, a
@@ -130,7 +146,7 @@ fragment and the compiled header — the build truth).
 | 7.3 | `tools/arc1_art/pixmap.py` | the `.px` text pixmap format and the sprite lab |
 | 7.4 | `tools/arc1_art/rig.py` | the rig animator (parts, keyframes, strips) — see `art/rigs/humanoid.json` and the review in `art/reports/humanoid.md` |
 | 7.5 | `tools/arc1_art/ingest.py` | raster ingest — **local only, stdlib only** (PNG, no JPG); see [docs/art/INGEST.md](../docs/art/INGEST.md) |
-| 7.6 | `tools/arc1_art/qa.py` | `arc1-art check`: the automated visual checks |
+| 7.6 | `tools/arc1_art/qa.py` | `arc1-art check`: the automated visual checks — with [CRITIQUE.md](CRITIQUE.md) for the human half |
 
 Two decisions shape this pipeline (the owner's, 2026-10-21):
 

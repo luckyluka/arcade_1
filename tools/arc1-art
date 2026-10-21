@@ -24,6 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from arc1_art import ingest as ingest_mod              # noqa: E402
+from arc1_art import qa as qa_mod                      # noqa: E402
 from arc1_art import pixmap, rig                        # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -332,6 +333,46 @@ def _nearest(p, colours):
     return best
 
 
+def cmd_check(args):
+    """The visual checks over a strip PNG: a JSON report, exit 1 on a
+    failure."""
+    frame = None
+    if args.frame:
+        frame = ingest_mod.parse_cell(args.frame)
+    key = (0, 0, 0)
+    if args.key:
+        try:
+            v = int(args.key.lstrip("#"), 16)
+            key = ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+        except ValueError:
+            sys.stderr.write("arc1-art: the key colour %r is not #RRGGBB\n"
+                             % args.key)
+            return 2
+    outline = None
+    if args.outline_colour:
+        try:
+            v = int(args.outline_colour.lstrip("#"), 16)
+            outline = ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+        except ValueError:
+            sys.stderr.write("arc1-art: the outline colour %r is not "
+                             "#RRGGBB\n" % args.outline_colour)
+            return 2
+    try:
+        report = qa_mod.check_strip(
+            args.file, frame=frame, allow_components=args.allow_components,
+            max_colours=args.max_colours, min_height=args.min_height,
+            max_jitter=args.max_jitter, outline_colour=outline, key=key)
+    except (qa_mod.QaError, OSError) as e:
+        sys.stderr.write("arc1-art: %s\n" % e)
+        return 1
+    print(json.dumps(report, indent=1, ensure_ascii=False))
+    if not report["ok"]:
+        for f in report["failures"]:
+            sys.stderr.write("arc1-art: %s\n" % f)
+        return 1
+    return 0
+
+
 def cmd_info(args):
     pm = _load(args.file)
     print("name %s" % pm["name"])
@@ -382,6 +423,19 @@ def main(argv=None):
     p.add_argument("--name", default="sheet")
     p.add_argument("--scale", type=int, default=4)
     p.set_defaults(func=cmd_ingest)
+
+    p = sub.add_parser("check", help="the visual checks over a strip PNG")
+    p.add_argument("file", metavar="FILE.png")
+    p.add_argument("--frame", metavar="WxH",
+                   help="the frame size (default: square frames)")
+    p.add_argument("--allow-components", type=int, default=1)
+    p.add_argument("--max-colours", type=int, default=15)
+    p.add_argument("--min-height", type=int, default=8)
+    p.add_argument("--max-jitter", type=int, default=2)
+    p.add_argument("--outline-colour", metavar="#RRGGBB")
+    p.add_argument("--key", metavar="#RRGGBB",
+                   help="the transparent key colour (default #000000)")
+    p.set_defaults(func=cmd_check)
 
     p = sub.add_parser("info", help="what a pixmap declares")
     p.add_argument("file", metavar="FILE.px")
