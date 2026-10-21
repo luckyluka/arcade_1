@@ -26,7 +26,7 @@ of the exercise.
 | the time | the log's timeline | the art step 09:31–10:05, the game step 10:12–10:45 |
 
 ```sh
-python3 tools/measure_round6.py round6     # the JSON report
+python3 tools/measure_round.py round6     # the JSON report
 ```
 
 The harness's verdict for the round: `"ok": true`.
@@ -107,7 +107,7 @@ that writes the sheet the checklist expects.
 | `round6/round6.arc1`, `round6/round6.syms`, `round6/round6.golden` | the image, the symbols, the golden (240 frames) |
 | `round6/in.txt`, `round6/in_lose.txt` | the winning and the losing sessions |
 | `round6/shot*.png` | the frames it looked at |
-| `tools/measure_round6.py` | the metrics harness |
+| `tools/measure_round.py` | the metrics harness |
 
 The round is **not** promoted into `make check` — the brief said to keep
 it inside `round6/`, and promoting it would change the game list. The

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tools/measure_round6.py — the clean-room round's metrics (card 7.8).
+"""tools/measure_round.py — a clean-room round's metrics (card 7.8).
 
 The card lists the success metrics: the attempts to the first compliant
 asset, the number of DOC GAPs, whether art/CRITIQUE.md was used, whether
@@ -7,11 +7,13 @@ any hand-edited generated file exists (must be none), that `arc1-art
 check` is clean on all the assets, and that the game is golden-locked via
 card 4.2's `arcade1 golden`.
 
+It serves every round: the folder is an argument (round6, round7, ...).
+
 This script measures the OBJECTIVE ones and reports the subjective ones
 from the round's log. It does not judge the round — it hands the operator
 the numbers, and prints the log's gaps so they can be classified.
 
-    python3 tools/measure_round6.py [round-dir] [--report FILE]
+    python3 tools/measure_round.py [round-dir]
 
 Exit: 0 when every objective check passes, 1 otherwise.
 """
@@ -172,10 +174,10 @@ def main():
     round_dir = args[0] if args else os.path.join(ROOT, "round6")
     round_dir = os.path.abspath(round_dir)
     if not os.path.isdir(round_dir):
-        sys.stderr.write("measure_round6: no such folder: %s\n" % round_dir)
+        sys.stderr.write("measure_round: no such folder: %s\n" % round_dir)
         return 2
     if not os.path.isfile(CLI):
-        sys.stderr.write("measure_round6: no CLI at %s (make build/arcade1)\n"
+        sys.stderr.write("measure_round: no CLI at %s (make build/arcade1)\n"
                          % CLI)
         return 2
 
@@ -199,7 +201,7 @@ def main():
 
     print(json.dumps(report, indent=1, ensure_ascii=False))
     if not report["ok"]:
-        sys.stderr.write("measure_round6: the round is not complete:\n")
+        sys.stderr.write("measure_round: the round is not complete:\n")
         for a in assets:
             if not a["ok"]:
                 sys.stderr.write("  asset %s: %s\n" % (a["asset"], a["why"]))

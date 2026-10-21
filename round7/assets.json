@@ -1,0 +1,529 @@
+{
+ "format": 1,
+ "palettes": {
+  "sky16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#080C18",
+    "#181831",
+    "#21244A",
+    "#31306B",
+    "#424184",
+    "#5255A5",
+    "#7371BD",
+    "#9492D6",
+    "#B5B6EF",
+    "#7B2839",
+    "#A5384A",
+    "#C6595A",
+    "#EF8E73",
+    "#EFBA5A",
+    "#FFE3A5"
+   ]
+  },
+  "tower16": {
+   "bank": 1,
+   "colors": [
+    "#000000",
+    "#101410",
+    "#212421",
+    "#313431",
+    "#4A494A",
+    "#5A595A",
+    "#6B6D6B",
+    "#7B7D7B",
+    "#949294",
+    "#A5A2A5",
+    "#B5B6B5",
+    "#C6C7C6",
+    "#DEDBDE",
+    "#EFEBEF",
+    "#F7F3F7",
+    "#FFFFFF"
+   ]
+  },
+  "rock16": {
+   "bank": 2,
+   "colors": [
+    "#000000",
+    "#181018",
+    "#8C2C21",
+    "#BD4129",
+    "#D66139",
+    "#CEB27B",
+    "#8C8273",
+    "#73717B",
+    "#6B6573",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#DEB65A",
+    "#211821",
+    "#ADA2B5",
+    "#100C18"
+   ]
+  },
+  "sea16": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#081421",
+    "#102039",
+    "#183052",
+    "#21416B",
+    "#295184",
+    "#31619C",
+    "#3971B5",
+    "#4A82C6",
+    "#5A96CE",
+    "#73A6DE",
+    "#84BAE7",
+    "#9CCBF7",
+    "#B5DFFF",
+    "#5AC3B5",
+    "#8CE3D6"
+   ]
+  },
+  "keeper16": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#211408",
+    "#392410",
+    "#523418",
+    "#6B4521",
+    "#845931",
+    "#9C7142",
+    "#B58A52",
+    "#C6A263",
+    "#DEBA7B",
+    "#EFD394",
+    "#F7E7B5",
+    "#FFF3D6",
+    "#C66931",
+    "#E78A42",
+    "#F7C373"
+   ]
+  },
+  "lamp16": {
+   "bank": 5,
+   "colors": [
+    "#000000",
+    "#080C18",
+    "#181831",
+    "#21244A",
+    "#31306B",
+    "#424184",
+    "#5255A5",
+    "#7371BD",
+    "#9492D6",
+    "#B5B6EF",
+    "#7B2839",
+    "#A5384A",
+    "#C6595A",
+    "#EF8E73",
+    "#EFBA5A",
+    "#FFE3A5"
+   ]
+  },
+  "ui16": {
+   "bank": 6,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#181C29",
+    "#292C39",
+    "#393C52",
+    "#52516B",
+    "#6B6984",
+    "#84869C",
+    "#A5A2B5",
+    "#C6C3CE",
+    "#E7E3EF",
+    "#FFFFFF",
+    "#C63839",
+    "#E7A639",
+    "#39C77B",
+    "#398AC6"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "sky",
+   "file": "art/strips/sky.png",
+   "palette": "sky16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the dusk sky tiles (a gradient, stars, clouds, a moon)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "tower",
+   "file": "art/strips/tower.png",
+   "palette": "tower16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the lighthouse tiles (wall, window, ladder, gallery, glass)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "rock",
+   "file": "art/strips/rock.png",
+   "palette": "rock16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the cliff tiles",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "sea",
+   "file": "art/strips/sea.png",
+   "palette": "sea16",
+   "frames": 1,
+   "origin": [
+    0,
+    0
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the sea tiles (crest, flat, deep, foam)",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "keeper_idle",
+   "file": "art/strips/keeper_idle.png",
+   "palette": "keeper16",
+   "frames": 2,
+   "origin": [
+    12,
+    31
+   ],
+   "collision": [
+    6,
+    12,
+    12,
+    19
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper, standing",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "keeper_climb",
+   "file": "art/strips/keeper_climb.png",
+   "palette": "keeper16",
+   "frames": 4,
+   "origin": [
+    12,
+    31
+   ],
+   "collision": [
+    6,
+    12,
+    12,
+    19
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper, climbing",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "keeper_carry",
+   "file": "art/strips/keeper_carry.png",
+   "palette": "keeper16",
+   "frames": 2,
+   "origin": [
+    12,
+    31
+   ],
+   "collision": [
+    6,
+    12,
+    12,
+    19
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper, carrying a lantern",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "lamp_off",
+   "file": "art/strips/lamp_off.png",
+   "palette": "lamp16",
+   "frames": 1,
+   "origin": [
+    8,
+    8
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the tower lamp, dark",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "lamp_on",
+   "file": "art/strips/lamp_on.png",
+   "palette": "lamp16",
+   "frames": 2,
+   "origin": [
+    8,
+    8
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the tower lamp, lit",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "keeper_idle_anim",
+   "sprite": "keeper_idle",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 520,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper's idle",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "keeper_climb_anim",
+   "sprite": "keeper_climb",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 130,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper's climb",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "keeper_carry_anim",
+   "sprite": "keeper_carry",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 320,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the keeper's carry",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "lamp_on_anim",
+   "sprite": "lamp_on",
+   "frames": [
+    0,
+    1
+   ],
+   "ms": 140,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the lamp's flicker",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "maps": [
+  {
+   "name": "sky_map",
+   "file": "art/sky_map.txt",
+   "tileset": "sky",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    "a": 0,
+    "b": 1,
+    "c": 2,
+    "d": 3,
+    "e": 4,
+    "f": 5,
+    "g": 6,
+    "h": 7,
+    "i": 8,
+    "j": 9,
+    "k": 10,
+    "S": 11,
+    "C": 12,
+    "M": 13,
+    ".": null
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the dusk sky",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "tower_map",
+   "file": "art/tower_map.txt",
+   "tileset": "tower",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "w": 0,
+    "n": 1,
+    "l": 2,
+    "g": 3,
+    "b": 4,
+    "r": 5,
+    "p": 7
+   },
+   "solid": {
+    "by_tile": {
+     "w": 1,
+     "n": 1,
+     "l": 0,
+     "g": 1,
+     "b": 1,
+     "r": 1,
+     "p": 1
+    }
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the lighthouse",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "rock_map",
+   "file": "art/rock_map.txt",
+   "tileset": "rock",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "c": 0,
+    "m": 3,
+    "s": 2
+   },
+   "solid": {
+    "by_tile": {
+     "c": 1,
+     "m": 1,
+     "s": 1
+    }
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the cliff",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "sea_map",
+   "file": "art/sea_map.txt",
+   "tileset": "sea",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "a": 0,
+    "b": 1,
+    "c": 2,
+    "d": 3,
+    "e": 4,
+    "f": 5
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the sea band",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "sea_deep_map",
+   "file": "art/sea_deep_map.txt",
+   "tileset": "sea",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "e": 4
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "round 7: the deep water under the surface",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ]
+}

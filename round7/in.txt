@@ -1,0 +1,19 @@
+# round 7 — the scripted session: the sea takes the keeper first, then he
+# climbs, lights the three lamps and reaches the beacon.
+#
+# Attempt 1: nobody climbs. The water reaches him at frame 96 (state 2).
+0    95   none
+# START begins another attempt. A press is an edge, so the pad has to be
+# empty on the frame before it.
+100  100  start
+# Climb to the first lamp (row 39), then hold A until the flame catches.
+101  122  up
+123  170  a
+# The second lamp (row 31).
+171  202  up
+203  250  a
+# The third lamp (row 23).
+251  282  up
+283  330  a
+# Up to the top of the ladder: all three lamps lit, the beacon burns.
+331  420  up

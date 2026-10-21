@@ -244,10 +244,11 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
    the status table in §9.
 3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Cards 7.1-7.8
-   are done: **7.8's clean-room run happened** (a fresh agent, the brief,
-   the tools) — the game builds, plays, is golden-locked, every asset
-   passes `arc1-art check`, and the round found SEVEN documentation
-   gaps. See docs/experiments/round6-art.md.
+   are done: **7.8's clean-room run happened TWICE** — round 6 (a fantasy
+   village: 7 gaps) and round 7 (a lighthouse keeper, after the gaps were
+   closed: 9 gaps, eight of them in the documents written for this wave).
+   Both games build, play, are golden-locked and pass every asset check.
+   See docs/experiments/round6-art.md and round7-art.md.
 
 ## 9. Status
 
@@ -273,7 +274,7 @@ that carried it, and the day it landed.
 | 7.5 | raster ingest — LOCAL ONLY, stdlib only (PNG, no JPG) | `5f4321d` | 2026-10-21 |
 | 7.6 | the visual QA tool and the critique protocol | `cd3ae95` | 2026-10-21 |
 | 7.7 | the art pass on Petal Blade (the rig variant) | `0f804a1` | 2026-10-21 |
-| 7.8 | the clean-room art round — RUN, 7 DOC GAPs, the game is compliant | (this commit) | 2026-10-21 |
+| 7.8 | the clean-room art round — RUN twice: round 6 (7 gaps) and round 7 (9 gaps), both compliant | `a6f6764`, this commit | 2026-10-20/21 |
 | 8.1-8.3 | audio observability | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 
