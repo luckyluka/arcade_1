@@ -862,11 +862,27 @@ static void ball_vs_paddle(Ball *b)
         cross_x = (b->x - b->vx) + (b->vx * frac) / 256;
     }
 
-    /* the offset from the paddle's centre, in 1/16 px */
+    /* The catch point decides the DIRECTION; the paddle's own motion may
+     * only bend the angle WITHIN that direction. A ball caught on the
+     * left always leaves to the left, a ball caught dead centre leaves
+     * straight up — the sweep is a garnish, never a second opinion.
+     *
+     * (The english is signed by the sweep's direction, so sweeping with
+     * the ball's line flattens the return and sweeping against it
+     * steepens it — the way a moving surface actually works.) */
     off = cross_x - paddle_x * FP;
     step = (off * 6) / (paddle_w * FP / 2);
-    /* the english: the paddle's own motion bends the return a little */
-    step += paddle_vx / 5;
+    {
+        int eng = paddle_vx / 5;
+        int want = step + eng;
+        if (step < 0 && want > 0)
+            want = 0;                   /* a left catch never leaves right */
+        else if (step > 0 && want < 0)
+            want = 0;                   /* a right catch never leaves left */
+        else if (step == 0)
+            want = 0;                   /* a centre catch stays vertical */
+        step = want;
+    }
     k = step < 0 ? -step : step;
     if (k > 6)
         k = 6;

@@ -298,9 +298,13 @@ ROM are exactly as they were.
   speed is a property of the **stage** (it grows a little per level and
   never creeps mid-rally), no bounce may leave the ball shallower than
   **60° from the vertical** (it is put back on that line at the same
-  speed), and the paddle's own motion adds a little **english**. The
-  ball's velocity is observable (`ball_vx`, `ball_vy`) so the invariants
-  can be checked: over a whole session the ball is never flat.
+  speed), and the paddle's own motion adds a little **english** — but
+  only within the direction the catch point chose: a ball caught on the
+  left always leaves to the left, and a ball caught dead centre leaves
+  straight up. The catch point is the joystick; the sweep is a garnish.
+  The ball's velocity is observable (`ball_vx`, `ball_vy`) so the
+  invariants can be checked: over a whole session the ball is never
+  flatter than 60 degrees.
 * **Four brick kinds**: normal, tough (two hits — it cracks first),
   steel (the ball bounces off it) and bomb (it takes its neighbours with
   it, three links deep).
