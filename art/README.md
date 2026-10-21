@@ -139,6 +139,50 @@ tools/arc1-art info art/px/coin.px
 `make px-samples` regenerates `programs/px/` (the strips, the manifest
 fragment and the compiled header — the build truth).
 
+## Writing a generator (and finding the library)
+
+A generator is a python script that paints the assets. It uses the
+repository's own drawing library, so it must find it:
+
+```python
+import os, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(HERE))   # the repo root
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+from arc1_art import canvas as C
+```
+
+That is the shape every generator in the repository uses (see
+`programs/petalblade_art/gen_art.py` and `round4/gen_art.py`). **It
+assumes the generator lives two directories below the repository root** —
+`<repo>/<folder>/<script>.py` — and that the repository's `tools/`
+directory is a sibling of that folder's parent. Two ways out when the art
+lives elsewhere:
+
+* keep the generator two levels below the root (`<repo>/roundN/art/…`), or
+* set `ARCADE1_ROOT` and use it instead of the `dirname` guess:
+
+```python
+ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
+    os.path.dirname(HERE))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+```
+
+A generator that cannot import `arc1_art` dies with
+`ModuleNotFoundError: No module named 'arc1_art'` — that is the symptom.
+
+**Two rules that catch everyone out**
+
+* **A tileset is ONE frame.** The map importer takes the tiles from the
+  sprite's *first frame*: a tileset image of 72×24 is one frame of three
+  24×24 tiles, not three frames. Writing three frames gives a sprite
+  that "holds 1 tile".
+* **A generator must not allocate without bound.** The canvas is a plain
+  list of pixels: a sheet that is a few hundred kilobytes is fine, and one
+  that asks for gigabytes will take the machine down with it. Check the
+  sheet's size before writing it, and run the generator under a memory
+  cap (`ulimit -v`) if you are not sure.
+
 ## The presets
 
 `art/palettes/*.json` — six 16-entry banks, ready to paste into an

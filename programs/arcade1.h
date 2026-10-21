@@ -20,6 +20,14 @@ void *memset(void *dst, int c, unsigned n);
 #define BTN_START 0x40u
 #define BTN_SELECT 0x80u
 #define REG_INPUT_PAD (GFX_MMIO_BASE + 0x200u)
+
+/* The screen. The machine is 480x270 (CHEATSHEET.md, `arcade1 info` is the
+ * authority) — every draw is clipped to it. These are the SAME numbers the
+ * VM is compiled with; the games that define their own SCREEN_W/SCREEN_H
+ * are just repeating them. */
+#define ARCADE1_SCREEN_W 480
+#define ARCADE1_SCREEN_H 270
+
 static inline unsigned arcade1_pad(void){ return *(volatile unsigned int*)REG_INPUT_PAD; }
 
 /* Frame time from the timer device (MMIO offset 0x00, read-only): +1 per

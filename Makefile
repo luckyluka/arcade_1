@@ -146,7 +146,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
-        test-art-rig test-art-ingest test-art-qa
+        test-art-rig test-art-ingest test-art-qa test-doc-gaps
 
 all: $(TARGET)
 
@@ -418,6 +418,11 @@ test-art-ingest: tests/test_art_ingest.sh
 # with the canvas library: one good sprite, three deliberately bad.
 test-art-qa: tests/test_art_qa.sh
 	sh tests/test_art_qa.sh .
+
+# ROADMAP_V4 card 7.8: the four doc gaps the round's rehearsal found, each
+# one pinned so it cannot come back.
+test-doc-gaps: $(CLI_BIN) tests/test_doc_gaps.sh
+	sh tests/test_doc_gaps.sh .
 
 # The generated licence summary: every asset, how it was made, its terms.
 art-licenses:

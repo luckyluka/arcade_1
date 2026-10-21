@@ -1009,11 +1009,23 @@ def compile_maps(doc, sprites, anims, palettes, base_dir):
                     break
                 if not isinstance(idx, int) or isinstance(idx, bool) or \
                         not 0 <= idx < n_tiles:
+                    # The tileset is ONE frame spanning the whole tileset
+                    # image: a sprite with several frames holds only the
+                    # first frame's tiles, which is the mistake this
+                    # message has to name (ROADMAP_V4 card 7.8, doc gap 2).
+                    hint = ""
+                    if spr.get("frames", 1) > 1:
+                        hint = (" — the tileset sprite must be ONE frame "
+                                "spanning the whole tileset image, but %s "
+                                "has %d frames of %dx%d (only the first "
+                                "frame's tiles are used)"
+                                % (tname, spr["frames"], spr["w"], spr["h"]))
                     fail_asset(where,
                                "legend %s tile %s out of range — sprite %s "
-                               "holds %d tiles (%d x %d grid)"
+                               "holds %d tiles (%d x %d grid)%s"
                                % (json.dumps(ch), json.dumps(idx), tname,
-                                  n_tiles, spr["w"] // tw, spr["h"] // th))
+                                  n_tiles, spr["w"] // tw, spr["h"] // th,
+                                  hint))
                     broken = True
                     break
                 leg[ch] = (idx + 1, fx, fy)

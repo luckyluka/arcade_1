@@ -2012,11 +2012,31 @@ static int cmd_build(int argc, char **argv)
     }
 
     char elf[1200], bin[1200], crt0[1200], ld[1200], incdir[1200];
+    char srcdir[1024], srcinc[1300];
     snprintf(elf,    sizeof elf,    "%s/program.elf", dir);
     snprintf(bin,    sizeof bin,    "%s/program.bin", dir);
     snprintf(crt0,   sizeof crt0,   "%s/crt0.S", dir);
     snprintf(ld,     sizeof ld,     "%s/link.ld", dir);
     snprintf(incdir, sizeof incdir, "-I%s", dir);
+
+    /* The SOURCE's own directory, so a generated header that sits beside
+     * the game resolves: the game does `#include "assets.h"` and the
+     * header was written next to it by arc1-assetc. (ROADMAP_V4 card 7.8,
+     * doc gap 4: without this the include only worked when the game
+     * happened to be compiled from its own directory.) */
+    {
+        const char *slash = strrchr(src, '/');
+        if (slash) {
+            size_t n = (size_t)(slash - src);
+            if (n >= sizeof srcdir)
+                n = sizeof srcdir - 1;
+            memcpy(srcdir, src, n);
+            srcdir[n] = '\0';
+        } else {
+            snprintf(srcdir, sizeof srcdir, ".");
+        }
+        snprintf(srcinc, sizeof srcinc, "-I%s", srcdir);
+    }
 
     for (size_t i = 0; i < nsdk; i++) {
         char path[1200];
@@ -2029,13 +2049,14 @@ static int cmd_build(int argc, char **argv)
     }
 
     /* Same flags `make program` uses for guests, plus -I so the guest's
-     * own #include "arcade1.h" resolves to the temp copy. */
+     * own #include "arcade1.h" resolves to the temp copy, and -I for the
+     * source's directory (the generated header sits beside the game). */
     char *const gcc_argv[] = {
         (char *)"riscv64-unknown-elf-gcc",
         (char *)"-march=rv32im", (char *)"-mabi=ilp32", (char *)"-Os",
         (char *)"-ffreestanding", (char *)"-nostdlib", (char *)"-nostartfiles",
         (char *)"-msmall-data-limit=0",
-        incdir, (char *)"-T", ld, (char *)"-o", elf, crt0, (char *)src, NULL
+        incdir, srcinc, (char *)"-T", ld, (char *)"-o", elf, crt0, (char *)src, NULL
     };
     if (run_cmd(gcc_argv) != 0) {
         fprintf(stderr, "arcade1: riscv64-unknown-elf-gcc failed "
