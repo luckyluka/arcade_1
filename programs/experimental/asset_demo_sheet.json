@@ -1,9 +1,40 @@
-{ "format": 1,
+{
+  "format": 1,
   "palettes": {
-    "hero": { "bank": 2,
-              "colors": ["#000000", "#FF0000", "#00FF00", "#0000FF", "#FFFFFF"] }
+    "hero": {
+      "bank": 2,
+      "colors": [
+        "#000000",
+        "#FF0000",
+        "#00FF00",
+        "#0000FF",
+        "#FFFFFF"
+      ]
+    }
   },
   "sprites": [
-    { "name": "hero", "file": "asset_demo_hero.png", "palette": "hero",
-      "frames": 4, "origin": [8, 16], "collision": [1, 1, 14, 14] }
-  ] }
+    {
+      "name": "hero",
+      "file": "asset_demo_hero.png",
+      "palette": "hero",
+      "frames": 4,
+      "origin": [
+        8,
+        16
+      ],
+      "collision": [
+        1,
+        1,
+        14,
+        14
+      ],
+      "provenance": {
+        "tool": "agent-authored",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
+    }
+  ]
+}

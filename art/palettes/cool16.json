@@ -1,0 +1,24 @@
+{
+  "name": "cool16",
+  "description": "Cool blues and teals \u2014 water, night, ice.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#0C1424",
+    "#142038",
+    "#1C3050",
+    "#244068",
+    "#2C5080",
+    "#346098",
+    "#3C70B0",
+    "#4A82C0",
+    "#5C94CC",
+    "#70A6D8",
+    "#86B8E4",
+    "#9CCAF0",
+    "#B4DCF8",
+    "#58C0B4",
+    "#8CE0D4"
+  ]
+}

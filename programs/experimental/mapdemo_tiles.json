@@ -3,7 +3,12 @@
   "palettes": {
     "mapdemo": {
       "bank": 5,
-      "colors": ["#000000", "#C63031", "#31F352", "#4261F7"]
+      "colors": [
+        "#000000",
+        "#C63031",
+        "#31F352",
+        "#4261F7"
+      ]
     }
   },
   "sprites": [
@@ -12,7 +17,14 @@
       "file": "mapdemo_tiles.png",
       "palette": "mapdemo",
       "quantize": "exact",
-      "frames": 1
+      "frames": 1,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ],
   "maps": [
@@ -23,7 +35,19 @@
       "tileset": "tiles",
       "tile_w": 16,
       "tile_h": 16,
-      "legend": { ".": null, "o": 0, "s": 2, "#": 3 }
+      "legend": {
+        ".": null,
+        "o": 0,
+        "s": 2,
+        "#": 3
+      },
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "small51",
@@ -32,7 +56,22 @@
       "tileset": "tiles",
       "tile_w": 16,
       "tile_h": 16,
-      "legend": { "o": 0, "s": 2, ".": null, "q": { "tile": 1, "flipX": true } }
+      "legend": {
+        "o": 0,
+        "s": 2,
+        ".": null,
+        "q": {
+          "tile": 1,
+          "flipX": true
+        }
+      },
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "field",
@@ -40,7 +79,19 @@
       "tileset": "tiles",
       "tile_w": 16,
       "tile_h": 16,
-      "legend": { "b": 0, "c": 3, "o": 1, "s": 2 }
+      "legend": {
+        "b": 0,
+        "c": 3,
+        "o": 1,
+        "s": 2
+      },
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ]
 }

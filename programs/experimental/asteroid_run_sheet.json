@@ -34,7 +34,14 @@
         1,
         14,
         14
-      ]
+      ],
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "foe",
@@ -47,14 +54,28 @@
         1,
         14,
         14
-      ]
+      ],
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "space",
       "file": "asteroid_run_tiles.png",
       "palette": "game1",
       "quantize": "exact",
-      "frames": 1
+      "frames": 1,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ],
   "animations": [
@@ -64,7 +85,14 @@
       "frames": [
         0
       ],
-      "ms": 200
+      "ms": 200,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "boost",
@@ -73,7 +101,14 @@
         1,
         2
       ],
-      "ms": 100
+      "ms": 100,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "fire",
@@ -81,7 +116,14 @@
       "frames": [
         3
       ],
-      "ms": 100
+      "ms": 100,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "spin",
@@ -90,7 +132,14 @@
         0,
         1
       ],
-      "ms": 150
+      "ms": 150,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ],
   "maps": [
@@ -109,6 +158,13 @@
           "flipX": true
         },
         "c": 2
+      },
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
       }
     }
   ]

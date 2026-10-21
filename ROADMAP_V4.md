@@ -219,20 +219,32 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 - `docs/experiments/freeze-dossier.md`: one table of every machine-level question seen so far (cap contract, work budget with the 480x270 numbers from card 4.8, memory sizes, audio v2, resolution), with: evidence, decision needed, options, recommendation, who decides. The agent recommends; the owner decides.
 - Games in evidence by then: Breakout, Tetris, Platformer, Asteroid Run, Flappy, Petal Blade (+ the clean-room art game). If fewer than three genres show a need, say so.
 
-## 7. Decisions for the owner (do not decide for them)
+## 7. Decisions for the owner (TAKEN 2026-10-21)
 
-1. **Pillow as an optional dependency for card 7.5.** Without it, raster ingest cannot read JPG; PNG-only input would need a stdlib PNG decoder (more code, no JPG).
-2. **Whether external image-model output may enter the repo at all** (licensing and provenance), or is used only as a local reference never committed.
-3. **The reference JPGs in `round4/`**: keep public, keep local only, or delete from history.
-4. **Art direction** for the first pipeline game: continue dusk-Japan or use a different brief (the clean-room round uses a neutral fantasy village).
-5. **When to decide Audio v2** (after card 8.3).
+1. **Pillow: NO — stdlib only.** The ingest tool (card 7.5) reads PNG and
+   nothing else; zlib is in the standard library, so no new dependency and
+   no JPG. The tool is local-only (see decision 2), so the loss is small.
+2. **Image-model output: NEVER committed.** It may be used locally as a
+   style reference; what ships is always code-generated. The consequence:
+   card 7.5 is a *local* helper, not a path into the build, and the
+   provenance schema (card 7.1) records that a shipped asset is
+   `procedural` or `agent-authored`.
+3. **The reference JPGs: the history stays as it is.** They are already
+   out of the working tree (card 4.7) and their provenance is recorded in
+   `docs/art/REFERENCES.md`; they remain in the git history. Nothing in
+   the repository derives from their pixels.
+4. **Art direction: dusk-Japan for card 7.7** (the rig hero has to beat a
+   known-good procedural one), **the neutral fantasy village stays card
+   7.8's** blind clean-room test.
+5. **Audio v2: decided after card 8.3's brief**, as this roadmap says.
 
 ## 8. First actions for the implementing AI
 
 1. Read §0-§2 and `docs/experiments/round3-cleanroom.md`, `docs/experiments/round5-petalblade.md`.
 2. ~~Execute **4.1 through 4.9** in order. Stop and report.~~ **Done** — see
    the status table in §9.
-3. Wait for the owner's go before Wave 7 (the AI art pipeline).
+3. The owner's go for Wave 7 was given on 2026-10-21 (§7). Card 7.1 is
+   done; **7.2** (the drawing library) is next.
 
 ## 9. Status
 
@@ -251,7 +263,8 @@ that carried it, and the day it landed.
 | 4.7 | Petal Blade promoted to Game #3; the repo cleaned | `86a20d6` | 2026-10-20 |
 | 4.8 | the device work re-measured at 480x270 | `22fdb0d` | 2026-10-20 |
 | 4.9 | AGENTS.md, the status tables, the `make check` budget | (this commit) | 2026-10-20 |
-| 7.1-7.8 | the AI art pipeline | — | not started |
+| 7.1 | the art workspace: presets, style template, provenance | (this commit) | 2026-10-21 |
+| 7.2-7.8 | the AI art pipeline | — | not started |
 | 8.1-8.3 | audio observability | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 

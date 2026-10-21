@@ -28,7 +28,14 @@
       "name": "hero",
       "file": "walkdemo_sheet_art.png",
       "palette": "hero",
-      "frames": 7
+      "frames": 7,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ],
   "animations": [
@@ -38,7 +45,14 @@
       "frames": [
         0
       ],
-      "ms": 200
+      "ms": 200,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     },
     {
       "name": "walk",
@@ -51,7 +65,14 @@
         5,
         6
       ],
-      "ms": 67
+      "ms": 67,
+      "provenance": {
+        "tool": "procedural",
+        "model": "",
+        "prompt": "",
+        "seed": 0,
+        "licence": "this repository"
+      }
     }
   ]
 }

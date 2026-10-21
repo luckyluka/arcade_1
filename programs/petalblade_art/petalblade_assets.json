@@ -218,6 +218,13 @@
    "file": "art/hero.png",
    "palette": "hero",
    "frames": 11,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   },
    "origin": [
     14,
     40
@@ -234,6 +241,13 @@
    "file": "art/oni.png",
    "palette": "oni",
    "frames": 4,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   },
    "origin": [
     14,
     36
@@ -250,6 +264,13 @@
    "file": "art/beetle.png",
    "palette": "beetle",
    "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   },
    "origin": [
     10,
     12
@@ -265,55 +286,118 @@
    "name": "tiles",
    "file": "art/tiles.png",
    "palette": "terrain",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "ridge",
    "file": "art/bg_ridge.png",
    "palette": "ridge",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "mid",
    "file": "art/bg_mid.png",
    "palette": "mid",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "near",
    "file": "art/bg_near.png",
    "palette": "near",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "moon",
    "file": "art/moon.png",
    "palette": "sky",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "slash",
    "file": "art/slash.png",
    "palette": "fx",
-   "frames": 3
+   "frames": 3,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "fx",
    "file": "art/fx.png",
    "palette": "fx",
-   "frames": 4
+   "frames": 4,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "coin",
    "file": "art/coin.png",
    "palette": "fx",
-   "frames": 2
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "goal",
    "file": "art/goal.png",
    "palette": "goal",
-   "frames": 1
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   }
  ],
  "animations": [
@@ -325,7 +409,14 @@
     2,
     3
    ],
-   "ms": 90
+   "ms": 90,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "heroslash",
@@ -335,7 +426,14 @@
     7,
     8
    ],
-   "ms": 45
+   "ms": 45,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "oniwalk",
@@ -344,7 +442,14 @@
     0,
     1
    ],
-   "ms": 140
+   "ms": 140,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "oniattack",
@@ -353,7 +458,14 @@
     2,
     3
    ],
-   "ms": 90
+   "ms": 90,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   },
   {
    "name": "crawl",
@@ -362,7 +474,14 @@
     0,
     1
    ],
-   "ms": 150
+   "ms": 150,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
   }
  ],
  "maps": [
@@ -389,6 +508,13 @@
     "l": 13,
     "t": 14,
     "v": 15
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
    }
   }
  ]

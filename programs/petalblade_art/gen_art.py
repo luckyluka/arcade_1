@@ -1299,6 +1299,13 @@ def register_sprites():
     SPRITES["goal"] = dict(file="goal", pal="goal", frames=goal_frames())
 
 
+# Provenance (ROADMAP_V4 card 7.1): every asset this generator paints is
+# procedural, deterministic and licensed with the repository. The seed is
+# fixed: the generator uses no randomness at all, so the seed is 0.
+PROVENANCE = {"tool": "procedural", "model": "", "prompt": "", "seed": 0,
+              "licence": "this repository"}
+
+
 def make_assets():
     doc = {"format": 1, "palettes": {}, "sprites": [], "animations": [],
            "maps": []}
@@ -1308,7 +1315,8 @@ def make_assets():
             "colors": ["#000000"] + [hx(c) for c in colors[1:]]}
     for name, s in SPRITES.items():
         e = {"name": name, "file": "art/%s.png" % s["file"],
-             "palette": s["pal"], "frames": len(s["frames"])}
+             "palette": s["pal"], "frames": len(s["frames"]),
+             "provenance": dict(PROVENANCE)}
         if s.get("origin"):
             e["origin"] = s["origin"]
         if s.get("collision"):
@@ -1317,10 +1325,11 @@ def make_assets():
     for name, s in SPRITES.items():
         for (aname, frames, ms) in (s.get("anims") or []):
             doc["animations"].append({"name": aname, "sprite": name,
-                                     "frames": frames, "ms": ms})
+                                     "frames": frames, "ms": ms,
+                                     "provenance": dict(PROVENANCE)})
     doc["maps"].append({"name": "level1", "file": "level1.txt",
                         "tileset": "tiles", "tile_w": 16, "tile_h": 16,
-                        "legend": LEGEND})
+                        "legend": LEGEND, "provenance": dict(PROVENANCE)})
     return doc
 
 

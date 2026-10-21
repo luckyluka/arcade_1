@@ -94,7 +94,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-golden golden-update check test-frame-rules test-video-worst \
         test-video-palette test-video-sprite4 test-video-tilemap4 test-color \
         test-run test-info test-golden-cli test-pad-trace test-color-trunc \
-        test-petalblade test-agents-md
+        test-petalblade test-agents-md test-art-palettes
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -143,7 +143,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-agents-md
+        test-agents-md test-art-palettes
 
 all: $(TARGET)
 
@@ -354,6 +354,15 @@ $(GUEST_BUILD)/probe_trunc_masked.bin: $(PROBE_DIR)/probe_trunc.c programs/gfx.h
 test-color-trunc: $(CLI_BIN) $(GUEST_BUILD)/probe_trunc.bin \
         $(GUEST_BUILD)/probe_trunc_masked.bin tests/test_color_trunc.sh
 	sh tests/test_color_trunc.sh $(CLI_BIN) $(GUEST_BUILD) $(ARC1_ROM_DIR)
+
+# ROADMAP_V4 card 7.1: the art pipeline's workspace — the palette presets,
+# the style template, the tool package and the provenance schema.
+test-art-palettes: tests/test_art_palettes.sh
+	sh tests/test_art_palettes.sh .
+
+# The generated licence summary: every asset, how it was made, its terms.
+art-licenses:
+	python3 tools/gen_art_licenses.py
 
 # ROADMAP_V4 card 4.9: AGENTS.md — the map for a fresh agent. The test
 # checks that every relative link resolves and that the file stays inside

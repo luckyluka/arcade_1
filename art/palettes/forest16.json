@@ -1,0 +1,24 @@
+{
+  "name": "forest16",
+  "description": "Forest greens and bark browns \u2014 trees, moss, canopies.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#10180C",
+    "#1C2A14",
+    "#283C1E",
+    "#345028",
+    "#406432",
+    "#4C7A40",
+    "#5A8E4E",
+    "#68A25C",
+    "#7AB66C",
+    "#8CCA7E",
+    "#A2DE92",
+    "#C0EEB4",
+    "#6A4A28",
+    "#8A6438",
+    "#AE8450"
+  ]
+}

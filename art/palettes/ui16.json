@@ -1,0 +1,24 @@
+{
+  "name": "ui16",
+  "description": "High-contrast UI: near-black to white, plus four signal colours.",
+  "outline": 1,
+  "transparent_key": "#000000",
+  "colors": [
+    "#000000",
+    "#101018",
+    "#1E1E2A",
+    "#2C2C3C",
+    "#3C3C50",
+    "#505068",
+    "#686880",
+    "#84849C",
+    "#A0A0B4",
+    "#C0C0CC",
+    "#E0E0E8",
+    "#FFFFFF",
+    "#C63A3A",
+    "#E0A63A",
+    "#3AC67A",
+    "#3A8AC6"
+  ]
+}

@@ -1108,6 +1108,66 @@ cmp "$OUT/older/asteroid_run_sheet.h" \
 CHECKS=$((CHECKS + 1))
 echo "  ok: an older generated header is byte-identical"
 
+# --- 14) provenance (ROADMAP_V4 card 7.1) ------------------------------------
+# An asset may carry a provenance block (tool/model/prompt/seed/licence).
+# The block is IGNORED for the output (the header is byte-identical with or
+# without it) but its keys are validated, and --require-provenance fails
+# when an asset has none.
+
+PROV='{"tool":"procedural","model":"","prompt":"","seed":7,"licence":"this repository"}'
+printf 'x\n' > "$OUT/provlvl.txt"
+mapman "$OUT/provok.json" "[{\"name\":\"lvl\",\"file\":\"provlvl.txt\",\"tileset\":\"tiles\",\"tile_w\":16,\"tile_h\":16,\"legend\":{\"x\":0},\"provenance\":$PROV}]"
+expect 0 "an asset with a provenance block compiles" \
+    python3 "$TOOL" --assets "$OUT/provok.json" --out-dir "$OUT/provok"
+# the block does not change the generated header
+python3 "$TOOL" --assets "$OUT/provok.json" --out-dir "$OUT/provplain" >/dev/null
+mapman "$OUT/provplain.json" '[{"name":"lvl","file":"provlvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0}}]'
+python3 "$TOOL" --assets "$OUT/provplain.json" --out-dir "$OUT/provplain" >/dev/null
+cmp "$OUT/provok/provok.h" "$OUT/provplain/provplain.h" || \
+    fail "a provenance block changed the generated header"
+CHECKS=$((CHECKS + 1))
+echo "  ok: the provenance block is ignored for the output"
+
+# an unknown key teaches
+mapman "$OUT/provbadkey.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0},"provenance":{"tool":"procedural","licence":"x","artist":"me"}}]'
+expect 1 "an unknown provenance key is a validation error" \
+    python3 "$TOOL" --assets "$OUT/provbadkey.json" --out-dir "$OUT/gen"
+assert_has 'provenance key "artist" is not one of' "provenance key error"
+
+# a wrong type teaches
+mapman "$OUT/provbadtype.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0},"provenance":{"tool":"procedural","licence":"x","seed":"seven"}}]'
+expect 1 "a non-integer provenance seed is a validation error" \
+    python3 "$TOOL" --assets "$OUT/provbadtype.json" --out-dir "$OUT/gen"
+assert_has 'provenance "seed" must be an integer' "provenance seed type error"
+
+# an unknown tool teaches
+mapman "$OUT/provbadtool.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0},"provenance":{"tool":"magic","licence":"x"}}]'
+expect 1 "an unknown provenance tool is a validation error" \
+    python3 "$TOOL" --assets "$OUT/provbadtool.json" --out-dir "$OUT/gen"
+assert_has 'provenance "tool" "magic" is not one of' "provenance tool error"
+
+# an empty licence teaches
+mapman "$OUT/provnolic.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0},"provenance":{"tool":"procedural","licence":"  "}}]'
+expect 1 "an empty provenance licence is a validation error" \
+    python3 "$TOOL" --assets "$OUT/provnolic.json" --out-dir "$OUT/gen"
+assert_has 'provenance "licence" is empty' "provenance licence error"
+
+# --require-provenance fails when an asset has none
+mapman "$OUT/provnone.json" '[{"name":"lvl","file":"lvl.txt","tileset":"tiles","tile_w":16,"tile_h":16,"legend":{"x":0}}]'
+expect 1 "--require-provenance fails when an asset has no provenance" \
+    python3 "$TOOL" --assets "$OUT/provnone.json" --out-dir "$OUT/gen" --require-provenance
+assert_has "have no provenance" "require-provenance error"
+expect 0 "--require-provenance passes when every asset has one" \
+    python3 "$TOOL" --assets "$OUT/provok.json" --out-dir "$OUT/gen" --require-provenance
+
+# --licenses writes the generated summary
+python3 "$TOOL" --assets "$OUT/provok.json" --out-dir "$OUT/gen" \
+    --licenses "$OUT/LIC.md" >/dev/null
+grep -q "| lvl |" "$OUT/LIC.md" || fail "the licences file has no row for the asset"
+grep -q "procedural" "$OUT/LIC.md" || fail "the licences file does not name the tool"
+CHECKS=$((CHECKS + 2))
+echo "  ok: provenance validates, --require-provenance gates, --licenses writes"
+
 # --- harness self-check: the mini-PNG-writer really writes a PNG ------------
 write_png_rgb "$OUT/fixture.png" 4 2 \
     "FF000000FF000000FF80402040406080C0D0E0F00102030405"
