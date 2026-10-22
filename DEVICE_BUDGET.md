@@ -15,13 +15,20 @@ hardware has been built or simulated).
 > re-measures the games at the real resolution**.
 > The cost-model **decision is deferred** (see the end of this file).
 
-## 0. Re-measured at 480×270 (2026-10-20)
+## 0. Re-measured at 480×270 (2026-10-20; brickstorm added 2026-10-22)
 
 **[M] MEASURED** at 480×270 on 2026-10-20 by `tools/measure_budget.sh`, which
 runs `arcade1 inspect` over every golden game plus Petal Blade and writes
 `docs/experiments/budget-480x270.csv` (the raw numbers, one row per game).
 The script is measurement only — it changes no machine state, and no source
 changed with it.
+
+**2026-10-22.** `brickstorm` (Game #5) had never been measured: the script's
+game list is maintained by hand and had fallen behind the roster, so the CSV
+omitted the newest game entirely. It is measured now, and it lands at the
+bottom of the fleet on pixel work — see the note under the table. Re-running
+the script left the other twelve rows byte-identical, which is the expected
+result of a deterministic machine.
 
 Sampling: `inspect` reports the **last** frame's counters, so the script
 sweeps the frame count with a stride of 50 (one sample per step; `STRIDE=1`
@@ -44,6 +51,35 @@ over the machine painted the whole screen in one frame.
 | asteroid_run   |  760 | 16 |  2,456 /  4,950 | 152,371 / 156,315 |  53 /  62 | 1.176 / 1.206 |
 | flappy         |  520 | 11 |    591 /    602 | 150,895 / 151,086 |  26 /  28 | 1.164 / 1.166 |
 | **petalblade** | 1202 | 25 |  3,620 /  5,808 | 335,029 / 335,816 |  72 /  72 | **2.585 / 2.591** |
+| **brickstorm**| 2800 | 56 |  5,135 / 14,176 |  50,437 / 191,111 | 115 / 143 | **0.389 / 1.475** |
+
+`brickstorm` is the only game here whose overdraw is **below 1.0** — on
+average it writes less than one screenful per frame, where every other
+game repaints the screen at least once and Petal Blade paints it two and a
+half times. That is not an accident of its art: it is the only game that
+repairs its static background in rectangles instead of repainting it
+(see `docs/experiments/brickstorm-stale-pixels.md`).
+
+Measured on the same 2800-frame session, before and after that change:
+
+| brickstorm | `inst` avg/max | `px` avg/max | `cmd` avg/max | overdraw avg/max |
+|---|---:|---:|---:|---:|
+| full repaint | 5,650 / 11,309 | 190,948 / 191,025 | 148 / 154 | 1.473 / 1.474 |
+| dirty rects | 5,135 / 14,176 | **50,437** / 191,111 | 115 / 143 | **0.389** / 1.475 |
+
+Pixel work falls **3.8×** and commands by a fifth, with instructions
+slightly *down* on average — the repair costs less CPU than the repaint
+it replaces. Note the shape of it: before, the overdraw was almost flat
+(1.473 avg against a 1.474 max) because repainting the whole background
+dominated everything and left no room for variation. After, the average
+is 0.389 but the worst frame is 1.475 — **the new renderer's worst frame
+costs about what the old renderer's typical frame cost.**
+
+Those peaks are the frames where the camera is shaking, which forces the
+whole brick field to be restored at once — and `brickstorm`'s shake is
+frozen for the rest of the game-over screen (see the same document), so
+those frames recur rather than being rare. Fixing the shake is a
+behaviour change and was deliberately left alone.
 
 What the numbers say, without proposing a cost model:
 

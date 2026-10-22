@@ -31,9 +31,18 @@ case "$CLI" in /*) ;; *) CLI="$(pwd)/$CLI" ;; esac
 # The golden games plus Petal Blade (Game #3). "golden_name:rom_name" —
 # the golden file and the ROM have different names for three of them (the
 # same mapping the Makefile's golden_rom uses).
+#
+# NOTE ON DRIFT: this list is maintained by hand and has already fallen
+# behind the Makefile's GOLDEN_IMGS once — brickstorm (Game #5) was
+# never measured at all, so the CSV silently omitted the newest game in
+# the roster. It is measured now. shmup and petalblade_rig are still
+# missing here while present in GOLDEN_IMGS, and asteroid_run is present
+# here but not in GOLDEN_IMGS; the two lists are not the same list and
+# neither claims to be derived from the other. Worth reconciling if the
+# budget is ever used to gate a change.
 GAMES=${GAMES:-"breakout tetris platformer scroll:scroll_demo color:color_demo \
 pong:example_pong snake:example_snake example-color:example_color \
-m29game asteroid_run flappy petalblade"}
+m29game asteroid_run flappy petalblade brickstorm"}
 
 SCREEN_PIXELS=129600        # 480 * 270
 
