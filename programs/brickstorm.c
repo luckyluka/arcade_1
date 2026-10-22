@@ -170,6 +170,7 @@ typedef struct {
     int vx, vy;            /* 1/16 px per frame */
     int alive;
     int stuck;             /* the catch power-up holds it on the paddle */
+    int stick_dx;          /* where on the paddle it is held, in px */
 } Ball;
 
 typedef struct { int x, y, kind, alive; } Drop;
@@ -589,6 +590,7 @@ static void serve_ball(void)
     ball_list[0].vx = 0;
     ball_list[0].vy = 0;
     ball_list[0].stuck = 1;
+    ball_list[0].stick_dx = 0;      /* it waits in the middle of the paddle */
     ball_list[0].alive = 1;
     balls = 1;
     trail_n = 0;
@@ -635,12 +637,16 @@ static void apply_power(int kind)
         power_timer = 900;
         break;
     case P_CATCH:
+        /* The paddle can CATCH the ball from now on: the next ball that
+         * lands on it is held instead of being returned, and A lets it
+         * go. The ball is NOT pulled to the paddle — snapping it there
+         * was a 30 px jump in one frame, which the play-test audit
+         * caught as a teleport (the "the ball was moved by magic"
+         * feeling). It is caught where it lands, and it rides the
+         * paddle from there. */
         catch_timer = 600;
         power = P_CATCH;
         power_timer = 600;
-        for (i = 0; i < 8; i++)
-            if (ball_list[i].alive)
-                ball_list[i].stuck = 1;
         break;
     default:
         break;
@@ -800,9 +806,9 @@ static void ball_vs_bricks(Ball *b)
                 if (over_y <= over_x) {
                     b->vy = -b->vy;
                     if (b->vy > 0)
-                        b->y = (by - BALL_S) * FP;
-                    else
                         b->y = (by + BRICK_H) * FP;
+                    else
+                        b->y = (by - BALL_S) * FP;
                 } else {
                     b->vx = -b->vx;
                     if (b->vx > 0)
@@ -815,12 +821,21 @@ static void ball_vs_bricks(Ball *b)
             }
 
             if (over_y <= over_x) {
-                /* the ball came at the brick's top or its bottom */
+                /* The ball came at the brick's top or its bottom: it
+                 * bounces vertically, and the correction puts it back on
+                 * the side it came from.
+                 *
+                 * (The two sides used to be the wrong way round: a ball
+                 * that hit a brick's underside was teleported 19 px UP,
+                 * through the brick and into the row above — where it
+                 * broke that row's bricks and set off their bombs. That
+                 * was the "the ball is magically moved" feeling, and the
+                 * play-test audit's teleport detector found it.) */
                 b->vy = -b->vy;
                 if (b->vy > 0)
-                    b->y = (by - BALL_S) * FP;
+                    b->y = (by + BRICK_H) * FP;   /* now going down: below */
                 else
-                    b->y = (by + BRICK_H) * FP;
+                    b->y = (by - BALL_S) * FP;   /* now going up: above */
             } else {
                 /* The ball came at the brick's SIDE, and here the original
                  * Breakout's rule is the better one: a brick never
@@ -949,6 +964,22 @@ static void ball_vs_paddle(Ball *b)
         cross_x = (b->x - b->vx) + (b->vx * frac) / 256;
     }
 
+    /* The catch: the ball is held where it landed, and it rides the
+     * paddle from there. (It used to be pulled to the paddle's centre
+     * the moment the power-up was picked up — a 30 px jump in one
+     * frame, which the audit caught as a teleport.) */
+    if (catch_timer > 0) {
+        b->stuck = 1;
+        b->stick_dx = (cross_x / FP) - paddle_x;
+        b->x = cross_x;
+        b->y = (PADDLE_Y - BALL_S) * FP;
+        b->vx = 0;
+        b->vy = 0;
+        sfx(700, 500, 8);
+        paddle_squash = 3;
+        return;
+    }
+
     /* The catch point decides the DIRECTION; the paddle's own motion may
      * only bend the angle WITHIN that direction. A ball caught on the
      * left always leaves to the left, a ball caught dead centre leaves
@@ -1040,7 +1071,8 @@ static void update_balls(void)
         if (!b->alive)
             continue;
         if (b->stuck) {
-            b->x = paddle_x * FP;
+            /* the ball rides the paddle, where it was caught */
+            b->x = (paddle_x + b->stick_dx) * FP;
             b->y = (PADDLE_Y - BALL_S) * FP;
             continue;
         }
@@ -1258,6 +1290,19 @@ static void update(void)
             for (i = 0; i < 8; i++)
                 if (ball_list[i].alive)
                     ball_list[i].stuck = 0;
+        }
+    }
+    /* A lets a caught ball go: it is released where it was caught, and
+     * the paddle hands it back on the catch-point rule as usual. */
+    if ((pad & BTN_A) && catch_timer > 0) {
+        for (i = 0; i < 8; i++) {
+            if (ball_list[i].alive && ball_list[i].stuck) {
+                ball_list[i].stuck = 0;
+                ball_list[i].vy = 1;      /* it will bounce off the paddle */
+                catch_timer = 0;          /* and the catch is over */
+                power = 0;
+                break;
+            }
         }
     }
     if (laser_timer > 0) {

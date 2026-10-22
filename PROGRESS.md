@@ -364,6 +364,22 @@ ROM are exactly as they were.
     count of the ones that broke the rule (`hit_bad`): a blind paddle
     catches the ball two or three times in six thousand frames, so the
     recorder alone could only ever see a handful of them.
+* **The ball was teleported, twice.** The audit grew a *teleport
+  detector* (the ball may not move further in a frame than its own
+  speed, plus the one pop the classic makes when it puts the ball back
+  outside a brick) and it found two real ones:
+  * the brick collision's **position correction was the wrong way
+    round**: a ball that hit a brick's underside was put 19 px *up*,
+    through the brick and into the row above — where it broke that
+    row's bricks and set off their bombs. That is the "when the bricks
+    explode the ball is magically moved" feeling, and it had been in
+    the game since the first cut. The correction now puts the ball back
+    on the side it came from.
+  * the **CATCH power-up pulled the ball to the paddle** the moment it
+    was picked up — a 30 px jump in one frame. The ball is now caught
+    where it lands and rides the paddle from there, and **A** lets it
+    go (before, there was no way to release it at all: the ball hung
+    off the paddle until the power-up ran out).
   * the **catch point could land off the paddle**: the swept crossing is
     a moment in the past and the paddle may have moved since, so the
     offset could exceed the paddle's half width and the launch angle

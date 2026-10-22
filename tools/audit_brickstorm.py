@@ -46,6 +46,7 @@ import sys
 # --- the game's own numbers (arcade1 info is the authority) ----------------
 FLAT_LIMIT = 223          # |vx| may not exceed 223/128 * |vy|
 PADDLE_Y = 244
+SCREEN_H = 270
 BALL_S = 8
 
 # The states: 0 title, 1 serve, 2 playing, 3 the death pause,
@@ -216,7 +217,6 @@ def audit(name, rows, report, verbose):
             if (prev_state, st) not in LEGAL_STATES:
                 flag("state", frame, "the state jumped %d -> %d"
                      % (prev_state, st))
-        prev_state = st
 
         # --- the contacts -------------------------------------------------
         contact_now = f.get("hit_count", 0) > prev_hits
@@ -260,7 +260,25 @@ def audit(name, rows, report, verbose):
                 flag("inside", frame, "the ball is inside the paddle: "
                      "x=%d y=%d paddle=%d" % (f.get("ball_x"), f.get("ball_y"),
                                              f.get("paddle_x")))
-            # the glove: the observable may have moved to another ball
+            # the ball may not be TELEPORTED: it may not move further in a
+            # frame than its own speed, plus the one pop the classic
+            # makes (the ball is put back just outside the brick it
+            # hit). A contact is exempt: the paddle puts the ball back
+            # on its plane.
+            if prev_pos is not None and not contact_now and st == prev_state:
+                dx = abs(f.get("ball_x", 0) - prev_pos[0])
+                dy = abs(f.get("ball_y", 0) - prev_pos[1])
+                budget = max(ax, ay) / 16.0 + BALL_S + 3
+                # a ball that fell off the screen is replaced by a new one
+                # on the paddle, and the state changes when that happens:
+                # that is the serve, not a teleport
+                if max(dx, dy) > budget:
+                    flag("teleport", frame,
+                         "the ball moved %d px in a frame (it may move "
+                         "%.1f): (%d,%d) -> (%d,%d)"
+                         % (max(dx, dy), budget, prev_pos[0], prev_pos[1],
+                            f.get("ball_x"), f.get("ball_y")))
+            # the observable may have moved to another ball
             switched = False
             if prev_bid is not None and f.get("ball_id") != prev_bid:
                 switched = True
@@ -286,6 +304,8 @@ def audit(name, rows, report, verbose):
             prev = (a, vx, vy)
         else:
             prev = None
+
+        prev_state = st
 
     if verbose:
         sys.stderr.write("audit: %s — %d contacts\n" % (name, contacts))
