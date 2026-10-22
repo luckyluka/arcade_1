@@ -1459,12 +1459,13 @@ static void draw_hud(void)
     for (i = 0; i < lives && i < 5; i++)
         arcade1_rect(266 + i * 12, 3, 9, 4, arcade1_rgb(0x70, 0xE0, 0xF0));
 
-    /* the power-up in force, with the time left */
+    /* The power-up in force, with the time left. It lives on the SECOND
+     * row: on the first it sat on top of the hi-score. */
     if (power) {
         int left = power_timer;
-        text_draw(340, 2, "POWER", arcade1_rgb(0xFF, 0xC0, 0x60));
-        arcade1_rect(392, 3, 60, 5, arcade1_rgb(0x20, 0x30, 0x50));
-        arcade1_rect(392, 3, (left * 60) / 900, 5, arcade1_rgb(0x60, 0xFF, 0x90));
+        text_draw(330, 11, "POWER", arcade1_rgb(0xFF, 0xC0, 0x60));
+        arcade1_rect(378, 12, 60, 5, arcade1_rgb(0x20, 0x30, 0x50));
+        arcade1_rect(378, 12, (left * 60) / 900, 5, arcade1_rgb(0x60, 0xFF, 0x90));
     }
 
     /* the boss's health bar */
