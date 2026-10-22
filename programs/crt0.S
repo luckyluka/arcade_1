@@ -60,6 +60,13 @@ _start:
  * code and rodata, so adding them here cannot move a single address in an
  * already-built guest: every committed golden stays reproducible. */
     .section .arcade1.text, "ax", @progbits
+    /* 4-byte alignment: a function's address must be a multiple of 4, or the
+     * RISC-V call relocations that reach it come out one byte off and the
+     * guest jumps into the rodata instead of the function. The linker
+     * script aligns the section too; this is the belt to that pair of
+     * braces. (The linker script's ALIGN(4) is the one that matters —
+     * the section's own alignment is what decides where it lands.) */
+    .balign 4
 
     .global memcpy
     .type   memcpy, @function

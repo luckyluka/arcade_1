@@ -28,6 +28,7 @@ SECTIONS
         *(.text .text.*)
         *(.rodata .rodata.*)
         *(.srodata .srodata.*)
+        . = ALIGN(4);                    /* the runtime follows, 4-aligned: */
         *(.arcade1.text)                 /* crt0's memcpy/memset/memmove, */
                                          /* appended last: the guest's own */
                                          /* code and rodata keep their      */
