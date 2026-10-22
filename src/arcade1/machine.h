@@ -41,8 +41,23 @@
 /* Stereo frames produced per frame: 48000 / 60 = 800. */
 #define ARCADE1_AUDIO_FRAMES (ARCADE1_SAMPLE_RATE_INT / ARCADE1_FPS_INT)
 
-/* Framebuffer size in pixels (RGB565, 16-bit, row-major). */
+#ifndef ARCADE1_HD_SCALE
+#define ARCADE1_HD_SCALE 1
+#endif
+
+/* Framebuffer size in LOGICAL pixels (RGB565, 16-bit, row-major). This is the
+ * guest's grid and never changes; every test and tool that counts pixels uses
+ * it. */
 #define ARCADE1_FB_PIXELS (ARCADE1_WIDTH * ARCADE1_HEIGHT)
+
+/* Physical scanout framebuffer geometry. Normally identical to the logical
+ * grid above; the HD experiment (HD_EXPERIMENT.md) sets ARCADE1_HD_SCALE to 2
+ * or 4 in a SEPARATE binary to measure what a higher-resolution machine would
+ * cost. The default build folds all of these back to the values above. */
+#define ARCADE1_FB_W      (ARCADE1_WIDTH  * ARCADE1_HD_SCALE)
+#define ARCADE1_FB_H      (ARCADE1_HEIGHT * ARCADE1_HD_SCALE)
+#define ARCADE1_FB_STRIDE ARCADE1_FB_W
+#define ARCADE1_FB_PHYS   ((uint32_t)ARCADE1_FB_W * (uint32_t)ARCADE1_FB_H)
 
 /* Safety cap: guest instructions executed per frame while firmware is
  * attached (docs.md M15). A well-behaved guest presents its frame long
@@ -85,7 +100,7 @@ typedef struct arcade1_input {
 
 typedef struct arcade1_machine {
     /* Output, valid after arcade1_run_frame(). */
-    uint16_t framebuffer[ARCADE1_FB_PIXELS];    /* RGB565, row-major.       */
+    uint16_t framebuffer[ARCADE1_FB_PHYS];     /* RGB565, row-major.       */
     int16_t  audio[ARCADE1_AUDIO_FRAMES * 2];   /* interleaved stereo L,R.  */
 
     /* Memory bus (ROM + RAM + MMIO). The CPU accesses it via

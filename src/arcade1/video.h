@@ -216,6 +216,14 @@ typedef struct arcade1_video {
  * framebuffer/ROM/RAM pointers (set once by the machine at init). */
 void arcade1_video_reset(arcade1_video_t *v);
 
+/* The host's side of the pixel-plot choke point (HD experiment H1): expand
+ * one LOGICAL pixel into its ARCADE1_HD_SCALE x ARCADE1_HD_SCALE physical
+ * block. Identical to the raw store machine.c used to do when k = 1. Never
+ * counted in pixels_written — the host's test pattern, pad indicator and demo
+ * square are not guest commands and never were. */
+void arcade1_video_draw_px(arcade1_video_t *v, int64_t x, int64_t y,
+                           uint16_t c);
+
 /* MMIO handler pair for the machine's muxed window handler (docs.md M11
  * contract); ctx is the arcade1_video_t*. Unknown offsets read 0 / ignore
  * writes. Commands execute synchronously at the write. */

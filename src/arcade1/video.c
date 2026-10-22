@@ -120,6 +120,61 @@ const arcade1_video_stats_t *arcade1_video_frame_totals(const arcade1_video_t *v
 
 /* --- Commands (run synchronously at the VIDEO_CMD write) ------------------ */
 
+/* --- The pixel-plot choke point (HD experiment H1) ------------------------
+ *
+ * Every framebuffer store in the machine goes through video_plot() or
+ * arcade1_video_draw_px(); together they are the only places that know the
+ * physical geometry. Coordinates are LOGICAL — the guest's 480x270 grid — and
+ * all clipping is expressed in that same grid, before expansion.
+ *
+ * At the default ARCADE1_HD_SCALE = 1 the k x k loop below is a single store
+ * (plus a single owner store while recording), exactly what each call site had
+ * before it, so the compiled behaviour is unchanged. With a scale it writes
+ * the k x k physical block whose top-left corner is logical (x, y):
+ * nearest-neighbour expansion, no filtering.
+ *
+ * pixels_written is counted inside video_plot() and nowhere else, k^2 per
+ * logical pixel, so "k^2 times the k=1 value, exactly, for every command
+ * type" holds by construction rather than by each command remembering to
+ * multiply. The host's own drawing (test pattern, D-pad indicator, demo
+ * square) is not a guest command and never counted — so it goes through
+ * arcade1_video_draw_px(), which does not count either. */
+static void video_plot_block(arcade1_video_t *v, int64_t x, int64_t y,
+                             uint16_t c, uint16_t *owner, uint16_t owner_id)
+{
+    const int64_t px0 = x * ARCADE1_HD_SCALE;
+    const int64_t py0 = y * ARCADE1_HD_SCALE;
+    int64_t py, px;
+
+    for (py = py0; py < py0 + ARCADE1_HD_SCALE; py++) {
+        uint16_t *const row = &v->framebuffer[py * (int64_t)ARCADE1_FB_STRIDE];
+        uint16_t *const row_o = (owner != 0)
+            ? &owner[py * (int64_t)ARCADE1_FB_STRIDE] : 0;
+
+        for (px = px0; px < px0 + ARCADE1_HD_SCALE; px++) {
+            row[px] = c;
+            if (row_o != 0)
+                row_o[px] = owner_id;
+        }
+    }
+}
+
+/* One logical pixel of a guest command. */
+static void video_plot(arcade1_video_t *v, int64_t x, int64_t y, uint16_t c,
+                       uint16_t *owner, uint16_t owner_id)
+{
+    video_plot_block(v, x, y, c, owner, owner_id);
+    v->stats.pixels_written += (uint32_t)(ARCADE1_HD_SCALE * ARCADE1_HD_SCALE);
+}
+
+/* One logical pixel of the host's own drawing (machine.c): same block, no
+ * accounting, because the host never counted these writes either. */
+void arcade1_video_draw_px(arcade1_video_t *v, int64_t x, int64_t y,
+                           uint16_t c)
+{
+    video_plot_block(v, x, y, c, 0, 0);
+}
+
 static void video_clear(arcade1_video_t *v)
 {
     const uint16_t c = (uint16_t)v->color;
@@ -128,19 +183,15 @@ static void video_clear(arcade1_video_t *v)
     v->stats.commands++;
     if (v->framebuffer == 0)
         return;
-    if (v->owner == 0) {                    /* B2 off: exactly the old loop */
-        for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++)
-            v->framebuffer[i] = c;
-    } else {                                /* recording: stamp as we write  */
-        const uint16_t  id = (uint16_t)v->rec_cur_id;
+    {                                       /* owner is NULL when not recording */
         uint16_t *const owner = v->owner;
+        const uint16_t id = (uint16_t)v->rec_cur_id;
+        unsigned y, x;
 
-        for (unsigned i = 0; i < (unsigned)ARCADE1_FB_PIXELS; i++) {
-            v->framebuffer[i] = c;
-            owner[i] = id;
-        }
+        for (y = 0; y < (unsigned)ARCADE1_HEIGHT; y++)
+            for (x = 0; x < (unsigned)ARCADE1_WIDTH; x++)
+                video_plot(v, (int64_t)x, (int64_t)y, c, owner, id);
     }
-    v->stats.pixels_written += (uint32_t)ARCADE1_FB_PIXELS;
 }
 
 static void video_set_pixel(arcade1_video_t *v)
@@ -153,13 +204,10 @@ static void video_set_pixel(arcade1_video_t *v)
         return;
     /* Out-of-range coordinates are stored in the register (and readable back)
      * but the plot is clipped: nothing is written outside the screen. */
-    if (v->x < (uint32_t)ARCADE1_WIDTH && v->y < (uint32_t)ARCADE1_HEIGHT) {
-        v->framebuffer[v->y * (uint32_t)ARCADE1_WIDTH + v->x] = c;
-        if (v->owner)
-            v->owner[v->y * (uint32_t)ARCADE1_WIDTH + v->x] =
-                (uint16_t)v->rec_cur_id;
-        v->stats.pixels_written++;      /* clipped away: no pixel written */
-    }
+    if (v->x < (uint32_t)ARCADE1_WIDTH && v->y < (uint32_t)ARCADE1_HEIGHT)
+        /* clipped away: no plot at all, so pixels_written is untouched */
+        video_plot(v, (int64_t)v->x, (int64_t)v->y, c, v->owner,
+                   (uint16_t)v->rec_cur_id);
 }
 
 static void video_present(arcade1_video_t *v)
@@ -214,26 +262,17 @@ static void video_fill(arcade1_video_t *v)
 
     video_clip((int32_t)v->x, (int32_t)v->y, v->w, v->h, &x0, &x1, &y0, &y1);
 
-    if (v->owner == 0) {                    /* B2 off: exactly the old loop */
+    {                                       /* owner is NULL when not recording */
+        uint16_t *const owner = v->owner;
+        const uint16_t id = (uint16_t)v->rec_cur_id;
+
         for (py = y0; py < y1; py++)
             for (px = x0; px < x1; px++)
-                v->framebuffer[py * (int64_t)ARCADE1_WIDTH + px] =
-                    (uint16_t)v->color;
-    } else {                                /* recording: stamp as we write  */
-        const uint16_t  id = (uint16_t)v->rec_cur_id;
-        uint16_t *const owner = v->owner;
-
-        for (py = y0; py < y1; py++)
-            for (px = x0; px < x1; px++) {
-                const int64_t i = py * (int64_t)ARCADE1_WIDTH + px;
-
-                v->framebuffer[i] = (uint16_t)v->color;
-                owner[i] = id;
-            }
+                video_plot(v, px, py, (uint16_t)v->color, owner, id);
     }
     /* Every pixel of the clipped window is written (a fill has no
-     * transparency), so the on-screen area is exactly the work done. */
-    v->stats.pixels_written += (uint32_t)((x1 - x0) * (y1 - y0));
+     * transparency), so pixels_written — counted inside video_plot(), once
+     * per logical pixel times k^2 — is exactly the work done. */
 }
 
 /* Fetch one byte of a 1-bpp image. The device only ever reads guest ROM
@@ -290,12 +329,9 @@ static void video_blit_1bpp(arcade1_video_t *v, uint64_t src_addr,
             v->stats.bytes_fetched++;
 
             /* Set bits are drawn in color; clear bits are transparent. */
-            if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u) {
-                v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = color;
-                if (owner)                 /* B2: only written pixels stamp  */
-                    owner[sy * (int64_t)ARCADE1_WIDTH + sx] = id;
-                v->stats.pixels_written++;   /* transparent: writes nothing */
-            }
+            if ((bits & (uint8_t)(0x80u >> (col & 7u))) != 0u)
+                /* transparent pixels plot nothing and are never counted */
+                video_plot(v, sx, sy, color, owner, id);
         }
     }
 }
@@ -362,12 +398,9 @@ static void video_blit_4bpp(arcade1_video_t *v, uint64_t src_addr,
             byte = video_fetch_byte(v, src_addr + row * stride + col / 2u);
             nib = ((col & 1u) != 0u) ? (uint8_t)(byte & 0x0Fu)
                                      : (uint8_t)(byte >> 4);
-            if (nib != 0u) {
-                v->framebuffer[sy * (int64_t)ARCADE1_WIDTH + sx] = pal[nib];
-                if (owner)                 /* B2: value 0 never stamps      */
-                    owner[sy * (int64_t)ARCADE1_WIDTH + sx] = id;
-                v->stats.pixels_written++;   /* transparent: writes nothing */
-            }
+            if (nib != 0u)
+                /* value 0 is transparent: plots nothing, never counted */
+                video_plot(v, sx, sy, pal[nib], owner, id);
         }
     }
     /* bytes fetched: one per two pixels examined (two 4-bit pixels share a
@@ -588,7 +621,7 @@ int arcade1_video_record_start(arcade1_video_t *v)
     if (v->rec != NULL || v->owner != NULL)
         return 0;                        /* already recording: harmless no-op */
     v->rec   = malloc(ARCADE1_VIDEO_REC_MAX * sizeof *v->rec);
-    v->owner = calloc((size_t)ARCADE1_FB_PIXELS, sizeof *v->owner);
+    v->owner = calloc((size_t)ARCADE1_FB_PHYS, sizeof *v->owner);
     if (v->rec == NULL || v->owner == NULL) {
         free(v->rec);
         free(v->owner);

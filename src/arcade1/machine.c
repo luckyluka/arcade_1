@@ -40,7 +40,10 @@ static inline uint16_t pack_rgb565(unsigned r, unsigned g, unsigned b)
                       ( b & 0x1Fu));
 }
 
-/* Fill a solid rectangle in the framebuffer, clipped to the screen. */
+/* Fill a solid rectangle in the framebuffer, clipped to the screen.
+ * Goes through the HD experiment's pixel-plot choke point so the pattern
+ * expands with ARCADE1_HD_SCALE like everything else; the store it makes at
+ * k = 1 is byte-identical to the direct one this used to do. */
 static void fill_rect(arcade1_machine_t *m, int x, int y, int w, int h,
                       uint16_t color)
 {
@@ -52,7 +55,7 @@ static void fill_rect(arcade1_machine_t *m, int x, int y, int w, int h,
             int xx = x + i;
             if (xx < 0 || xx >= ARCADE1_WIDTH)
                 continue;
-            m->framebuffer[yy * ARCADE1_WIDTH + xx] = color;
+            arcade1_video_draw_px(&m->video, xx, yy, color);
         }
     }
 }
@@ -82,24 +85,30 @@ static void render_test_pattern(arcade1_machine_t *m)
     const unsigned scroll = m->frame_counter % ARCADE1_WIDTH;
 
     for (unsigned y = 0; y < ARCADE1_HEIGHT; y++) {
-        uint16_t *row = &m->framebuffer[y * ARCADE1_WIDTH];
-
         if (y < band_h) {
             for (unsigned x = 0; x < ARCADE1_WIDTH; x++) {
                 unsigned band = (x * 8) / ARCADE1_WIDTH;
-                row[x] = pack_rgb565(bars[band][0], bars[band][1],
-                                     bars[band][2]);
+
+                arcade1_video_draw_px(&m->video, (int64_t)x, (int64_t)y,
+                                      pack_rgb565(bars[band][0],
+                                                  bars[band][1],
+                                                  bars[band][2]));
             }
         } else if (y < 2 * band_h) {
             for (unsigned x = 0; x < ARCADE1_WIDTH; x++) {
                 unsigned level = (x * 31) / (ARCADE1_WIDTH - 1);
-                row[x] = pack_rgb565(level, (level * 63) / 31, level);
+
+                arcade1_video_draw_px(&m->video, (int64_t)x, (int64_t)y,
+                                      pack_rgb565(level, (level * 63) / 31,
+                                                  level));
             }
         } else {
             for (unsigned x = 0; x < ARCADE1_WIDTH; x++) {
                 unsigned sx = (x + scroll) % ARCADE1_WIDTH;
                 unsigned on = ((sx / 20) & 1u) ? 31u : 0u;
-                row[x] = pack_rgb565(on, on, on);
+
+                arcade1_video_draw_px(&m->video, (int64_t)x, (int64_t)y,
+                                      pack_rgb565(on, on, on));
             }
         }
     }
@@ -364,7 +373,7 @@ const uint16_t *arcade1_framebuffer(const arcade1_machine_t *m)
 unsigned arcade1_framebuffer_pitch(const arcade1_machine_t *m)
 {
     (void)m;
-    return ARCADE1_WIDTH * (unsigned)sizeof(uint16_t);
+    return ARCADE1_FB_STRIDE * (unsigned)sizeof(uint16_t);
 }
 
 const int16_t *arcade1_audio(const arcade1_machine_t *m)
