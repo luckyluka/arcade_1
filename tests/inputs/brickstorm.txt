@@ -1,125 +1,178 @@
 # BRICKSTORM session: the title, the default level played to the game
 # over, then the level picker to the boss stage and the boss itself.
 #   0    - the title, then level 1 (the default), swept with the paddle
-#   1900 - the level picker: level 13, the boss
+#   1840 - the level picker: level 13, the boss
 0    9    none
 10   11   start
 12   14   none
-15   64   a left
-65   114  a right
-115  164  a left
-165  214  a right
-215  264  a left
-265  314  a right
-315  364  a left
-365  414  a right
-415  464  a left
-465  514  a right
-515  564  a left
-565  614  a right
-615  664  a left
-665  714  a right
-715  764  a left
-765  814  a right
-815  864  a left
-865  914  a right
-915  964  a left
-965  1014 a right
-1015 1064 a left
-1065 1114 a right
-1115 1164 a left
-1165 1214 a right
-1215 1264 a left
-1265 1314 a right
-1315 1364 a left
-1365 1414 a right
-1415 1464 a left
-1465 1514 a right
-1515 1564 a left
-1565 1614 a right
-1615 1664 a left
-1665 1714 a right
-1715 1764 a left
-1760 1899 none
-1900 1901 start
-1902 1919 none
-1920 1920 right
-1921 1921 none
-1922 1922 right
-1923 1923 none
-1924 1924 right
-1925 1925 none
-1926 1926 right
-1927 1927 none
-1928 1928 right
-1929 1929 none
-1930 1930 right
-1931 1931 none
-1932 1932 right
-1933 1933 none
-1934 1934 right
-1935 1935 none
-1936 1936 right
-1937 1937 none
-1938 1938 right
-1939 1939 none
-1940 1940 right
-1941 1941 none
-1942 1942 right
-1943 1943 none
-1944 1953 none
-1954 1955 start
-1956 1965 none
-1966 1984 a left
-1985 2009 a right
-2010 2027 a right
-2028 2050 a left
-2051 2060 a left
-2061 2082 a left
-2083 2104 a right
-2105 2126 a right
-2127 2138 a left
-2139 2149 a right
-2150 2167 a left
-2168 2187 a right
-2188 2208 a left
+15   34   a left
+35   54   a right
+55   74   a left
+75   94   a right
+95   114  a left
+115  134  a right
+135  154  a left
+155  174  a right
+175  194  a left
+195  214  a right
+215  234  a left
+235  254  a right
+255  274  a left
+275  294  a right
+295  314  a left
+315  334  a right
+335  354  a left
+355  374  a right
+375  394  a left
+395  414  a right
+415  434  a left
+435  454  a right
+455  474  a left
+475  494  a right
+495  514  a left
+515  534  a right
+535  554  a left
+555  574  a right
+575  594  a left
+595  614  a right
+615  634  a left
+635  654  a right
+655  674  a left
+675  694  a right
+695  714  a left
+715  734  a right
+735  754  a left
+755  774  a right
+775  794  a left
+795  814  a right
+815  834  a left
+835  854  a right
+855  874  a left
+875  894  a right
+895  914  a left
+915  934  a right
+935  954  a left
+955  974  a right
+975  994  a left
+995  1014 a right
+1015 1034 a left
+1035 1054 a right
+1055 1074 a left
+1075 1094 a right
+1095 1114 a left
+1115 1134 a right
+1135 1154 a left
+1155 1174 a right
+1175 1194 a left
+1195 1214 a right
+1215 1234 a left
+1235 1254 a right
+1255 1274 a left
+1275 1294 a right
+1295 1314 a left
+1315 1334 a right
+1335 1354 a left
+1355 1374 a right
+1375 1394 a left
+1395 1414 a right
+1415 1434 a left
+1435 1454 a right
+1455 1474 a left
+1475 1494 a right
+1495 1514 a left
+1515 1534 a right
+1535 1554 a left
+1555 1574 a right
+1575 1594 a left
+1595 1614 a right
+1615 1634 a left
+1635 1654 a right
+1655 1674 a left
+1675 1694 a right
+1695 1714 a left
+1700 1839 none
+1840 1841 start
+1842 1859 none
+1860 1860 right
+1861 1861 none
+1862 1862 right
+1863 1863 none
+1864 1864 right
+1865 1865 none
+1866 1866 right
+1867 1867 none
+1868 1868 right
+1869 1869 none
+1870 1870 right
+1871 1871 none
+1872 1872 right
+1873 1873 none
+1874 1874 right
+1875 1875 none
+1876 1876 right
+1877 1877 none
+1878 1878 right
+1879 1879 none
+1880 1880 right
+1881 1881 none
+1882 1882 right
+1883 1883 none
+1884 1893 none
+1894 1895 start
+1896 1905 none
+1906 1924 a left
+1925 1949 a right
+1950 1967 a right
+1968 1990 a left
+1991 2000 a left
+2001 2022 a left
+2023 2044 a right
+2045 2066 a right
+2067 2078 a left
+2079 2089 a right
+2090 2107 a left
+2108 2127 a right
+2128 2148 a left
+2149 2163 a left
+2164 2173 a left
+2174 2183 a right
+2184 2208 a left
 2209 2223 a left
-2224 2233 a left
-2234 2243 a right
-2244 2268 a left
-2269 2283 a left
-2284 2299 a left
-2300 2314 a right
-2315 2333 a right
-2334 2348 a left
-2349 2356 a none
-2357 2369 a right
-2370 2397 a left
-2398 2412 a right
-2413 2425 a left
-2426 2451 a right
-2452 2479 a left
-2480 2492 a none
-2493 2517 a left
-2518 2530 a none
-2531 2553 a left
-2554 2575 a right
-2576 2593 a right
-2594 2610 a none
-2611 2623 a right
-2624 2642 a none
-2643 2657 a left
-2658 2685 a left
-2686 2700 a none
-2701 2723 a right
-2724 2734 a none
-2735 2753 a left
-2754 2781 a right
-2782 2789 a none
-2790 2801 a right
-2802 2817 a left
-2818 2842 a left
-2843 2870 a left
-2871 2883 a none
-2884 2898 a left
-2899 2899 a none
+2224 2239 a left
+2240 2254 a right
+2255 2273 a right
+2274 2288 a left
+2289 2296 a none
+2297 2309 a right
+2310 2337 a left
+2338 2352 a right
+2353 2365 a left
+2366 2391 a right
+2392 2419 a left
+2420 2432 a none
+2433 2457 a left
+2458 2470 a none
+2471 2493 a left
+2494 2515 a right
+2516 2533 a right
+2534 2550 a none
+2551 2563 a right
+2564 2582 a none
+2583 2597 a left
+2598 2625 a left
+2626 2640 a none
+2641 2663 a right
+2664 2674 a none
+2675 2693 a left
+2694 2721 a right
+2722 2729 a none
+2730 2741 a right
+2742 2757 a left
+2758 2782 a left
+2783 2810 a left
+2811 2823 a none
+2824 2838 a left
+2839 2854 a none
+2855 2862 a none
+2863 2882 a left
+2883 2899 a left

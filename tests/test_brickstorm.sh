@@ -43,7 +43,7 @@ HITS=$(dirname "$0")/inputs/brickstorm_hits.txt
 [ -f "$SCRIPT" ] || fail "missing $SCRIPT"
 [ -f "$HITS" ] || fail "missing $HITS"
 
-FRAMES=2600
+FRAMES=2800
 
 # Named-variable reads need an `nm` dump: the committed one (the golden ROM
 # dir has it), else make one from the freshly built ELF.

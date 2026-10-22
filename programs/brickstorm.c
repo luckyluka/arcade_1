@@ -58,11 +58,17 @@
 #define SPEED_BASE   42       /* 2.6 px per frame at stage 1 */
 #define SPEED_STEP   2        /* +0.125 px per stage */
 #define SPEED_MAX    58       /* 3.6 px per frame: the fastest it gets */
-/* The shallowest legal angle is 60 degrees from the vertical, so the ball
- * may never travel flatter than that — no matter which way it is bounced.
- * Without this the ball settles into a flat loop between the wall and
- * the paddle and the game stops moving. */
-#define FLAT_LIMIT   223      /* |vx| may not exceed 0.87 * |vy| (256ths) */
+/* The shallowest legal angle is the table's last step: |vx| = 223,
+ * |vy| = 128 (in 256ths) — 30 degrees above the horizontal. No bounce
+ * may leave the ball shallower than that.
+ *
+ * (This was WRONG at first, and wrong in a way that cost the game its
+ * whole mechanic: the limit forbade |vx| > 0.87 * |vy| — 49 degrees —
+ * which is STEEPER than the shallowest legal angle, so it re-aimed
+ * every single launch and the catch point decided nothing but the side.
+ * The contact recorder showed it: every contact left with the same
+ * |vx|.) */
+#define FLAT_LIMIT   223      /* |vx| may not exceed 1.74 * |vy| */
 
 #define SPARK_MAX 64
 
@@ -230,8 +236,10 @@ static void limit_flat(Ball *b)
 {
     int ax = b->vx < 0 ? -b->vx : b->vx;
     int ay = b->vy < 0 ? -b->vy : b->vy;
-    if (ay == 0 || ax * 256 <= ay * FLAT_LIMIT)
+    /* the shallowest legal line: |vx| / |vy| = 223 / 128 */
+    if (ay == 0 || ax * 128 <= ay * FLAT_LIMIT)
         return;
+    /* too flat: put it back on that line, at the same speed */
     b->vx = (b->vx < 0 ? -1 : 1) * ((ball_speed * FLAT_LIMIT) >> 8);
     b->vy = (b->vy < 0 ? -1 : 1) * ((ball_speed * 128) >> 8);
 }
@@ -713,10 +721,10 @@ static void break_brick(int row, int col, int chain)
         shake = 8;
         sfx(300, 60, 24);
     }
-    /* the drop */
+    /* the drop: a power-up every so often, not every fifth brick */
     drop_timer--;
     if (drop_timer <= 0 && bricks_left > 0) {
-        drop_timer = 5;
+        drop_timer = 14;
         spawn_drop(BRICK_X0 + col * BRICK_PITCH_X + BRICK_W / 2,
                    BRICK_Y0 + row * BRICK_PITCH_Y, arcade1_rand(P_KINDS));
     }

@@ -310,11 +310,20 @@ ROM are exactly as they were.
   the velocity it left with), and `tools/record_hits.py` turns the
   CLI's per-frame `--vars` trace into a contact log — one line per
   contact, with the exact frame — and checks the catch-point rule over
-  the whole log. It is a regression: it caught the bug where the
-  paddle's launch step lost its SIGN, so the paddle always kicked the
-  ball to the right, whatever side it was caught on. That bug is why
-  the game "did not feel ok", and it is why the rule now has a machine
-  check on it.
+  the whole log. It is a regression, and it found two bugs:
+  * the paddle's launch step lost its **SIGN**, so the paddle always
+    kicked the ball to the right, whatever side it was caught on;
+  * the flat-angle limit was **inverted** — it forbade the ball from
+    travelling flatter than 49° above the horizontal, while the
+    shallowest *legal* angle is 30°, so it re-aimed every single
+    launch and the catch point decided nothing but the side. That was
+    the "an invisible glove moves the ball" feeling: the limit was
+    quietly overwriting the player's aim on every contact. The log
+    shows it — every contact used to leave with the same |vx|; now a
+    catch 22 px left of the centre leaves at −32 and one 19 px right
+    at +25, i.e. the catch point decides the angle again.
+* The power-up drops are **rarer** (one in fourteen broken bricks, not
+  one in five).
 * **Four brick kinds**: normal, tough (two hits — it cracks first),
   steel (the ball bounces off it) and bomb (it takes its neighbours with
   it, three links deep).
