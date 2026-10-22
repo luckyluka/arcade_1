@@ -25,8 +25,12 @@
  * region (their guest code is unchanged); the rest of the screen shows
  * whatever their CLEAR colour leaves. */
 
+#ifndef ARCADE1_WIDTH
 #define ARCADE1_WIDTH        480
+#endif
+#ifndef ARCADE1_HEIGHT
 #define ARCADE1_HEIGHT       270
+#endif
 #define ARCADE1_FPS          60.0
 #define ARCADE1_SAMPLE_RATE  48000.0
 
