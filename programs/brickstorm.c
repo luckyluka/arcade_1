@@ -220,6 +220,75 @@ static int pressed(unsigned pad, unsigned bit)
 static int trail_x[6], trail_y[6], trail_n;
 
 /* ------------------------------------------------------------------------ */
+/* the background: painted in full once, then only where a frame needs it    */
+/* ------------------------------------------------------------------------ */
+
+/* The field behind everything — a dozen gradient bands and a faint grid —
+ * never changes for the whole run, and it was most of the game's pixel
+ * work: about 141 k of the 152-173 k written per frame, 87-99 % of it,
+ * repainted behind movers that only ever touch a few hundred pixels.
+ *
+ * The framebuffer survives between frames, so a frame no longer repaints
+ * the field. It restores the RECTANGLES that last frame drew and this one
+ * does not, in a fixed order that reproduces a full repaint exactly:
+ *
+ *     restore  ->  bricks  ->  boss  ->  fx  ->  balls  ->  paddle  ->  hud
+ *
+ * Patches may overlap freely (repainting the background is idempotent)
+ * because that fixed order is what makes the result correct: anything a
+ * patch cut through — a brick, another mover — is redrawn after it, and
+ * the HUD fills its own strip unconditionally, so it needs no restoring
+ * at all.
+ *
+ * A rectangle is recorded in SCREEN space. FILL is screen-space (SPEC:
+ * "CLEAR, SET_PIXEL and FILL are screen-space and are never scrolled"),
+ * so the background's patches ignore the camera; SPRITE is world-space,
+ * so a sprite's recorded rect is its position minus this frame's camera.
+ */
+#define DIRTY_MAX   160              /* rects to restore, then repaint all */
+#define OV_NONE     0                /* what sits over the field           */
+#define OV_TITLE    1
+#define OV_OVER     2
+#define OV_WIN      3
+#define OV_CLEAR    4
+#define OV_WARN     5
+#define OV_FLASH    8                /* OR-ed in: it shares the band       */
+/* The band every overlay is drawn inside: WARNING at y=60, the title panel
+ * y=84..157, the game-over/win panel y=100..147, LEVEL CLEAR y=110, the
+ * level-name flash y=120. Restored only when the set changes, so a screen
+ * that keeps its panel pays nothing for it. */
+#define OV_BAND_X   0
+#define OV_BAND_Y   50
+#define OV_BAND_W   SCREEN_W
+#define OV_BAND_H   120
+
+static int dirty_n;                  /* rects to restore before drawing    */
+static int dirty_rect[DIRTY_MAX][4]; /* x, y, w, h in screen space         */
+static int bg_full = 1;              /* the whole background needs painting*/
+static int cam_sx, cam_sy;           /* the camera the rect was measured   */
+static int cam_px, cam_py;           /* under, and last frame's — see the  */
+                                     /* block above                        */
+static int ov_now, ov_flash;         /* which overlay is over the field    */
+static int ov_mask_prev;
+
+/* Remember a rectangle being drawn (or just removed) now: the background
+ * has to go back under it before the next frame draws anything else. */
+static void dirty_add(int x, int y, int w, int h)
+{
+    if (bg_full)
+        return;
+    if (dirty_n >= DIRTY_MAX) {
+        bg_full = 1;                 /* too much moved at once: repaint it */
+        return;
+    }
+    dirty_rect[dirty_n][0] = x;
+    dirty_rect[dirty_n][1] = y;
+    dirty_rect[dirty_n][2] = w;
+    dirty_rect[dirty_n][3] = h;
+    dirty_n++;
+}
+
+/* ------------------------------------------------------------------------ */
 /* the audio: one tone at a time, with a pitch sweep                        */
 /* ------------------------------------------------------------------------ */
 
@@ -540,6 +609,9 @@ static const short ang_y[7] = { 256, 251, 241, 223, 197, 164, 128 };
 static void load_level(int n)
 {
     int r, c;
+    /* The field changes shape wholesale — too many rectangles to track, so
+     * the background is repainted in full on this frame's draw. */
+    bg_full = 1;
     bricks_left = 0;
     ball_speed = speed_for_level(n);
     for (r = 0; r < BRICK_ROWS; r++) {
@@ -701,6 +773,9 @@ static void boss_fire(void)
 static void clear_run(void)
 {
     int i;
+    /* Everything on the field goes at once — likewise too much to track:
+     * the background under the lot is repainted on this frame's draw. */
+    bg_full = 1;
     for (i = 0; i < BRICK_ROWS * BRICK_COLS; i++)
         bricks[i].alive = 0;
     for (i = 0; i < 8; i++) {
@@ -759,6 +834,13 @@ static void break_brick(int row, int col, int chain)
         return;
     b->alive = 0;
     bricks_left--;
+    /* The brick's own pixels now outlive it: put the background back
+     * under its 44x14 box. This runs in update(), before the draw, so it
+     * is restored in the same frame the brick disappears. Screen space,
+     * under the camera it was last drawn with — see the DIRTY_MAX block. */
+    dirty_add(BRICK_X0 + col * BRICK_PITCH_X - cam_sx,
+              BRICK_Y0 + row * BRICK_PITCH_Y - cam_sy,
+              BRICK_PITCH_X, BRICK_PITCH_Y);
     add_score((BRICK_ROWS - row) * 10);
     spawn_sparks(BRICK_X0 + col * BRICK_PITCH_X + BRICK_W / 2,
                  BRICK_Y0 + row * BRICK_PITCH_Y + BRICK_H / 2, 8, 7);
@@ -1486,35 +1568,70 @@ static void update(void)
 /* the drawing                                                              */
 /* ------------------------------------------------------------------------ */
 
-static void draw_background(void)
+/* The gradient's colour for band i.
+ *
+ * A vertical gradient of a dozen bands at a 22 px pitch, 23 px tall each,
+ * so twelve bands stop at y = 265 — five rows short of SCREEN_H (270).
+ * Those rows used to receive no gradient at all, and because the
+ * background was repainted every frame they kept whatever first landed in
+ * them: a black strip with the grid's verticals poking down into it from
+ * frame 0, and then a PERMANENT scar for every sprite that crossed the
+ * bottom edge (a power-up drop is killed only at y > SCREEN_H, so it is
+ * still DRAWN on its way out and nothing repainted the rows it touched —
+ * `arcade1 inspect --at X,Y` reported them as "never written in the
+ * recorded frame", 191 of them by frame 900, unchanged at frame 1500
+ * because nothing falls while the game-over holds). Band 11 therefore
+ * runs to the bottom edge; rows 0..264 are byte-identical to before. */
+static unsigned band_color(int i)
 {
-    int i;
-    /* A vertical gradient: a dozen bands, one rect each.
-     *
-     * The pitch is 22 and a band is 23 tall, so twelve bands stop at
-     * y = 265 — five rows short of SCREEN_H (270). Those rows never got
-     * the gradient, and because this repaints the whole screen every
-     * frame they kept whatever first landed in them: a black strip with
-     * the grid's verticals poking down into it from frame 0, and then a
-     * PERMANENT scar for every sprite that crossed the bottom edge. (A
-     * power-up drop is only killed at y > SCREEN_H, so it is still DRAWN
-     * on its way out, and nothing ever repainted the rows it touched —
-     * `arcade1 inspect --at X,Y` reported those pixels as "never written
-     * in the recorded frame", 191 of them by frame 900 and still 191 at
-     * frame 1500, because nothing falls while the game-over holds.)
-     *
-     * The last band runs to the bottom edge instead of stopping at 23
-     * px; rows 0..264 are byte-identical to before. */
+    return lerp565(arcade1_rgb(0x08, 0x10, 0x20),
+                   arcade1_rgb(0x1A, 0x10, 0x38), i, 11);
+}
+
+/* Restore the static background inside one screen rectangle: the gradient
+ * bands clipped to it, then the grid lines that fall inside it — in
+ * exactly the order a full paint uses, so a patch is pixel-for-pixel what
+ * painting the whole screen would have put there. Overlapping patches are
+ * harmless: repainting the background is idempotent. */
+static void bg_rect(int x, int y, int w, int h)
+{
+    int i, top, bot;
+
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > SCREEN_W) w = SCREEN_W - x;
+    if (y + h > SCREEN_H) h = SCREEN_H - y;
+    if (w <= 0 || h <= 0)
+        return;
+
+    /* the bands, clipped to the rectangle */
     for (i = 0; i < 12; i++) {
-        unsigned c = lerp565(arcade1_rgb(0x08, 0x10, 0x20), arcade1_rgb(0x1A, 0x10, 0x38), i, 11);
-        arcade1_rect(0, i * 22, SCREEN_W,
-                     (i == 11) ? SCREEN_H - i * 22 : 23, c);
+        int by = i * 22;
+        int bh = (i == 11) ? SCREEN_H - by : 23;
+        top = (by > y) ? by : y;
+        bot = (by + bh < y + h) ? (by + bh) : (y + h);
+        if (top < bot)
+            arcade1_rect(x, top, w, bot - top, band_color(i));
     }
     /* a faint grid, so the field has a floor to read against */
-    for (i = 0; i < 12; i++)
-        arcade1_rect(0, HUD_H + i * 20, SCREEN_W, 1, arcade1_rgb(0x14, 0x20, 0x3C));
-    for (i = 0; i < 12; i++)
-        arcade1_rect(i * 40, HUD_H, 1, SCREEN_H - HUD_H, arcade1_rgb(0x14, 0x20, 0x3C));
+    for (i = 0; i < 12; i++) {
+        int ly = HUD_H + i * 20;
+        if (ly >= y && ly < y + h)
+            arcade1_rect(x, ly, w, 1, arcade1_rgb(0x14, 0x20, 0x3C));
+    }
+    for (i = 0; i < 12; i++) {
+        int lx = i * 40;
+        if (lx >= x && lx < x + w)
+            arcade1_rect(lx, y, 1, h, arcade1_rgb(0x14, 0x20, 0x3C));
+    }
+}
+
+/* The full paint — the first frame, and any frame whose change was too
+ * large to track. bg_rect over the whole screen, so there is one source
+ * of truth for what the background is and a patch cannot drift from it. */
+static void draw_background(void)
+{
+    bg_rect(0, 0, SCREEN_W, SCREEN_H);
 }
 
 static void draw_bricks(void)
@@ -1527,8 +1644,15 @@ static void draw_bricks(void)
             int y = BRICK_Y0 + r * BRICK_PITCH_Y;
             if (!b->alive)
                 continue;
-            if (b->flash > 0)
+            if (b->flash > 0) {
                 arcade1_rect(x, y, BRICK_W, 2, arcade1_rgb(0xFF, 0xF0, 0xC0));
+                /* That white line is drawn UNDER the sprite, so the parts
+                 * of it the sprite leaves transparent really do show — and
+                 * when the flash expires those pixels have to become
+                 * background again. FILL is screen-space, so the rect goes
+                 * in exactly as issued: no camera adjustment. */
+                dirty_add(x, y, BRICK_W, 2);
+            }
             switch (b->kind) {
             case B_TOUGH:
                 asset_sprite4(&brick_tough_frames[b->hp > 1 ? 0 : 1], x, y, 0);
@@ -1572,6 +1696,9 @@ static void draw_boss(void)
     if (boss_y + BOSS_H <= 0 || boss_y >= SCREEN_H ||
         boss_x + BOSS_W <= 0 || boss_x >= SCREEN_W)
         return;
+    /* Where the boss is NOW: next frame has to have the background back
+     * under it. The cores are inside this box, so one rect covers them. */
+    dirty_add(boss_x - cam_sx, boss_y - cam_sy, BOSS_W, BOSS_H);
     if (boss_state == 3) {
         if ((boss_timer / 3) & 1)
             asset_sprite4(&boss_frames[1], boss_x, boss_y, 0);
@@ -1597,6 +1724,9 @@ static void draw_paddle(void)
         fr = &paddle_m_frames[0];
     else
         fr = &paddle_l_frames[0];
+    dirty_add(paddle_x - paddle_w / 2 - cam_sx,
+              PADDLE_Y + (paddle_squash ? 1 : 0) - cam_sy,
+              paddle_w, PADDLE_H);
     asset_sprite4(fr, paddle_x - paddle_w / 2,
                   PADDLE_Y + (paddle_squash ? 1 : 0), 0);
 }
@@ -1615,6 +1745,7 @@ static void draw_fx(void)
         for (i = 1; i < trail_n; i++) {
             unsigned c = lerp565(arcade1_rgb(0x0A, 0x20, 0x38), arcade1_rgb(0x60, 0xC8, 0xF0), i, 6);
             arcade1_rect(trail_x[i] - 1, trail_y[i] - 1, 4, 4, c);
+            dirty_add(trail_x[i] - 1, trail_y[i] - 1, 4, 4);
         }
     }
     /* the sparks */
@@ -1623,6 +1754,7 @@ static void draw_fx(void)
         if (!s->alive)
             continue;
         arcade1_rect(s->x, s->y, 2, 2, 0xFFE0u);
+        dirty_add(s->x, s->y, 2, 2);
     }
     /* the power-up drops */
     for (i = 0; i < 8; i++) {
@@ -1638,16 +1770,22 @@ static void draw_fx(void)
         case P_LASER:  fr = &pow_laser_frames[0]; break;
         default:       fr = &pow_catch_frames[0]; break;
         }
+        /* world-space sprite: the rect is recorded in screen space */
+        dirty_add(d->x - 7 - cam_sx, d->y - 7 - cam_sy, 14, 14);
         asset_sprite4(fr, d->x - 7, d->y - 7, 0);
     }
     /* the shots */
     for (i = 0; i < 8; i++) {
-        if (paddle_shots[i].alive)
+        if (paddle_shots[i].alive) {
             arcade1_rect(paddle_shots[i].x - 1, paddle_shots[i].y - 4, 3, 8,
                          0xFFE0u);
-        if (boss_shots[i].alive)
+            dirty_add(paddle_shots[i].x - 1, paddle_shots[i].y - 4, 3, 8);
+        }
+        if (boss_shots[i].alive) {
             arcade1_rect(boss_shots[i].x - 2, boss_shots[i].y - 3, 5, 6,
                          0xF060u);
+            dirty_add(boss_shots[i].x - 2, boss_shots[i].y - 3, 5, 6);
+        }
     }
 }
 
@@ -1696,7 +1834,13 @@ static void draw_hud(void)
         arcade1_rect(160, 16, w, 3, arcade1_rgb(0xE0, 0x40, 0x50));
     }
 
-    if (state == ST_TITLE) {
+    /* The overlay over the field. It is chosen in main() BEFORE the movers
+     * are drawn, because the band behind it has to be restored while the
+     * background is still being repaired — and choosing it in one place
+     * means the branch that restores the band and this branch that draws
+     * it cannot drift apart. The camera is zero here (draw_hud set it),
+     * so these are screen coordinates either way. */
+    if (ov_now == OV_TITLE) {
         arcade1_rect(0, 84, SCREEN_W, 74, arcade1_rgb(0x08, 0x10, 0x20));
         text_draw(160, 92, "BRICKSTORM", arcade1_rgb(0x70, 0xE0, 0xF0));
         text_draw(148, 110, "TWELVE LEVELS AND A BOSS", arcade1_rgb(0xC0, 0xC0, 0xFF));
@@ -1706,28 +1850,28 @@ static void draw_hud(void)
         text_draw(120, 136, "LEFT RIGHT PICK", arcade1_rgb(0x70, 0x80, 0xA0));
         if ((title_t / 30) & 1)
             text_draw(160, 148, "PRESS START", arcade1_rgb(0xFF, 0xD0, 0x60));
-    } else if (state == ST_OVER) {
+    } else if (ov_now == OV_OVER) {
         arcade1_rect(0, 100, SCREEN_W, 48, arcade1_rgb(0x08, 0x10, 0x20));
         text_draw(180, 108, "GAME OVER", arcade1_rgb(0xFF, 0x50, 0x50));
         text_u32(150, 124, (unsigned)score, 7, 0xFFFFu);
         if ((frames / 30) & 1)
             text_draw(160, 136, "PRESS START", arcade1_rgb(0xFF, 0xD0, 0x60));
-    } else if (state == ST_WIN) {
+    } else if (ov_now == OV_WIN) {
         arcade1_rect(0, 100, SCREEN_W, 48, arcade1_rgb(0x08, 0x10, 0x20));
         text_draw(196, 108, "YOU WIN", arcade1_rgb(0x60, 0xFF, 0x90));
         text_u32(150, 124, (unsigned)score, 7, 0xFFFFu);
         if ((frames / 30) & 1)
             text_draw(160, 136, "PRESS START", arcade1_rgb(0xFF, 0xD0, 0x60));
-    } else if (state == ST_CLEAR) {
+    } else if (ov_now == OV_CLEAR) {
         if (boss_cleared)
             text_draw(152, 110, "THE CORE IS DOWN", arcade1_rgb(0x60, 0xFF, 0x90));
         else
             text_draw(168, 110, "LEVEL CLEAR", arcade1_rgb(0x60, 0xFF, 0x90));
-    } else if (boss_state == 1) {
+    } else if (ov_now == OV_WARN) {
         text_draw(140, 60, "WARNING", arcade1_rgb(0xFF, 0x40, 0x40));
     }
     /* the level's name, flashed when a stage begins */
-    if (state == ST_SERVE && frames < 90 && level <= LEVEL_COUNT)
+    if (ov_flash)
         text_draw(176, 120, level_names[level - 1], arcade1_rgb(0xFF, 0xD0, 0x60));
 }
 
@@ -1753,7 +1897,7 @@ int main(void)
     clear_run();
 
     for (;;) {
-        int sx = 0, sy = 0;
+        int sx = 0, sy = 0, mask, r, c;
 
         machine_frame = (int)arcade1_timer_count();
         update();
@@ -1765,13 +1909,70 @@ int main(void)
         }
 
         arcade1_cam(sx, sy);
-        draw_background();
+        cam_px = cam_sx;              /* last frame's camera — the bricks */
+        cam_py = cam_sy;              /* were drawn under it               */
+        cam_sx = sx;
+        cam_sy = sy;
+
+        /* Which overlay sits over the field this frame. It is decided here,
+         * immediately after update(), so that the band behind it can be
+         * restored before anything is drawn — draw_hud() then draws
+         * exactly the one chosen here. */
+        if (state == ST_TITLE)          ov_now = OV_TITLE;
+        else if (state == ST_OVER)      ov_now = OV_OVER;
+        else if (state == ST_WIN)       ov_now = OV_WIN;
+        else if (state == ST_CLEAR)     ov_now = OV_CLEAR;
+        else if (boss_state == 1)       ov_now = OV_WARN;
+        else                            ov_now = OV_NONE;
+        ov_flash = (state == ST_SERVE && frames < 90 && level <= LEVEL_COUNT);
+        mask = ov_now | (ov_flash ? OV_FLASH : 0);
+
+        /* Restore first, draw second. The background behind the last
+         * frame's movers, behind the bricks update() broke this frame, and
+         * behind whichever overlay just went away — then the fixed order
+         * below redraws everything those rectangles cut through, which is
+         * what makes this frame pixel-identical to a full repaint. */
+        if (bg_full) {
+            draw_background();           /* a change too large to track  */
+            dirty_n = 0;
+            bg_full = 0;
+        } else {
+            if (mask != ov_mask_prev)
+                bg_rect(OV_BAND_X, OV_BAND_Y, OV_BAND_W, OV_BAND_H);
+            for (i = 0; i < dirty_n; i++)
+                bg_rect(dirty_rect[i][0], dirty_rect[i][1],
+                        dirty_rect[i][2], dirty_rect[i][3]);
+            dirty_n = 0;
+
+            /* The bricks are the one sort of world-space sprite NOT
+             * recorded every frame — up to 120 of them, and recording the
+             * lot would cost more than the bug it prevents. The
+             * background, though, is SCREEN space: when a screen shake
+             * moves the camera the bricks slide against it by up to two
+             * pixels and leave their previous outline behind. So on the
+             * frames where the camera actually moved, put the background
+             * back under every brick where it was drawn LAST frame. (A
+             * brick that died this frame is covered by break_brick's own
+             * record, which was taken under last frame's camera.) */
+            if (cam_sx != cam_px || cam_sy != cam_py) {
+                for (r = 0; r < BRICK_ROWS; r++)
+                    for (c = 0; c < BRICK_COLS; c++)
+                        if (bricks[r * BRICK_COLS + c].alive)
+                            bg_rect(BRICK_X0 + c * BRICK_PITCH_X - cam_px,
+                                    BRICK_Y0 + r * BRICK_PITCH_Y - cam_py,
+                                    BRICK_PITCH_X, BRICK_PITCH_Y);
+            }
+        }
+        ov_mask_prev = mask;
+
         draw_bricks();
         draw_boss();
         draw_fx();
         for (i = 0; i < 8; i++) {
             if (!ball_list[i].alive)
                 continue;
+            dirty_add(ball_list[i].x / FP - 4 - cam_sx,
+                      ball_list[i].y / FP - 4 - cam_sy, BALL_W, BALL_H);
             asset_sprite4(&ball_frames[(frames / 6) & 1],
                           ball_list[i].x / FP - 4, ball_list[i].y / FP - 4, 0);
         }
