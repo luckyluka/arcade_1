@@ -50,20 +50,30 @@
 
 /* --- the paddle and the ball --------------------------------------------- */
 /* The ball's position and velocity are in 1/16 px, so it moves smoothly
- * and its speed can be tuned to a fraction of a pixel. */
+ * and its speed can be tuned to a fraction of a pixel.
+ *
+ * The paddle's speed is the original Breakout's, scaled to this screen:
+ * it moved 2 px a frame on a 320-wide field, which is 3 px on 480. The
+ * point is that the paddle moves at about the same speed as the ball, so
+ * the player can put the catch where they want it — a fast paddle
+ * outruns the ball and the catch point stops being the player's aim. */
 #define FP           16
 #define PADDLE_Y     244
 #define PADDLE_H     10
 #define PADDLE_W_MID 56
-#define PADDLE_SPEED 7
+#define PADDLE_SPEED 3
 #define BALL_S       8
 /* The ball's speed is a property of the STAGE, not of the rally: it grows
  * a little with every level and never creeps up while the player is
  * returning it. (It used to climb on every paddle hit, and the ball ended
- * up both fast and flat — the rally turned into noise.) */
-#define SPEED_BASE   42       /* 2.6 px per frame at stage 1 */
-#define SPEED_STEP   2        /* +0.125 px per stage */
-#define SPEED_MAX    58       /* 3.6 px per frame: the fastest it gets */
+ * up both fast and flat — the rally turned into noise.)
+ *
+ * The stage-1 speed is the original Breakout's: it moved 2.24 px a frame
+ * (|vx| = 1, |vy| = 2 in pixels). The ramp is gentler than it was, so
+ * even the last stage is slower than this one used to be. */
+#define SPEED_BASE   36       /* 2.25 px per frame at stage 1 */
+#define SPEED_STEP   1        /* +0.0625 px per stage */
+#define SPEED_MAX    48       /* 3.0 px per frame: the fastest it gets */
 /* The shallowest legal angle is the table's last step: |vx| = 223,
  * |vy| = 128 (in 256ths) — 30 degrees above the horizontal. No bounce
  * may leave the ball shallower than that.
@@ -125,6 +135,12 @@ volatile int hit_side = 0;    /* -1 left of centre, 0 dead centre, +1 right */
 volatile int hit_vx = 0;      /* the horizontal velocity it left with */
 volatile int hit_vx_in = 0;   /* the horizontal velocity it arrived with */
 volatile int hit_count = 0;   /* the contacts so far */
+
+/* The contacts that broke the catch-point rule. The game checks EVERY
+ * contact, not only the ones a scripted session happens to make: the
+ * recorder can only see what the game publishes, and a blind paddle
+ * catches the ball two or three times in six thousand frames. */
+volatile int hit_bad = 0;
 
 /* Which ball the observables (ball_x, ball_y, ball_vx, ball_vy) describe.
  * With the MULTI power-up there can be several balls in flight and the
@@ -775,26 +791,54 @@ static void ball_vs_bricks(Ball *b)
                                                    : px - bx;
             over_y = (py + BALL_S < by + BRICK_H) ? (by + BRICK_H) - (py + BALL_S)
                                                    : py - by;
+            if (br->kind == B_STEEL) {
+                /* A steel brick is solid: the ball bounces off it, both
+                 * ways. (It is visibly a wall, so a bounce here is the
+                 * player reading the field, not the field taking over.) */
+                sfx(240, 200, 8);
+                shake = 3;
+                if (over_y <= over_x) {
+                    b->vy = -b->vy;
+                    if (b->vy > 0)
+                        b->y = (by - BALL_S) * FP;
+                    else
+                        b->y = (by + BRICK_H) * FP;
+                } else {
+                    b->vx = -b->vx;
+                    if (b->vx > 0)
+                        b->x = (bx - BALL_S) * FP;
+                    else
+                        b->x = (bx + BRICK_W) * FP;
+                }
+                limit_flat(b);
+                return;
+            }
+
             if (over_y <= over_x) {
+                /* the ball came at the brick's top or its bottom */
                 b->vy = -b->vy;
                 if (b->vy > 0)
                     b->y = (by - BALL_S) * FP;
                 else
                     b->y = (by + BRICK_H) * FP;
             } else {
-                b->vx = -b->vx;
-                if (b->vx > 0)
-                    b->x = (bx - BALL_S) * FP;
-                else
-                    b->x = (bx + BRICK_W) * FP;
+                /* The ball came at the brick's SIDE, and here the original
+                 * Breakout's rule is the better one: a brick never
+                 * changes the ball's horizontal direction. The field
+                 * breaks and the ball goes on its way; only the vertical
+                 * component turns. A brick that could kick the ball
+                 * sideways took the aim away from the player — the ball
+                 * left the paddle exactly where the player sent it and
+                 * the next thing it touched threw it the other way.
+                 *
+                 * (The original simply cleared the brick and flipped vy;
+                 * the position is left alone here for the same reason —
+                 * the brick is broken, so there is nothing to be inside
+                 * of.) */
+                b->vy = -b->vy;
             }
             limit_flat(b);
 
-            if (br->kind == B_STEEL) {
-                sfx(240, 200, 8);
-                shake = 3;
-                return;
-            }
             br->hp--;
             br->flash = 3;
             shake = 2;
@@ -962,6 +1006,17 @@ static void ball_vs_paddle(Ball *b)
     }
     b->vy = -(ball_speed * ang_y[k]) >> 8;
     b->y = (PADDLE_Y - BALL_S) * FP;
+    /* The rule, checked on EVERY contact: the catch point decides the
+     * direction. A left catch never leaves to the right, a right catch
+     * never leaves to the left, and a centre catch keeps the way the
+     * ball was travelling (and never goes straight up). The counter of
+     * the breaks is published for the test — the recorder can only see
+     * the contacts a session happens to make. */
+    if ((pos_step < 0 && b->vx > 0) ||
+        (pos_step > 0 && b->vx < 0) ||
+        (pos_step == 0 && (b->vx == 0 ||
+                           (in_vx && (b->vx > 0) != (in_vx > 0)))))
+        hit_bad++;
     /* publish the contact */
     hit_frame = machine_frame;
     hit_off = off;

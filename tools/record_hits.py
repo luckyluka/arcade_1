@@ -109,7 +109,8 @@ def main():
         guess = os.path.splitext(rom)[0] + ".syms"
         syms = guess if os.path.exists(guess) else None
 
-    vars_list = "hit_frame,hit_off,hit_side,hit_vx,hit_vx_in,hit_count,paddle_w"
+    vars_list = ("hit_frame,hit_off,hit_side,hit_vx,hit_vx_in,hit_count,"
+                 "hit_bad,paddle_w")
     frames_seen = trace(rom, args.input, args.frames, syms, vars_list)
     hits = contacts(frames_seen)
     if not hits:
@@ -166,8 +167,20 @@ def main():
             sys.stderr.write("record_hits: %d contact(s) broke the rule\n"
                              % len(bad))
             return 1
+        # the game checks EVERY contact, not only the recorded ones
+        game_bad = 0
+        for v in frames_seen.values():
+            game_bad = max(game_bad, v.get("hit_bad", 0))
+        if game_bad:
+            sys.stderr.write("record_hits: the game counted %d contact(s) "
+                             "that broke the rule\n" % game_bad)
+            return 1
         sys.stderr.write("record_hits: %d contacts, all of them followed the "
-                         "catch-point rule\n" % len(hits))
+                         "catch-point rule (the game's own count of the "
+                         "contacts it made: %d, none broken)\n"
+                         % (len(hits), max([v.get("hit_count", 0)
+                                           for v in frames_seen.values()]
+                                         or [0])))
     return 0
 
 

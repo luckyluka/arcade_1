@@ -289,6 +289,40 @@ ROM are exactly as they were.
   costs a life and not the bricks you have already broken** (the classic
   rule — the first cut reloaded the field and that was wrong), and the
   screen clears when you die.
+* **The original Breakout's ball, measured.** The milestone-15
+  `programs/breakout.c` was read side by side with this one and run
+  under a tracer, because it *felt* better. The numbers:
+
+  | | the original | BRICKSTORM (before this pass) |
+  |---|---|---|
+  | the ball's speed | 2.24 px/frame, constant | 2.6 px/frame, up to 3.6 in the late stages |
+  | the ball's angles | 4 (|vx| = 1 or 2) | 7 steps, 10°–60° from the vertical |
+  | what may change the ball's **horizontal** direction | the paddle, and a wall (which also normalises |vx| to 1) | the paddle, **a wall, and a brick hit on the side** |
+  | the paddle's speed | 2 px a frame on a 320-wide field (0.63 %) | 7 px a frame on 480 (1.46 %) — twice the ball's speed |
+  | the ball's size | 6 px | 8 px |
+
+  Three things came out of it, and all three are in:
+  * **A brick never changes the ball's horizontal direction.** The
+    original's rule: the brick breaks, the ball goes on its way, only
+    the vertical component turns. A brick that could kick the ball
+    sideways took the aim away from the player — the ball left the
+    paddle exactly where the player sent it and the next thing it
+    touched threw it the other way. (A *steel* brick is still solid
+    and bounces the ball off both ways: it is visibly a wall, so a
+    bounce there is the player reading the field.)
+  * **The paddle is slower** — 3 px a frame, which is the original's
+    2 px on a 320-wide field, scaled. The point is that the paddle
+    moves at about the same speed as the ball, so the player can put
+    the catch where they want it. A paddle twice as fast as the ball
+    outruns it, and the catch point stops being the player's aim.
+  * **The ball is slower** — 2.25 px a frame at stage 1, which is the
+    original's 2.24, and the ramp is gentler, so even the last stage
+    is slower than the first one used to be.
+
+  The angle table was left alone: the original's four angles and this
+  one's seven steps agree on which way round they go (the centre is
+  the steep shot, the edges the flat ones), and seven steps are a
+  finer aim.
 * **The physics, revised after play-testing.** The first cut sampled the
   paddle collision once a frame, so the launch angle was a third of a
   step off the one the player aimed at; the ball's speed crept up on
@@ -326,6 +360,10 @@ ROM are exactly as they were.
     own frame counter, which restarts at every level, so every contact
     was off by the frames that ran before the level began. It now
     publishes the **machine's** frame (the timer device).
+  * and the game now checks **every** contact itself and publishes the
+    count of the ones that broke the rule (`hit_bad`): a blind paddle
+    catches the ball two or three times in six thousand frames, so the
+    recorder alone could only ever see a handful of them.
   * the **catch point could land off the paddle**: the swept crossing is
     a moment in the past and the paddle may have moved since, so the
     offset could exceed the paddle's half width and the launch angle

@@ -117,7 +117,21 @@ if [ -f "$SYMS" ]; then
         fail "a paddle contact broke the catch-point rule"
     note "rule ok — every contact left the way the catch point asked"
 
-    # --- 4) record -> replay round trip ------------------------------------
+    # --- 4) the play-test audit --------------------------------------------
+    # The whole rally, checked: every change of the ball's direction must
+    # be explainable (a mirror, the flat limit, a contact, a new serve),
+    # the ball must never be flatter than the shallowest legal angle, and
+    # the bookkeeping (the score, the lives, the level, the boss, the
+    # state machine) must not jump. This is the instrument that found
+    # the physics pass's four defects.
+    python3 "$(dirname "$0")/../tools/audit_brickstorm.py" "$GAME" \
+        --syms "$SYMS" --frames 1200 --sessions 4 > "$OUT/audit.txt" ||
+        fail "the play-test audit found something"
+    grep -q "NO FINDINGS" "$OUT/audit.txt" ||
+        fail "the play-test audit did not come out clean"
+    note "audit ok — the rally obeys the invariants"
+
+    # --- 5) record -> replay round trip ------------------------------------
     "$CLI" run "$GAME" --frames 700 --input "$SCRIPT" \
         --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
     "$CLI" run "$GAME" --frames 700 --input "$OUT/rec.txt" \
@@ -133,4 +147,4 @@ else
     note "named variables skipped — no brickstorm.syms and no riscv nm to make one"
 fi
 
-echo "test-brickstorm: brickstorm ok (determinism, story, rule, record-replay)"
+echo "test-brickstorm: brickstorm ok (determinism, story, rule, audit, record-replay)"
