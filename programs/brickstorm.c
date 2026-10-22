@@ -1489,10 +1489,26 @@ static void update(void)
 static void draw_background(void)
 {
     int i;
-    /* a vertical gradient: a dozen bands, one rect each */
+    /* A vertical gradient: a dozen bands, one rect each.
+     *
+     * The pitch is 22 and a band is 23 tall, so twelve bands stop at
+     * y = 265 — five rows short of SCREEN_H (270). Those rows never got
+     * the gradient, and because this repaints the whole screen every
+     * frame they kept whatever first landed in them: a black strip with
+     * the grid's verticals poking down into it from frame 0, and then a
+     * PERMANENT scar for every sprite that crossed the bottom edge. (A
+     * power-up drop is only killed at y > SCREEN_H, so it is still DRAWN
+     * on its way out, and nothing ever repainted the rows it touched —
+     * `arcade1 inspect --at X,Y` reported those pixels as "never written
+     * in the recorded frame", 191 of them by frame 900 and still 191 at
+     * frame 1500, because nothing falls while the game-over holds.)
+     *
+     * The last band runs to the bottom edge instead of stopping at 23
+     * px; rows 0..264 are byte-identical to before. */
     for (i = 0; i < 12; i++) {
         unsigned c = lerp565(arcade1_rgb(0x08, 0x10, 0x20), arcade1_rgb(0x1A, 0x10, 0x38), i, 11);
-        arcade1_rect(0, i * 22, SCREEN_W, 23, c);
+        arcade1_rect(0, i * 22, SCREEN_W,
+                     (i == 11) ? SCREEN_H - i * 22 : 23, c);
     }
     /* a faint grid, so the field has a floor to read against */
     for (i = 0; i < 12; i++)
@@ -1576,10 +1592,18 @@ static void draw_paddle(void)
 static void draw_fx(void)
 {
     int i;
-    /* the ball's trail */
-    for (i = 1; i < trail_n; i++) {
-        unsigned c = lerp565(arcade1_rgb(0x0A, 0x20, 0x38), arcade1_rgb(0x60, 0xC8, 0xF0), i, 6);
-        arcade1_rect(trail_x[i] - 1, trail_y[i] - 1, 4, 4, c);
+    /* the ball's trail — drawn only while a ball is actually in flight.
+     *
+     * `trail_n` is cleared on a paddle contact (paddle_hit) and on the
+     * serve, but never when the last ball dies, so the positions the ball
+     * died at stayed drawn for the whole of the game-over screen and the
+     * title after it: a 4x4 blob of the ball's ghost sitting where it fell
+     * out of play, with balls == 0 the entire time. */
+    if (balls > 0) {
+        for (i = 1; i < trail_n; i++) {
+            unsigned c = lerp565(arcade1_rgb(0x0A, 0x20, 0x38), arcade1_rgb(0x60, 0xC8, 0xF0), i, 6);
+            arcade1_rect(trail_x[i] - 1, trail_y[i] - 1, 4, 4, c);
+        }
     }
     /* the sparks */
     for (i = 0; i < SPARK_MAX; i++) {
