@@ -265,10 +265,19 @@ def audit(name, rows, report, verbose):
             # makes (the ball is put back just outside the brick it
             # hit). A contact is exempt: the paddle puts the ball back
             # on its plane.
-            if prev_pos is not None and not contact_now and st == prev_state:
+            # the observable may have moved to another ball (MULTI): the
+            # position then belongs to a different ball entirely
+            switched = False
+            if prev_bid is not None and f.get("ball_id") != prev_bid:
+                switched = True
+            if prev_pos is not None and not contact_now and st == prev_state \
+                    and not switched:
                 dx = abs(f.get("ball_x", 0) - prev_pos[0])
                 dy = abs(f.get("ball_y", 0) - prev_pos[1])
-                budget = max(ax, ay) / 16.0 + BALL_S + 3
+                # the ball's own speed, plus the correction the classic
+                # makes when it puts the ball back just outside the
+                # brick it hit (the penetration plus the ball's height)
+                budget = max(ax, ay) / 16.0 + 2 * BALL_S + 1
                 # a ball that fell off the screen is replaced by a new one
                 # on the paddle, and the state changes when that happens:
                 # that is the serve, not a teleport
@@ -278,10 +287,6 @@ def audit(name, rows, report, verbose):
                          "%.1f): (%d,%d) -> (%d,%d)"
                          % (max(dx, dy), budget, prev_pos[0], prev_pos[1],
                             f.get("ball_x"), f.get("ball_y")))
-            # the observable may have moved to another ball
-            switched = False
-            if prev_bid is not None and f.get("ball_id") != prev_bid:
-                switched = True
             if prev_pos is not None:
                 if abs(f.get("ball_x", 0) - prev_pos[0]) > 6 or \
                         abs(f.get("ball_y", 0) - prev_pos[1]) > 6:

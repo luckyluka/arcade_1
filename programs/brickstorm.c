@@ -116,6 +116,8 @@ int ball_y = 200;
 int paddle_x = 240;
 int power = 0;            /* the power-up in force, or 0 */
 int power_timer = 0;      /* its frames left */
+int power_msg = 0;        /* the power-up just picked up (0 = none) */
+int power_msg_timer = 0;  /* how long the message stays up */
 int boss_hp = 0;
 int boss_state = 0;       /* 0 none, 1 entering, 2 fighting, 3 dying */
 int balls = 0;            /* the balls in play */
@@ -169,7 +171,8 @@ typedef struct {
     int x, y;              /* 1/16 px */
     int vx, vy;            /* 1/16 px per frame */
     int alive;
-    int stuck;             /* the catch power-up holds it on the paddle */
+    int stuck;             /* the ball is held (the serve, or the catch) */
+    int caught;            /* ...and it was the CATCH that held it */
     int stick_dx;          /* where on the paddle it is held, in px */
 } Ball;
 
@@ -590,6 +593,7 @@ static void serve_ball(void)
     ball_list[0].vx = 0;
     ball_list[0].vy = 0;
     ball_list[0].stuck = 1;
+    ball_list[0].caught = 0;        /* the serve holds it, not the catch */
     ball_list[0].stick_dx = 0;      /* it waits in the middle of the paddle */
     ball_list[0].alive = 1;
     balls = 1;
@@ -644,13 +648,19 @@ static void apply_power(int kind)
          * caught as a teleport (the "the ball was moved by magic"
          * feeling). It is caught where it lands, and it rides the
          * paddle from there. */
-        catch_timer = 600;
+        catch_timer = 300;              /* five seconds to use it */
         power = P_CATCH;
-        power_timer = 600;
+        power_timer = 300;
         break;
     default:
         break;
     }
+    /* Every power-up says so. The HUD's POWER bar only ever showed the
+     * two TIMED powers, so picking up EXPAND, MULTI, SLOW or FAST gave
+     * no sign at all — the player hit a power-up and nothing happened.
+     * The name goes up for a moment, whatever the power does. */
+    power_msg = kind;
+    power_msg_timer = 100;
     add_score(100);
     sfx(700, 1500, 18);
 }
@@ -821,21 +831,31 @@ static void ball_vs_bricks(Ball *b)
             }
 
             if (over_y <= over_x) {
-                /* The ball came at the brick's top or its bottom: it
-                 * bounces vertically, and the correction puts it back on
-                 * the side it came from.
+                /* The ball came at the brick's top or its bottom — but
+                 * only if it was actually HEADING for that face. A ball
+                 * that drifted in from the side is already inside the
+                 * brick, and there is nothing for it to bounce off: it
+                 * carries on, the brick breaks, and there is nothing
+                 * left to be inside of. (Bouncing it out of the top of
+                 * a brick it entered from the side was a fifteen-pixel
+                 * jump in one frame.)
                  *
-                 * (The two sides used to be the wrong way round: a ball
-                 * that hit a brick's underside was teleported 19 px UP,
-                 * through the brick and into the row above — where it
-                 * broke that row's bricks and set off their bombs. That
-                 * was the "the ball is magically moved" feeling, and the
-                 * play-test audit's teleport detector found it.) */
-                b->vy = -b->vy;
-                if (b->vy > 0)
-                    b->y = (by + BRICK_H) * FP;   /* now going down: below */
-                else
-                    b->y = (by - BALL_S) * FP;   /* now going up: above */
+                 * (The two sides of the correction used to be the wrong
+                 * way round: a ball that hit a brick's underside was
+                 * teleported 19 px UP, through the brick and into the row
+                 * above — where it broke that row's bricks and set off
+                 * their bombs. That was the "the ball is magically moved"
+                 * feeling, and the play-test audit's teleport detector
+                 * found it.) */
+                int from_face = (b->vy > 0) ? (py - by < BALL_S)
+                                            : (by + BRICK_H - py < BALL_S);
+                if (from_face) {
+                    b->vy = -b->vy;
+                    if (b->vy > 0)
+                        b->y = (by + BRICK_H) * FP;   /* now going down: below */
+                    else
+                        b->y = (by - BALL_S) * FP;   /* now going up: above */
+                }
             } else {
                 /* The ball came at the brick's SIDE, and here the original
                  * Breakout's rule is the better one: a brick never
@@ -846,10 +866,11 @@ static void ball_vs_bricks(Ball *b)
                  * left the paddle exactly where the player sent it and
                  * the next thing it touched threw it the other way.
                  *
-                 * (The original simply cleared the brick and flipped vy;
-                 * the position is left alone here for the same reason —
-                 * the brick is broken, so there is nothing to be inside
-                 * of.) */
+                 * The ball is NOT pushed out of the brick's side either:
+                 * putting it back outside means a jump of up to forty
+                 * pixels (the brick's width), and the audit caught that
+                 * as a teleport too. The brick breaks, and there is
+                 * nothing left to be inside of. */
                 b->vy = -b->vy;
             }
             limit_flat(b);
@@ -970,6 +991,7 @@ static void ball_vs_paddle(Ball *b)
      * frame, which the audit caught as a teleport.) */
     if (catch_timer > 0) {
         b->stuck = 1;
+        b->caught = 1;
         b->stick_dx = (cross_x / FP) - paddle_x;
         b->x = cross_x;
         b->y = (PADDLE_Y - BALL_S) * FP;
@@ -1132,6 +1154,52 @@ static void update(void)
 
     frames++;
 
+    /* --- the power-up timers ----------------------------------------------- */
+    if (power_timer > 0)
+        power_timer--;
+    if (power_msg_timer > 0)
+        power_msg_timer--;
+    if (catch_timer > 0) {
+        catch_timer--;
+        if (catch_timer == 0) {
+            power = 0;
+            /* The time is up: the ball goes back into play. It used to
+             * be simply unstuck, with its speed at zero — so it hung in
+             * the air for ever and could not be released. */
+            for (i = 0; i < 8; i++)
+                if (ball_list[i].alive && ball_list[i].caught) {
+                    ball_list[i].stuck = 0;
+                    ball_list[i].caught = 0;
+                    ball_list[i].vy = 1;  /* it drops back onto the paddle */
+                }
+        }
+    }
+    /* A lets a caught ball go: it is released where it was caught, and
+     * the paddle hands it back on the catch-point rule as usual. */
+    if ((pad & BTN_A) && catch_timer > 0) {
+        for (i = 0; i < 8; i++) {
+            if (ball_list[i].alive && ball_list[i].caught) {
+                ball_list[i].stuck = 0;
+                ball_list[i].caught = 0;
+                ball_list[i].vy = 1;      /* it will bounce off the paddle */
+                catch_timer = 0;          /* and the catch is over */
+                power = 0;
+                break;
+            }
+        }
+    }
+    if (laser_timer > 0) {
+        laser_timer--;
+        if (laser_timer == 0)
+            power = 0;
+    }
+    if (speed_timer > 0) {
+        speed_timer--;
+        if (speed_timer == 0)
+            ball_speed = speed_for_level(level);   /* the stage's speed back */
+    }
+
+
     if (state == ST_TITLE) {
         title_t++;
         if (pressed(pad, BTN_LEFT)) {
@@ -1278,42 +1346,6 @@ static void update(void)
             state = ST_CLEAR;
             sfx(500, 1000, 30);
         }
-    }
-
-    /* --- the power-up timers ----------------------------------------------- */
-    if (power_timer > 0)
-        power_timer--;
-    if (catch_timer > 0) {
-        catch_timer--;
-        if (catch_timer == 0) {
-            power = 0;
-            for (i = 0; i < 8; i++)
-                if (ball_list[i].alive)
-                    ball_list[i].stuck = 0;
-        }
-    }
-    /* A lets a caught ball go: it is released where it was caught, and
-     * the paddle hands it back on the catch-point rule as usual. */
-    if ((pad & BTN_A) && catch_timer > 0) {
-        for (i = 0; i < 8; i++) {
-            if (ball_list[i].alive && ball_list[i].stuck) {
-                ball_list[i].stuck = 0;
-                ball_list[i].vy = 1;      /* it will bounce off the paddle */
-                catch_timer = 0;          /* and the catch is over */
-                power = 0;
-                break;
-            }
-        }
-    }
-    if (laser_timer > 0) {
-        laser_timer--;
-        if (laser_timer == 0)
-            power = 0;
-    }
-    if (speed_timer > 0) {
-        speed_timer--;
-        if (speed_timer == 0)
-            ball_speed = speed_for_level(level);   /* the stage's speed back */
     }
 
     /* --- the paddle's laser ------------------------------------------------ */
@@ -1607,9 +1639,18 @@ static void draw_hud(void)
      * row: on the first it sat on top of the hi-score. */
     if (power) {
         int left = power_timer;
+        int span = (power == P_CATCH) ? 300 : 900;
         text_draw(330, 11, "POWER", arcade1_rgb(0xFF, 0xC0, 0x60));
         arcade1_rect(378, 12, 60, 5, arcade1_rgb(0x20, 0x30, 0x50));
-        arcade1_rect(378, 12, (left * 60) / 900, 5, arcade1_rgb(0x60, 0xFF, 0x90));
+        arcade1_rect(378, 12, (left * 60) / span, 5, arcade1_rgb(0x60, 0xFF, 0x90));
+    }
+    /* The power-up that was just picked up. Without it, four of the six
+     * gave no sign at all. */
+    if (power_msg_timer > 0) {
+        static const char *const names[6] = {
+            "EXPAND", "MULTI", "SLOW", "FAST", "LASER", "CATCH"
+        };
+        text_draw(300, 2, names[power_msg % 6], arcade1_rgb(0x60, 0xFF, 0x90));
     }
 
     /* the boss's health bar */

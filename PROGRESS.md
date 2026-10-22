@@ -394,6 +394,21 @@ ROM are exactly as they were.
   * and the audit's own crash: the session that froze turned out to be
     a **build** bug, not a game bug — see
     `docs/experiments/misaligned-crt0-runtime.md`.
+* **The power-ups say so, and the catch works.** Four of the six
+  power-ups (EXPAND, MULTI, SLOW, FAST) had no sign at all — the HUD's
+  POWER bar only ever showed the two *timed* powers, so hitting a
+  power-up looked like nothing happening. Every power-up now puts its
+  name up for a moment.
+  The CATCH had two faults: the power-up **pulled the ball to the
+  paddle** (a 30 px jump in one frame — the "the ball was moved by
+  magic" feeling, now fixed: the ball is caught where it lands and
+  rides the paddle from there, and **A** lets it go), and its
+  **countdown never ran out**, because the power-up timers sat after
+  the state branches in `update()` and the *serve* state returns early
+  — so the countdown froze with the ball on the paddle and the game
+  could not be released. The timers now run in every state, the
+  countdown is 5 seconds, and when it runs out the ball goes back into
+  play.
 * **The contact recorder.** The game publishes every paddle contact (the
   frame, where the ball landed, which side of the centre that was, the
   velocity it left with and the one it arrived with), and
