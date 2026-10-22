@@ -310,10 +310,13 @@ ROM are exactly as they were.
 * **The play-test audit** (the second pass, with the recorder): sixteen
   scripted sessions × 3,000 frames, and a scratch build with an
   autopilot that tracks the ball so the contacts are hundreds, not
-  six. A "glove detector" flags every change of the ball's direction
-  that the physics cannot explain — a mirror about an axis, the flat
-  limit, a paddle contact, a new serve. The audit found four real
-  things:
+  six. The audit is a tool now — `tools/audit_brickstorm.py` — and it
+  checks the whole rally: every change of the ball's direction must be
+  explainable (a mirror about an axis, the flat limit, a paddle
+  contact, a new serve — anything else is an invisible hand moving the
+  ball), the catch point must be on the paddle, a left catch must never
+  leave to the right, a centre catch must never go straight up, and the
+  bookkeeping must not jump. It found four real things:
   * the **observables lied**: `ball_x`/`ball_y` came from the *last*
     ball alive and `ball_vx`/`ball_vy` from the *first*, so with the
     MULTI power-up in flight the tools read two different balls and
