@@ -105,9 +105,12 @@ if [ -f "$SYMS" ]; then
     # landed, which side of the centre that was, and the velocity it left
     # with). The recorder turns the trace into a log and checks the rule:
     # a ball caught on the left leaves to the left, one caught on the
-    # right leaves to the right, one caught dead centre leaves straight
-    # up. This is the regression for the bug that made the paddle always
-    # kick the ball to the right, whatever side it was caught on.
+    # right leaves to the right, and one caught dead centre keeps the way
+    # it was already travelling (never straight up — a dead vertical
+    # launch lets the ball bounce up and down one column for ever). The
+    # catch point must also be ON the paddle. This is the regression for
+    # the bug that made the paddle always kick the ball to the right,
+    # whatever side it was caught on.
     python3 "$(dirname "$0")/../tools/record_hits.py" "$GAME" \
         --input "$HITS" --frames 1500 --syms "$SYMS" --check \
         --out "$OUT/hits.txt" > /dev/null ||

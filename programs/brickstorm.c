@@ -13,9 +13,15 @@
  *
  * Observable globals (read with --vars):
  *   state, score, hi_score, lives, level, bricks_left, ball_x, ball_y,
- *   paddle_x, power, boss_hp, boss_state, balls
+ *   paddle_x, paddle_w, power, boss_hp, boss_state, balls, ball_vx,
+ *   ball_vy, ball_id, machine_frame
  *
  *   arcade1 run brickstorm.arc1 --vars state,score,lives,level
+ *
+ * The contact recorder's globals (a paddle contact, published for the
+ * tools): hit_frame, hit_off, hit_side, hit_vx, hit_vx_in, hit_count.
+ * `hit_frame` is the MACHINE's frame (the timer device), not the game's
+ * own counter, which restarts at every level.
  *
  * States: 0 = the title, 1 = the serve (the ball waits on the paddle),
  * 2 = playing, 3 = the death pause, 4 = the level clear, 5 = the game
@@ -117,7 +123,20 @@ volatile int hit_frame = 0;   /* the frame of the last contact */
 volatile int hit_off = 0;     /* where it landed, 1/16 px from the centre */
 volatile int hit_side = 0;    /* -1 left of centre, 0 dead centre, +1 right */
 volatile int hit_vx = 0;      /* the horizontal velocity it left with */
+volatile int hit_vx_in = 0;   /* the horizontal velocity it arrived with */
 volatile int hit_count = 0;   /* the contacts so far */
+
+/* Which ball the observables (ball_x, ball_y, ball_vx, ball_vy) describe.
+ * With the MULTI power-up there can be several balls in flight and the
+ * tools need to know when the one they are watching has been replaced. */
+volatile int ball_id = -1;
+
+/* The MACHINE's frame counter — the timer device, not the game's own
+ * `frames`, which restarts at every level load. The contact recorder
+ * has to name the frame the contact happened on the way the tools count
+ * frames (the trace's own numbering), or every contact is off by the
+ * frames that ran before the level began. */
+volatile int machine_frame = 0;
 
 /* ------------------------------------------------------------------------ */
 /* the entities                                                             */
@@ -860,6 +879,7 @@ static void ball_vs_paddle(Ball *b)
     int px = b->x / FP;
     int py = b->y / FP;
     int prev_top, now_top, frac, cross_x, off, step, pos_step, k;
+    int in_vx;
     if (b->vy <= 0)
         return;
     if (py + BALL_S < PADDLE_Y || py > PADDLE_Y + PADDLE_H)
@@ -867,6 +887,7 @@ static void ball_vs_paddle(Ball *b)
     if (px + BALL_S <= paddle_x - paddle_w / 2 ||
         px >= paddle_x + paddle_w / 2)
         return;
+    in_vx = b->vx;                 /* the way it was already travelling */
 
     /* where the ball's lower edge crossed the paddle's top edge */
     prev_top = b->y - b->vy + BALL_S * FP;
@@ -887,23 +908,45 @@ static void ball_vs_paddle(Ball *b)
     /* The catch point decides the DIRECTION; the paddle's own motion may
      * only bend the angle WITHIN that direction. A ball caught on the
      * left always leaves to the left, a ball caught dead centre leaves
-     * straight up — the sweep is a garnish, never a second opinion.
+     * the way it was already travelling — the sweep is a garnish, never a
+     * second opinion.
      *
      * (The english is signed by the sweep's direction, so sweeping with
      * the ball's line flattens the return and sweeping against it
      * steepens it — the way a moving surface actually works.) */
+    /* The offset from the paddle's centre, in 1/16 px — CLAMPED to the
+     * paddle's half width. The crossing point is a moment ago and the
+     * paddle may have moved since, so without the clamp the catch point
+     * can be off the paddle's edge and the launch angle can exceed the
+     * angle the paddle is supposed to give. The edge is the maximum
+     * angle; that is the contract. */
     off = cross_x - paddle_x * FP;
+    {
+        int max_off = paddle_w * FP / 2;
+        if (off > max_off)
+            off = max_off;
+        if (off < -max_off)
+            off = -max_off;
+    }
     pos_step = (off * 6) / (paddle_w * FP / 2);
     step = pos_step;
+    if (step == 0) {
+        /* A dead-centre catch keeps the way the ball was already going, at
+         * the shallowest legal angle. A dead VERTICAL launch is the
+         * classic's worst stalemate: the ball goes up and down one
+         * column forever and nothing is ever broken. The contact
+         * recorder's audit found it: the ball sat in one column for
+         * 2,000 frames, the score never moved. */
+        step = (in_vx < 0) ? -1 : 1;
+    }
     {
         int eng = paddle_vx / 5;
         int want = step + eng;
-        if (step < 0 && want > 0)
-            want = 0;                   /* a left catch never leaves right */
-        else if (step > 0 && want < 0)
-            want = 0;                   /* a right catch never leaves left */
-        else if (step == 0)
-            want = 0;                   /* a centre catch stays vertical */
+        /* the sweep bends the angle, never the direction */
+        if ((step < 0 && want > 0) || (step > 0 && want < 0))
+            want = step;                 /* a left catch never leaves right */
+        if (want == 0)
+            want = step;                 /* never a dead vertical launch */
         step = want;
     }
     k = step < 0 ? -step : step;
@@ -920,10 +963,11 @@ static void ball_vs_paddle(Ball *b)
     b->vy = -(ball_speed * ang_y[k]) >> 8;
     b->y = (PADDLE_Y - BALL_S) * FP;
     /* publish the contact */
-    hit_frame = (int)frames;
+    hit_frame = machine_frame;
     hit_off = off;
     hit_side = pos_step < 0 ? -1 : (pos_step > 0 ? 1 : 0);
     hit_vx = b->vx;
+    hit_vx_in = in_vx;             /* how it was travelling when it landed */
     hits++;
     hit_count = hits;             /* published for the tools */
     paddle_squash = 3;
@@ -1534,6 +1578,7 @@ int main(void)
     for (;;) {
         int sx = 0, sy = 0;
 
+        machine_frame = (int)arcade1_timer_count();
         update();
         sfx_update();
 
@@ -1550,20 +1595,28 @@ int main(void)
         for (i = 0; i < 8; i++) {
             if (!ball_list[i].alive)
                 continue;
-            ball_x = ball_list[i].x / FP;
-            ball_y = ball_list[i].y / FP;
-            asset_sprite4(&ball_frames[(frames / 6) & 1], ball_x - 4,
-                          ball_y - 4, 0);
+            asset_sprite4(&ball_frames[(frames / 6) & 1],
+                          ball_list[i].x / FP - 4, ball_list[i].y / FP - 4, 0);
         }
         draw_paddle();
         draw_hud();
+        /* The observables must all describe the SAME ball — the first one
+         * alive. The position used to come from the LAST ball drawn and
+         * the velocity from the FIRST, so with the MULTI power-up in
+         * flight the tools read two different balls and every direction
+         * change looked like a phantom hand on the ball. */
         for (i = 0; i < 8; i++) {
             if (ball_list[i].alive) {
+                ball_x = ball_list[i].x / FP;
+                ball_y = ball_list[i].y / FP;
                 ball_vx = ball_list[i].vx;
                 ball_vy = ball_list[i].vy;
+                ball_id = i;
                 break;
             }
         }
+        if (i == 8)
+            ball_id = -1;
         arcade1_present();
     }
     return 0;

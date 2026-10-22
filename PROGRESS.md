@@ -218,6 +218,7 @@ All builds use `-Wall -Wextra` and must stay warning-free.
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-22 | the BRICKSTORM physics pass | 2 m 10 s (130 s) — **starved**: RetroArch was at 69 % CPU on the same box, so this number is the load, not the suite |
 | 2026-10-21 | BRICKSTORM (Game #5) | 1 m 57 s (117 s) |
 | 2026-10-21 | TEMPEST (Game #4) | 1 m 52 s (112 s) |
 | 2026-10-21 | the library's day sky and faces | 1 m 48 s (108 s) |
@@ -300,17 +301,49 @@ ROM are exactly as they were.
   **60° from the vertical** (it is put back on that line at the same
   speed), and the paddle's own motion adds a little **english** — but
   only within the direction the catch point chose: a ball caught on the
-  left always leaves to the left, and a ball caught dead centre leaves
-  straight up. The catch point is the joystick; the sweep is a garnish.
+  left always leaves to the left, and a ball caught dead centre keeps
+  the way it was already travelling. The catch point is the joystick;
+  the sweep is a garnish.
   The ball's velocity is observable (`ball_vx`, `ball_vy`) so the
   invariants can be checked: over a whole session the ball is never
   flatter than 60 degrees.
+* **The play-test audit** (the second pass, with the recorder): sixteen
+  scripted sessions × 3,000 frames, and a scratch build with an
+  autopilot that tracks the ball so the contacts are hundreds, not
+  six. A "glove detector" flags every change of the ball's direction
+  that the physics cannot explain — a mirror about an axis, the flat
+  limit, a paddle contact, a new serve. The audit found four real
+  things:
+  * the **observables lied**: `ball_x`/`ball_y` came from the *last*
+    ball alive and `ball_vx`/`ball_vy` from the *first*, so with the
+    MULTI power-up in flight the tools read two different balls and
+    every direction change looked like a phantom hand on the ball. All
+    four now describe the same ball, and `ball_id` says which.
+  * the **contact's frame number was wrong**: it published the game's
+    own frame counter, which restarts at every level, so every contact
+    was off by the frames that ran before the level began. It now
+    publishes the **machine's** frame (the timer device).
+  * the **catch point could land off the paddle**: the swept crossing is
+    a moment in the past and the paddle may have moved since, so the
+    offset could exceed the paddle's half width and the launch angle
+    could exceed the angle the paddle is supposed to give. The offset
+    is clamped to the paddle now — the edge is the maximum angle.
+  * a **dead-centre catch launched the ball perfectly vertically**, and
+    a perfectly vertical ball in an empty column bounces up and down it
+    for ever: the score never moves and the game is stuck. A centre
+    catch now keeps the way the ball was already travelling, at the
+    shallowest legal angle. (The recorder's rule follows: a centre
+    catch must not go straight up, and must not change sides.)
+  * and the audit's own crash: the session that froze turned out to be
+    a **build** bug, not a game bug — see
+    `docs/experiments/misaligned-crt0-runtime.md`.
 * **The contact recorder.** The game publishes every paddle contact (the
-  frame, where the ball landed, which side of the centre that was, and
-  the velocity it left with), and `tools/record_hits.py` turns the
-  CLI's per-frame `--vars` trace into a contact log — one line per
-  contact, with the exact frame — and checks the catch-point rule over
-  the whole log. It is a regression, and it found two bugs:
+  frame, where the ball landed, which side of the centre that was, the
+  velocity it left with and the one it arrived with), and
+  `tools/record_hits.py` turns the CLI's per-frame `--vars` trace into a
+  contact log — one line per contact, with the exact frame — and checks
+  the catch-point rule over the whole log. It is a regression, and it
+  found two bugs:
   * the paddle's launch step lost its **SIGN**, so the paddle always
     kicked the ball to the right, whatever side it was caught on;
   * the flat-angle limit was **inverted** — it forbade the ball from

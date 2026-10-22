@@ -18,9 +18,11 @@ The log is one line per contact:
 
 and with --check it also asserts the game's own rule, if it has one: a
 contact on the left must leave to the left, a contact on the right to
-the right, a contact dead centre straight up. That is the rule the
-BRICKSTORM paddle follows ("the catch point decides the direction, the
-sweep only bends it").
+the right, and a contact dead centre must keep the way the ball was
+already travelling — never straight up, which would let the ball bounce
+up and down one column for ever. That is the rule the BRICKSTORM paddle
+follows ("the catch point decides the direction, the sweep only bends
+it").
 
 Stdlib only.
 """
@@ -78,13 +80,13 @@ def trace(rom, script, frames, syms, vars_list):
 def contacts(frames_seen):
     """The contacts, in order: one entry per change of hit_count."""
     out = []
-    last = -1
+    last = 0
     for frame in sorted(frames_seen):
         v = frames_seen[frame]
         count = v.get("hit_count")
         if count is None:
             continue
-        if count != last:
+        if count > last:
             last = count
             out.append((frame, v))
     return out
@@ -107,7 +109,7 @@ def main():
         guess = os.path.splitext(rom)[0] + ".syms"
         syms = guess if os.path.exists(guess) else None
 
-    vars_list = "hit_frame,hit_off,hit_side,hit_vx,hit_count"
+    vars_list = "hit_frame,hit_off,hit_side,hit_vx,hit_vx_in,hit_count,paddle_w"
     frames_seen = trace(rom, args.input, args.frames, syms, vars_list)
     hits = contacts(frames_seen)
     if not hits:
@@ -116,14 +118,15 @@ def main():
         return 1
 
     lines = ["# the paddle contacts: the frame, the side of the centre the",
-             "# ball landed on, how far from the centre (1/16 px), and the",
-             "# horizontal velocity it left with.",
-             "#  frame  side  offset      vx"]
+             "# ball landed on, how far from the centre (1/16 px), the",
+             "# horizontal velocity it left with, and the one it arrived with.",
+             "#  frame  side  offset      vx   vx in"]
     for frame, v in hits:
-        lines.append("%6d  %4d  %6d  %6d" % (v.get("hit_frame", frame),
-                                             v.get("hit_side", 0),
-                                             v.get("hit_off", 0),
-                                             v.get("hit_vx", 0)))
+        lines.append("%6d  %4d  %6d  %6d  %6d" % (v.get("hit_frame", frame),
+                                                   v.get("hit_side", 0),
+                                                   v.get("hit_off", 0),
+                                                   v.get("hit_vx", 0),
+                                                   v.get("hit_vx_in", 0)))
     text = "\n".join(lines) + "\n"
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
@@ -138,12 +141,24 @@ def main():
         for frame, v in hits:
             side = v.get("hit_side", 0)
             vx = v.get("hit_vx", 0)
-            if side < 0 and vx > 0:
+            vx_in = v.get("hit_vx_in", 0)
+            off = v.get("hit_off", 0)
+            half = v.get("paddle_w", 0) * 8      # half the paddle, in 1/16 px
+            if half and abs(off) > half:
+                bad.append((frame, side, vx,
+                            "the catch point is off the paddle (%d, the "
+                            "paddle is %d px wide)" % (off, v["paddle_w"])))
+            elif side < 0 and vx > 0:
                 bad.append((frame, side, vx, "a left catch left to the right"))
             elif side > 0 and vx < 0:
                 bad.append((frame, side, vx, "a right catch left to the left"))
-            elif side == 0 and vx != 0:
-                bad.append((frame, side, vx, "a centre catch was bent"))
+            elif side == 0:
+                if vx == 0:
+                    bad.append((frame, side, vx,
+                                "a centre catch went straight up"))
+                elif vx_in and (vx > 0) != (vx_in > 0):
+                    bad.append((frame, side, vx,
+                                "a centre catch changed sides"))
         if bad:
             for frame, side, vx, why in bad[:10]:
                 sys.stderr.write("record_hits: frame %d: %s (side %d, vx %d)\n"
