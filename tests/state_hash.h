@@ -76,15 +76,28 @@ static inline uint64_t state_hash(const arcade1_cpu_t *cpu,
 
 /* Fingerprint of the visible output: FNV-1a 64-bit over the framebuffer,
  * every RGB565 pixel as 2 bytes little-endian, row-major. Two machines that
- * presented identical pictures hash equal regardless of CPU/RAM state. */
+ * presented identical pictures hash equal regardless of CPU/RAM state.
+ *
+ * Sampled on the LOGICAL grid (the guest's ARCADE1_WIDTH x ARCADE1_HEIGHT),
+ * reading the top-left pixel of each logical pixel's k x k physical block, so
+ * the fingerprint means "the picture the guest composed" and does not change
+ * when the framebuffer is expanded by ARCADE1_HD_SCALE. At the default k = 1
+ * the addresses are (y * ARCADE1_WIDTH + x) in the same y-major order as
+ * before, so every existing golden hash is unchanged. */
 static inline uint64_t fb_hash(const arcade1_machine_t *m)
 {
     uint64_t h = SH_FNV_OFFSET;
     const uint16_t *fb = arcade1_framebuffer(m);
 
-    for (size_t i = 0; i < (size_t)ARCADE1_FB_PIXELS; i++) {
-        h = sh_byte(h, (uint8_t)(fb[i] & 0xFFu));
-        h = sh_byte(h, (uint8_t)((fb[i] >> 8) & 0xFFu));
+    for (size_t y = 0; y < (size_t)ARCADE1_HEIGHT; y++) {
+        for (size_t x = 0; x < (size_t)ARCADE1_WIDTH; x++) {
+            const size_t i = (y * (size_t)ARCADE1_HD_SCALE) *
+                             (size_t)ARCADE1_FB_STRIDE +
+                             x * (size_t)ARCADE1_HD_SCALE;
+
+            h = sh_byte(h, (uint8_t)(fb[i] & 0xFFu));
+            h = sh_byte(h, (uint8_t)((fb[i] >> 8) & 0xFFu));
+        }
     }
     return h;
 }

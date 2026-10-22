@@ -100,7 +100,7 @@ nm_src        = $(if $(wildcard $(ARC1_ROM_DIR)/$(1).syms), \
         test-art-library \
         test-art-canvas \
         test-art-pixmap test-art-rig test-art-ingest test-art-qa \
-        test-art-faces
+        test-art-faces test-hd-default
 
 # --- Developer CLI: `arcade1 run` (milestone 28, AI SDK v0.1) ---------------
 # The variables live up here, NOT beside their build rules further down:
@@ -152,7 +152,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-shmup test-brickstorm \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
         test-art-rig test-art-ingest test-art-qa test-art-faces \
-        test-doc-gaps
+        test-doc-gaps test-hd-default
 
 all: $(TARGET)
 
@@ -340,6 +340,14 @@ $(TESTDIR)/test_info: tests/test_info.c $(SDK_DATA) | $(TESTDIR)
 
 test-info: $(CLI_BIN) $(TESTDIR)/test_info tests/test_info.sh
 	sh tests/test_info.sh $(CLI_BIN) $(TESTDIR)/test_info
+
+# HD_EXPERIMENT.md H1: the experiment's ONE admission into `make check`
+# (§0 rule 3). It proves the default build carries no ARCADE1_HD_SCALE and
+# still emits the frozen frame hashes. Deliberately run against the committed
+# ROMs, so it tests the default build alone and needs no RISC-V toolchain.
+# The k = 2 / k = 4 acceptance is `make hd-experiment`, which is NOT in check.
+test-hd-default: $(CLI_BIN) tests/test_hd_default.sh
+	sh tests/test_hd_default.sh $(CLI_BIN) $(GOLDEN_ROMDIR) $(GOLDEN_DIR)
 
 # ROADMAP_V4 card 4.2: golden authoring from the CLI — `arcade1 golden
 # game --out FILE` writes the frame lines `arcade1 test --golden` reads.
@@ -662,6 +670,35 @@ $(CLI_BIN): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTD
 # prove the --live absence path exits 3 and nothing else changes).
 $(CLI_NOSDL): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
 	$(CC) $(CFLAGS) -Itests -Itools -o $@ $(CLI_SRC) $(SDK_DATA)
+
+# --- HD resolution experiment (HD_EXPERIMENT.md, card H1) -------------------
+# SEPARATE binaries, the SAME sources: -DARCADE1_HD_SCALE=k makes the scanout
+# framebuffer 480k x 270k while the guest keeps drawing in logical 480x270,
+# every logical pixel expanded as a k x k block by video.c's pixel-plot choke
+# point. The default build never passes the flag, machine.h defaults k to 1,
+# and NOTHING listed here is a prerequisite of `all` or `check` (§0 rules 1
+# and 3): the default machine and every golden are untouched by this target.
+HD_BIN1 := $(TESTDIR)/arcade1-hd1   # the experiment sources at k = 1
+HD_BIN2 := $(TESTDIR)/arcade1-hd2   # 960x540
+HD_BIN4 := $(TESTDIR)/arcade1-hd4   # 1920x1080
+# Headless on purpose (like CLI_NOSDL): measurements must not depend on an
+# SDL3 install, a window or a display.
+HD_FLAGS := -Itests -Itools
+
+$(HD_BIN1): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -DARCADE1_HD_SCALE=1 $(HD_FLAGS) -o $@ $(CLI_SRC) $(SDK_DATA)
+
+$(HD_BIN2): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -DARCADE1_HD_SCALE=2 $(HD_FLAGS) -o $@ $(CLI_SRC) $(SDK_DATA)
+
+$(HD_BIN4): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -DARCADE1_HD_SCALE=4 $(HD_FLAGS) -o $@ $(CLI_SRC) $(SDK_DATA)
+
+# Build all three and run the H1 acceptance script.
+.PHONY: hd-experiment
+hd-experiment: $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
+	sh experiments/hd/test_scale.sh $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) \
+	    $(HD_BIN4) $(GOLDEN_ROMDIR)
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and

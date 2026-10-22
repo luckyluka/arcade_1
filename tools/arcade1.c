@@ -100,6 +100,7 @@
 #include <sys/stat.h>     /* mkdir: the capture subcommand's directory */
 #include <errno.h>
 #include <sys/wait.h>     /* waitpid */
+#include <time.h>         /* clock_gettime(CLOCK_MONOTONIC): run --bench (H1) */
 
 /* The play window (cmd_run --live): SDL3 is OPTIONAL (ROADMAP_V3 §4.5). The
  * Makefile defines this only when pkg-config finds sdl3; without it every
@@ -365,8 +366,8 @@ static int live_setup(const char *rom_path, unsigned scale)
         return -1;
     }
     g_sdl_up = 1;
-    g_window = SDL_CreateWindow(title, (int)(ARCADE1_WIDTH * scale),
-                                (int)(ARCADE1_HEIGHT * scale), 0);
+    g_window = SDL_CreateWindow(title, (int)(ARCADE1_FB_W * scale),
+                                (int)(ARCADE1_FB_H * scale), 0);
     if (!g_window) {
         fprintf(stderr, "arcade1 run --live: cannot open a window: %s\n",
                 SDL_GetError());
@@ -382,7 +383,7 @@ static int live_setup(const char *rom_path, unsigned scale)
     }
     g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_RGB565,
                                   SDL_TEXTUREACCESS_STREAMING,
-                                  ARCADE1_WIDTH, ARCADE1_HEIGHT);
+                                  ARCADE1_FB_W, ARCADE1_FB_H);
     if (!g_texture) {
         fprintf(stderr, "arcade1 run --live: no RGB565 texture: %s\n",
                 SDL_GetError());
@@ -514,7 +515,9 @@ static void px_rgb888(uint16_t p, uint8_t out[3])
 }
 
 /* Nearest-neighbour upscale: output pixel (x, y) is framebuffer pixel
- * (x / scale, y / scale). scale 1 reproduces the framebuffer exactly. */
+ * (x / scale, y / scale). scale 1 reproduces the framebuffer exactly.
+ * Reads the PHYSICAL framebuffer, so a build with ARCADE1_HD_SCALE = k
+ * captures 480k x 270k; at the default k = 1 that is 480 x 270 as always. */
 static int write_ppm(const char *path, const uint16_t *fb, unsigned scale)
 {
     FILE *f = fopen(path, "wb");
@@ -522,11 +525,12 @@ static int write_ppm(const char *path, const uint16_t *fb, unsigned scale)
         fprintf(stderr, "arcade1: cannot write '%s'\n", path);
         return -1;
     }
-    fprintf(f, "P6\n%u %u\n255\n", (unsigned)ARCADE1_WIDTH * scale,
-            (unsigned)ARCADE1_HEIGHT * scale);
-    for (unsigned y = 0; y < (unsigned)ARCADE1_HEIGHT * scale; y++) {
-        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_WIDTH;
-        for (unsigned x = 0; x < (unsigned)ARCADE1_WIDTH * scale; x++) {
+    fprintf(f, "P6\n%u %u\n255\n", (unsigned)ARCADE1_FB_W * scale,
+            (unsigned)ARCADE1_FB_H * scale);
+    for (unsigned y = 0; y < (unsigned)ARCADE1_FB_H * scale; y++) {
+        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_FB_STRIDE;
+
+        for (unsigned x = 0; x < (unsigned)ARCADE1_FB_W * scale; x++) {
             uint8_t rgb[3];
             px_rgb888(row[x / scale], rgb);
             if (fwrite(rgb, 1, 3, f) != 3) {
@@ -817,8 +821,8 @@ static int write_png(const char *path, const uint16_t *fb, unsigned scale,
                      int store)
 {
     static const uint8_t sig[8] = { 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A };
-    const unsigned w = (unsigned)ARCADE1_WIDTH * scale;
-    const unsigned h = (unsigned)ARCADE1_HEIGHT * scale;
+    const unsigned w = (unsigned)ARCADE1_FB_W * scale;
+    const unsigned h = (unsigned)ARCADE1_FB_H * scale;
     const size_t   stride = (size_t)w * 3 + 1;        /* filter byte + RGB  */
     const size_t   raw_len = stride * h;
     const size_t   nblk = (raw_len + 65534) / 65535;  /* ceil, >= 1         */
@@ -840,7 +844,7 @@ static int write_png(const char *path, const uint16_t *fb, unsigned scale,
         return -1;
     }
     for (unsigned y = 0; y < h; y++) {
-        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_WIDTH;
+        const uint16_t *row = fb + (y / scale) * (unsigned)ARCADE1_FB_STRIDE;
         uint8_t *dst = raw + (size_t)y * stride;
         dst[0] = 0;                                  /* filter: none */
         for (unsigned x = 0; x < w; x++)
@@ -1099,6 +1103,121 @@ static int resolve_vars(const char *list)
     return g_nvars ? 0 : -1;
 }
 
+/* --- `run --bench` (HD experiment H1 step 5) --------------------------------
+ *
+ * Host timing, and only host timing: each sample is clock_gettime(
+ * CLOCK_MONOTONIC) taken around arcade1_run_frame, so input handling, hashing,
+ * capture writing and the live 60 Hz pacing are all outside the measurement.
+ * None of it ever reaches the machine or any hash — a benchmark number is
+ * diagnostic output, not state.
+ *
+ * The CPU model line is printed with the numbers because a millisecond figure
+ * is meaningless without the machine it was taken on. Every number this emits
+ * is therefore "measured, <this CPU>". */
+
+static int bench_cmp(const void *a, const void *b)
+{
+    const double x = *(const double *)a;
+    const double y = *(const double *)b;
+
+    return (x > y) - (x < y);
+}
+
+/* Best-effort host CPU model from /proc/cpuinfo. A non-Linux host or an odd
+ * architecture leaves "unknown" rather than an error: the timings still stand,
+ * they are just not attributable.
+ *
+ * Keys are ranked, because x86 has both `model : 94` (the CPUID model NUMBER,
+ * useless) and `model name : Intel(R) Core(TM) ...` (what we want), and the
+ * first one in the file is not the good one. */
+static void bench_cpu_model(char *out, size_t cap)
+{
+    char line[512], best[256];
+    int best_pri = 0;
+    FILE *f;
+
+    snprintf(out, cap, "unknown");
+    best[0] = '\0';
+    f = fopen("/proc/cpuinfo", "r");
+    if (f == 0)
+        return;
+    while (fgets(line, sizeof line, f) != 0) {
+        char *colon = strchr(line, ':');
+        char *key, *end, *val, *nl;
+        int pri = 0;
+
+        if (colon == 0)
+            continue;
+        *colon = 0;
+        key = line;
+        while (*key == ' ' || *key == '\t')
+            key++;
+        end = key + strlen(key);
+        while (end > key && (end[-1] == ' ' || end[-1] == '\t'))
+            *--end = '\0';
+
+        if (!strcmp(key, "model name"))          pri = 4;   /* x86, arm64   */
+        else if (!strcmp(key, "cpu model") ||
+                 !strcmp(key, "Model"))          pri = 3;   /* arm, risc-v  */
+        else if (!strcmp(key, "model"))          pri = 2;
+        else if (!strcmp(key, "Hardware"))       pri = 1;   /* arm fallback */
+        else continue;
+        if (pri <= best_pri)
+            continue;
+
+        val = colon + 1;
+        while (*val == ' ' || *val == '\t')
+            val++;
+        nl = strchr(val, '\n');
+        if (nl != 0)
+            *nl = '\0';
+        if (*val == '\0')
+            continue;
+        snprintf(best, sizeof best, "%s", val);
+        best_pri = pri;
+        if (pri == 4)
+            break;
+    }
+    fclose(f);
+    if (best_pri != 0)
+        snprintf(out, cap, "%s", best);
+}
+
+/* Nearest-rank percentile over sorted samples. */
+static unsigned bench_rank(unsigned n, unsigned pct)
+{
+    unsigned rank = (n * pct + 99u) / 100u;   /* ceil(n * pct / 100) */
+
+    if (rank < 1u)
+        rank = 1u;
+    if (rank > n)
+        rank = n;
+    return rank - 1u;                          /* 0-based index */
+}
+
+static void bench_report(double *ms, unsigned n)
+{
+    char cpu[256];
+
+    printf("BENCH_FRAMES %u\n", n);
+    if (n == 0) {
+        printf("BENCH_MS_MEDIAN n/a\n");
+        printf("BENCH_MS_P95 n/a\n");
+        printf("BENCH_MS_MAX n/a\n");
+    } else {
+        qsort(ms, n, sizeof *ms, bench_cmp);
+        printf("BENCH_MS_MEDIAN %.4f\n",
+               (n % 2u) ? ms[n / 2u]
+                        : (ms[n / 2u - 1u] + ms[n / 2u]) / 2.0);
+        printf("BENCH_MS_P95 %.4f\n", ms[bench_rank(n, 95u)]);
+        printf("BENCH_MS_MAX %.4f\n", ms[n - 1u]);
+    }
+    bench_cpu_model(cpu, sizeof cpu);
+    printf("BENCH_CPU_MODEL %s\n", cpu);
+    printf("BENCH_LABEL measured (per-frame monotonic host timing)\n");
+    free(ms);
+}
+
 /* --- run subcommand ------------------------------------------------------- */
 
 static int cmd_run(int argc, char **argv)
@@ -1112,6 +1231,9 @@ static int cmd_run(int argc, char **argv)
     unsigned scale = 1;              /* capture upscale, 1..8 (A3) */
     int format_png = 0;              /* capture-dir extension: .png? */
     int inspect = 0;    int quiet = 0;    int strict = 0;
+    int bench = 0;                      /* H1 step 5: --bench frame timings  */
+    double *bench_ms = NULL;            /* one entry per frame timed         */
+    struct timespec bench_t0, bench_t1;
     int live = 0;                      /* --live: the play window (SDL3)    */
     int frames_set = 0;                /* did --frames appear on the line?  */
     unsigned long long skipped = 0;   /* M29: out-of-window source reads */
@@ -1152,6 +1274,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--inspect")) inspect = 1;
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
         else if (!strcmp(a, "--strict"))                   strict = 1;
+        else if (!strcmp(a, "--bench"))                    bench = 1;
         else if (a[0] == '-') {
             fprintf(stderr, "arcade1 run: unknown option '%s'\n", a);
             return 2;
@@ -1171,6 +1294,7 @@ static int cmd_run(int argc, char **argv)
                 "                   [--scale N] [--record FILE] [--live]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
                 "                   [--pad-trace FILE] [--quiet] [--strict]\n"
+                "                   [--bench]\n"
                 "  --strict exits non-zero if any draw read a source address\n"
                 "  outside ROM/RAM (they silently draw nothing); see below.\n"
                 "  --vars LIST is a comma list of RAM globals, or \"all\";\n"
@@ -1184,6 +1308,10 @@ static int cmd_run(int argc, char **argv)
                 "  --record writes the applied buttons in the script format.\n"
                 "  --pad-trace FILE writes one line per frame:\n"
                 "  'frame N pad 0xXX' — the pad the guest actually saw.\n"
+                "  --bench times only arcade1_run_frame, per frame, on a\n"
+                "  monotonic clock, and prints BENCH_MS_MEDIAN / _P95 /\n"
+                "  _MAX plus the host CPU model. Diagnostic: host timing\n"
+                "  never enters any hash.\n"
                 "  --live opens the play window (SDL3): arrows/WASD d-pad,\n"
                 "  Z -> A, X -> B, Enter -> START, --scale N sets the window\n"
                 "  size; R ends the session writing --record's script, ESC\n"
@@ -1209,6 +1337,23 @@ static int cmd_run(int argc, char **argv)
         }
         if (!frames_set)
             frames = UINT_MAX;
+    }
+
+    /* --bench (H1 step 5): one monotonic-clock sample per frame, taken around
+     * arcade1_run_frame ONLY — input, hashing, capture writing and (in a live
+     * session) the 60 Hz pacing sit outside the sample, so what is measured is
+     * the machine itself. Host timing is diagnostic and never enters a hash. */
+    if (bench) {
+        if (live && !frames_set) {
+            fprintf(stderr, "arcade1 run: --bench needs a --frames bound\n");
+            return 2;
+        }
+        bench_ms = (double *)malloc((size_t)frames * sizeof *bench_ms);
+        if (bench_ms == 0) {
+            fprintf(stderr, "arcade1 run: --bench cannot allocate %u timing "
+                    "slots\n", frames);
+            return 1;
+        }
     }
 
     /* --vars without --syms: auto-load the sidecar `arcade1 build` writes
@@ -1332,7 +1477,15 @@ static int cmd_run(int argc, char **argv)
         record_frame(fr, &in);
         if (pad_trace)
             fprintf(pad_trace, "frame %4u pad 0x%02X\n", fr, pad_bits(&in));
+        if (bench)
+            clock_gettime(CLOCK_MONOTONIC, &bench_t0);
         arcade1_run_frame(&m);
+        if (bench) {
+            clock_gettime(CLOCK_MONOTONIC, &bench_t1);
+            bench_ms[fr] =
+                (double)(bench_t1.tv_sec - bench_t0.tv_sec) * 1000.0 +
+                (double)(bench_t1.tv_nsec - bench_t0.tv_nsec) / 1000000.0;
+        }
         if (live)
             live_present(&m);           /* upload + show + pace to 60 Hz */
         skipped += arcade1_video_frame_totals(&m.video)->skipped_ops;
@@ -1388,6 +1541,8 @@ static int cmd_run(int argc, char **argv)
     printf("ran %u frames  final state hash=0x%016llX  fb hash=0x%016llX\n",
            fr, (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
+    if (bench)
+        bench_report(bench_ms, fr);
 
     /* Every live exit path reaches here, so the recording is always finished
      * (R, ESC, window close and end-of-frames all leave a complete script). */
@@ -2376,7 +2531,10 @@ static int cmd_inspect(int argc, char **argv)
      * recorded — an off-screen pixel trivially counts as never written). */
     if (at_set && at_x < (unsigned)ARCADE1_WIDTH &&
         at_y < (unsigned)ARCADE1_HEIGHT)
-        at_id = m.video.owner[at_y * (unsigned)ARCADE1_WIDTH + at_x];
+        /* logical (x, y) -> the owner id stamped on its k x k block */
+        at_id = m.video.owner[(size_t)(at_y * (unsigned)ARCADE1_HD_SCALE) *
+                              (unsigned)ARCADE1_FB_STRIDE +
+                              (size_t)(at_x * (unsigned)ARCADE1_HD_SCALE)];
 
     {
         const arcade1_video_stats_t *ft =
@@ -2496,6 +2654,15 @@ static void info_print_json(void)
     printf("  \"screen_height\": %d,\n", ARCADE1_HEIGHT);
     printf("  \"framebuffer_format\": \"RGB565\",\n");
     printf("  \"framebuffer_pixels\": %d,\n", ARCADE1_FB_PIXELS);
+    /* Present only in HD experiment builds (k = 1): the physical scanout
+     * buffer and the block factor. Absent from the default output. */
+    if (ARCADE1_HD_SCALE != 1) {
+        printf("  \"framebuffer_width\": %d,\n", ARCADE1_FB_W);
+        printf("  \"framebuffer_height\": %d,\n", ARCADE1_FB_H);
+        printf("  \"framebuffer_physical_pixels\": %u,\n",
+               (unsigned)ARCADE1_FB_PHYS);
+        printf("  \"hd_scale\": %d,\n", ARCADE1_HD_SCALE);
+    }
     printf("  \"fps\": %d,\n", ARCADE1_FPS_INT);
     printf("  \"sample_rate\": %d,\n", ARCADE1_SAMPLE_RATE_INT);
     printf("  \"audio_samples_per_frame\": %d,\n", ARCADE1_AUDIO_FRAMES);
@@ -2533,6 +2700,14 @@ static void info_print_text(void)
     printf("machine:\n");
     printf("  screen            %dx%d (RGB565, %d pixels)\n",
            ARCADE1_WIDTH, ARCADE1_HEIGHT, ARCADE1_FB_PIXELS);
+    /* HD experiment only: the scanout buffer is k x the guest's screen. At
+     * the default k = 1 this line does not exist, so `arcade1 info` output is
+     * byte-identical to what it has always been. */
+    if (ARCADE1_HD_SCALE != 1)
+        printf("  framebuffer       %dx%d (RGB565, %u pixels), %dx block "
+               "expansion of the screen above\n",
+               ARCADE1_FB_W, ARCADE1_FB_H, (unsigned)ARCADE1_FB_PHYS,
+               ARCADE1_HD_SCALE);
     printf("  tick rate        %d fps\n", ARCADE1_FPS_INT);
     printf("  audio            %d Hz, %d samples per frame (stereo)\n",
            ARCADE1_SAMPLE_RATE_INT, ARCADE1_AUDIO_FRAMES);
