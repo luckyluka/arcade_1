@@ -1560,6 +1560,18 @@ static void draw_boss(void)
 {
     if (!boss_state)
         return;
+    /* While the boss waits off-screen it is drawn anyway: start_boss()
+     * parks it at boss_y = -BOSS_H, and the WARNING screen runs for some
+     * frames before it descends, so every one of those frames issued four
+     * SPRITE4 commands (the body plus its three cores) that the device
+     * clipped to ZERO pixels — `inspect --commands` showed them all with
+     * y=-72 / y=-26, px=0, clipped=1. Skip a boss that lies wholly
+     * outside the screen; the cores sit inside the body's box, so this
+     * covers them too. Clipping is the device's job otherwise — a boss
+     * merely PARTLY on screen must still be issued and left to clip. */
+    if (boss_y + BOSS_H <= 0 || boss_y >= SCREEN_H ||
+        boss_x + BOSS_W <= 0 || boss_x >= SCREEN_W)
+        return;
     if (boss_state == 3) {
         if ((boss_timer / 3) & 1)
             asset_sprite4(&boss_frames[1], boss_x, boss_y, 0);
