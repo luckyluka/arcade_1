@@ -1195,7 +1195,17 @@ static unsigned bench_rank(unsigned n, unsigned pct)
     return rank - 1u;                          /* 0-based index */
 }
 
-static void bench_report(double *ms, unsigned n)
+/* The machine's work over the run, accumulated frame by frame by --bench.
+ * Exact, never sampled: every frame contributes one entry. `px` is the
+ * PHYSICAL pixel count (k^2 per logical pixel), `inst` the guest's retired
+ * instructions. Reported next to the timings because a cost per frame means
+ * nothing without the amount of work that frame did. */
+typedef struct {
+    unsigned long long px_total, px_max, px_last;
+    unsigned long long inst_total, inst_max, inst_last;
+} bench_work_t;
+
+static void bench_report(double *ms, unsigned n, const bench_work_t *w)
 {
     char cpu[256];
 
@@ -1215,6 +1225,23 @@ static void bench_report(double *ms, unsigned n)
     bench_cpu_model(cpu, sizeof cpu);
     printf("BENCH_CPU_MODEL %s\n", cpu);
     printf("BENCH_LABEL measured (per-frame monotonic host timing)\n");
+
+    if (n == 0) {
+        printf("WORK_PX_AVG n/a\n");
+        printf("WORK_PX_MAX n/a\n");
+        printf("WORK_PX_LAST n/a\n");
+        printf("WORK_INST_AVG n/a\n");
+        printf("WORK_INST_MAX n/a\n");
+        printf("WORK_INST_LAST n/a\n");
+    } else {
+        printf("WORK_PX_AVG %.2f\n", (double)w->px_total / (double)n);
+        printf("WORK_PX_MAX %llu\n", w->px_max);
+        printf("WORK_PX_LAST %llu\n", w->px_last);
+        printf("WORK_INST_AVG %.2f\n", (double)w->inst_total / (double)n);
+        printf("WORK_INST_MAX %llu\n", w->inst_max);
+        printf("WORK_INST_LAST %llu\n", w->inst_last);
+    }
+    printf("WORK_LABEL measured (exact over every frame, not sampled)\n");
     free(ms);
 }
 
@@ -1233,6 +1260,8 @@ static int cmd_run(int argc, char **argv)
     int inspect = 0;    int quiet = 0;    int strict = 0;
     int bench = 0;                      /* H1 step 5: --bench frame timings  */
     double *bench_ms = NULL;            /* one entry per frame timed         */
+    bench_work_t work;                  /* per-frame work, exact over the run */
+    unsigned long long prev_instret = 0;
     struct timespec bench_t0, bench_t1;
     int live = 0;                      /* --live: the play window (SDL3)    */
     int frames_set = 0;                /* did --frames appear on the line?  */
@@ -1310,8 +1339,10 @@ static int cmd_run(int argc, char **argv)
                 "  'frame N pad 0xXX' — the pad the guest actually saw.\n"
                 "  --bench times only arcade1_run_frame, per frame, on a\n"
                 "  monotonic clock, and prints BENCH_MS_MEDIAN / _P95 /\n"
-                "  _MAX plus the host CPU model. Diagnostic: host timing\n"
-                "  never enters any hash.\n"
+                "  _MAX plus the host CPU model. It also prints WORK_PX_\n"
+                "  and WORK_INST_ (avg/max/last): the exact per-frame pixel\n"
+                "  and instruction counts, over every frame. Diagnostic:\n"
+                "  host timing and work counters never enter any hash.\n"
                 "  --live opens the play window (SDL3): arrows/WASD d-pad,\n"
                 "  Z -> A, X -> B, Enter -> START, --scale N sets the window\n"
                 "  size; R ends the session writing --record's script, ESC\n"
@@ -1354,6 +1385,7 @@ static int cmd_run(int argc, char **argv)
                     "slots\n", frames);
             return 1;
         }
+        memset(&work, 0, sizeof work);
     }
 
     /* --vars without --syms: auto-load the sidecar `arcade1 build` writes
@@ -1481,10 +1513,28 @@ static int cmd_run(int argc, char **argv)
             clock_gettime(CLOCK_MONOTONIC, &bench_t0);
         arcade1_run_frame(&m);
         if (bench) {
+            /* One frame of work, exactly: frame_totals was written by the
+             * frame that just ran, and instret is cumulative so its delta is
+             * this frame's execution. */
+            const unsigned long long px_here =
+                (unsigned long long)
+                arcade1_video_frame_totals(&m.video)->pixels_written;
+            const unsigned long long inst_here =
+                (unsigned long long)m.cpu.instret - prev_instret;
+
             clock_gettime(CLOCK_MONOTONIC, &bench_t1);
             bench_ms[fr] =
                 (double)(bench_t1.tv_sec - bench_t0.tv_sec) * 1000.0 +
                 (double)(bench_t1.tv_nsec - bench_t0.tv_nsec) / 1000000.0;
+            work.px_last = px_here;
+            work.inst_last = inst_here;
+            work.px_total += px_here;
+            work.inst_total += inst_here;
+            if (px_here > work.px_max)
+                work.px_max = px_here;
+            if (inst_here > work.inst_max)
+                work.inst_max = inst_here;
+            prev_instret = (unsigned long long)m.cpu.instret;
         }
         if (live)
             live_present(&m);           /* upload + show + pace to 60 Hz */
@@ -1542,7 +1592,7 @@ static int cmd_run(int argc, char **argv)
            fr, (unsigned long long)state_hash(&m.cpu, &m.bus),
            (unsigned long long)fb_hash(&m));
     if (bench)
-        bench_report(bench_ms, fr);
+        bench_report(bench_ms, fr, &work);
 
     /* Every live exit path reaches here, so the recording is always finished
      * (R, ESC, window close and end-of-frames all leave a complete script). */

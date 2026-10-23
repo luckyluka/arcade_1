@@ -700,6 +700,18 @@ hd-experiment: $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
 	sh experiments/hd/test_scale.sh $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) \
 	    $(HD_BIN4) $(GOLDEN_ROMDIR)
 
+# H2: measure every guest with a committed input script at k = 1, 2 and 4,
+# 600 frames each, into docs/experiments/hd-measurements.csv; then generate
+# docs/experiments/hd-fpga-estimates.md from that CSV — the FPGA-side and
+# native-HD-asset tables are computed from measured inputs, never typed.
+# Also NOT part of `check` (§0 rule 3): it reads no golden and writes no ROM.
+.PHONY: hd-measure
+hd-measure: $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
+	sh experiments/hd/measure.sh $(GOLDEN_ROMDIR)
+	python3 experiments/hd/fpga_estimates.py >/dev/null
+	@echo "hd-measure: docs/experiments/hd-measurements.csv"
+	@echo "hd-measure: docs/experiments/hd-fpga-estimates.md"
+
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and
 # assert the program set counter = 123. Links exec+cpu+memory (no .so).
