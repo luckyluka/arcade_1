@@ -694,6 +694,19 @@ $(HD_BIN2): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTD
 $(HD_BIN4): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
 	$(CC) $(CFLAGS) -DARCADE1_HD_SCALE=4 $(HD_FLAGS) -o $@ $(CLI_SRC) $(SDK_DATA)
 
+# H3: the k-FREE 960x540 machine. Card H3 requires scene_960 to draw 960x540
+# pixels NATIVELY, not through the block expander, so this variant overrides
+# the GEOMETRY (the #ifndef guards H1 added around ARCADE1_WIDTH/HEIGHT) and
+# deliberately does NOT define ARCADE1_HD_SCALE: machine.h then leaves k at 1,
+# ARCADE1_FB_W = WIDTH * k = 960 and the expander's block is 1x1 — the guest's
+# logical grid and the physical framebuffer are the same 960x540 array.
+# Same sources, separate binary, never a prerequisite of `all` or `check`.
+HD_GEO960 := $(TESTDIR)/arcade1-geo960
+
+$(HD_GEO960): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TESTDIR)
+	$(CC) $(CFLAGS) -DARCADE1_WIDTH=960 -DARCADE1_HEIGHT=540 $(HD_FLAGS) \
+	    -o $@ $(CLI_SRC) $(SDK_DATA)
+
 # Build all three and run the H1 acceptance script.
 .PHONY: hd-experiment
 hd-experiment: $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
@@ -711,6 +724,25 @@ hd-measure: $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
 	python3 experiments/hd/fpga_estimates.py >/dev/null
 	@echo "hd-measure: docs/experiments/hd-measurements.csv"
 	@echo "hd-measure: docs/experiments/hd-fpga-estimates.md"
+
+# H3: the two scenes and their captures. Both guests through `arcade1 build`
+# (the CLI's own toolchain), art from experiments/hd/build_scene_art.py at
+# --scale 1 and --scale 2, and both captured at the SAME on-screen size —
+# 1920x1080, by --scale 4 on the 480 scene and --scale 2 on the 960 scene —
+# with the PNG writer's real deflate. The 960 guest runs on the k-free
+# geometry binary above. Not part of `check` (§0 rule 3): it writes no ROM
+# and reads no golden.
+.PHONY: hd-scene
+hd-scene: $(CLI_BIN) $(HD_GEO960)
+	python3 experiments/hd/build_scene_art.py --scale 1
+	python3 experiments/hd/build_scene_art.py --scale 2
+	$(CLI_BIN) build experiments/hd/scene_480.c $(TESTDIR)/scene_480.arc1
+	$(CLI_BIN) build experiments/hd/scene_960.c $(TESTDIR)/scene_960.arc1
+	$(CLI_BIN) run $(TESTDIR)/scene_480.arc1 --frames 5 --scale 4 \
+	    --capture docs/experiments/hd-art_480.png
+	$(HD_GEO960) run $(TESTDIR)/scene_960.arc1 --frames 5 --scale 2 \
+	    --capture docs/experiments/hd-art_960.png
+	@echo "hd-scene: docs/experiments/hd-art_480.png hd-art_960.png"
 
 # Build + run the milestone-10 guest-program harness: compile counter.c with
 # RISC-V GCC, load its flat binary into the VM, execute it on the CPU, and

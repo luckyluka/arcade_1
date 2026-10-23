@@ -1,0 +1,196 @@
+{
+ "format": 1,
+ "palettes": {
+  "fx": {
+   "bank": 8,
+   "colors": [
+    "#000000",
+    "#181421",
+    "#8C6921",
+    "#C69A31",
+    "#EFD36B",
+    "#FFF3B5",
+    "#8C385A",
+    "#C6698C",
+    "#EFA2B5",
+    "#FFE3EF",
+    "#EFF7FF",
+    "#9CB6D6",
+    "#C63842",
+    "#7B2431",
+    "#FFFFFF",
+    "#392C42"
+   ]
+  },
+  "hero16": {
+   "bank": 0,
+   "colors": [
+    "#000000",
+    "#101018",
+    "#212442",
+    "#313C73",
+    "#4A59A5",
+    "#B53839",
+    "#732429",
+    "#E7B28C",
+    "#B57D63",
+    "#101429",
+    "#E7C35A",
+    "#A57D31",
+    "#21515A",
+    "#31797B",
+    "#EFF7FF",
+    "#8CAAC6"
+   ]
+  },
+  "ridge": {
+   "bank": 4,
+   "colors": [
+    "#000000",
+    "#101029",
+    "#181439",
+    "#211C4A",
+    "#292852",
+    "#393063",
+    "#423C73",
+    "#524584",
+    "#5A5594",
+    "#6B61A5",
+    "#7B71B5",
+    "#8C82C6",
+    "#9C92CE",
+    "#B5AAD6",
+    "#E7AA7B",
+    "#CE8A63"
+   ]
+  },
+  "terrain": {
+   "bank": 3,
+   "colors": [
+    "#000000",
+    "#100C18",
+    "#292029",
+    "#423039",
+    "#5A4142",
+    "#214129",
+    "#316139",
+    "#4A864A",
+    "#7BAA5A",
+    "#393442",
+    "#52515A",
+    "#73717B",
+    "#8C8273",
+    "#6B6573",
+    "#ADA2B5",
+    "#AD7952"
+   ]
+  }
+ },
+ "sprites": [
+  {
+   "name": "samurai_idle",
+   "file": "samurai_idle.png",
+   "palette": "hero16",
+   "frames": 4,
+   "collision": [
+    5,
+    0,
+    46,
+    80
+   ],
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "the rig animator: samurai_2x.json",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "ridge",
+   "file": "bg_ridge.png",
+   "palette": "ridge",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "tiles",
+   "file": "../../../programs/petalblade_art/art/tiles.png",
+   "palette": "terrain",
+   "frames": 1,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  },
+  {
+   "name": "coin",
+   "file": "../../../programs/petalblade_art/art/coin.png",
+   "palette": "fx",
+   "frames": 2,
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ],
+ "animations": [
+  {
+   "name": "idle",
+   "sprite": "samurai_idle",
+   "frames": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "ms": 200
+  }
+ ],
+ "maps": [
+  {
+   "name": "level1",
+   "file": "../../../programs/petalblade_art/level1.txt",
+   "tileset": "tiles",
+   "tile_w": 16,
+   "tile_h": 16,
+   "legend": {
+    ".": null,
+    "#": 1,
+    "d": 2,
+    "D": 3,
+    "s": 4,
+    "b": 5,
+    "w": 6,
+    "B": 7,
+    "g": 8,
+    "f": 9,
+    "r": 10,
+    "m": 11,
+    "p": 12,
+    "l": 13,
+    "t": 14,
+    "v": 15
+   },
+   "provenance": {
+    "tool": "procedural",
+    "model": "",
+    "prompt": "",
+    "seed": 0,
+    "licence": "this repository"
+   }
+  }
+ ]
+}
