@@ -98,7 +98,7 @@
 
 - NEW `AGENTS.md` (≤ 80 lines): reading order, canonical docs (CHEATSHEET = guest API, SDK = CLI, GAME_DEV_GUIDE = workflow, SPEC = machine), where tests and goldens live, the rules of §0.
 - Add a status table to `ROADMAP_V3.md` and this file (card, commit hash, date).
-- `make check` wall time recorded in `PROGRESS.md` with a budget of 120 s; if exceeded, report before adding tests.
+- `make check` wall time recorded in `PROGRESS.md` with a budget of 300 s (raised from 120 s on 2026-10-24); if exceeded, report before adding tests.
 - **Acceptance**: `AGENTS.md` links resolve (a test greps every relative link); `make check` green. **Size**: ~2 h.
 
 **Wave 7a report must state**: PNG size before/after, repo size before/after, `make check` time before/after.

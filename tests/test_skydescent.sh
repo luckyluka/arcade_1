@@ -1,17 +1,19 @@
 #!/bin/sh
 # ARCADE-1 — skydescent test (the descending shoot-'em-up, the owner's
 # shmup/ prototype redone as a guest ROM): a scripted session that plays
-# the title, starts, and descends from 12,000 m through the stratosphere
-# into the high cloud.
+# the title, starts, and descends the whole 12,000 m — through all five
+# altitude palettes, the terrain fading in below 2,200 m, the ground map,
+# and into the boss fight waiting on it.
 #
 # The assertions are made through the game's named variables:
 #   1. determinism      — two identical sessions, identical output
 #   2. the story        — the title waits for a button; the game starts;
 #                         the score climbs; the altitude keeps falling
-#                         (2 m per frame) from 12,000 m into the high
-#                         cloud; the phase advances; the ship takes two
-#                         hits on the way down; the session ends still
-#                         flying
+#                         (2 m per frame) from 12,000 m to 0 m; the phase
+#                         advances into the low haze; the ship takes two
+#                         hits on the way down; the boss spawns at the
+#                         ground and takes damage; the session ends
+#                         still flying, mid-fight
 #   3. record -> replay — the recorded session replays bit-identically
 #
 # The verbose run prints its per-frame hash lines to stdout, which is what
@@ -38,7 +40,7 @@ GAME=$ROM/skydescent.arc1
 SCRIPT=$(dirname "$0")/inputs/skydescent.txt
 [ -f "$SCRIPT" ] || fail "missing $SCRIPT"
 
-FRAMES=2400
+FRAMES=6400
 
 # Named-variable reads need an `nm` dump: the committed one (the golden ROM
 # dir has it), else make one from the freshly built ELF.
@@ -85,19 +87,22 @@ if [ -f "$SYMS" ]; then
     # the score climbs once the cadence gun starts cutting
     grep -qE '^vars +[0-9]+ .*score=[1-9][0-9]*' "$OUT/trace.txt" ||
         fail "the score should climb once the game is running"
-    # the descent: the altitude falls from 12,000 m past 8,000 m
-    grep -qE '^vars +[0-9]+ .*altitude=[78][0-9]{3}' "$OUT/trace.txt" ||
-        fail "the altitude should keep falling on the way down"
-    # the phase advances past the stratosphere
-    has phase 1 ||
-        fail "the phase should advance into the high cloud"
+    # the descent: the altitude falls from 12,000 m all the way to 0
+    has altitude 0 ||
+        fail "the altitude should reach 0 — the whole descent"
+    # the phase advances past the stratosphere into the low haze
+    has phase 3 ||
+        fail "the phase should advance into the low haze"
     # the ship takes two hits on the way down
     has lives 1 ||
         fail "the ship should take hits during the descent"
-    # the session ends still flying
+    # the boss is on the ground by then, and the fight has drawn blood
+    awk '/^var boss_hp = /{v=$4} END{exit !(v>0 && v<1600)}' "$OUT/main.txt" ||
+        fail "the boss should spawn at the ground and take damage"
+    # the session ends still flying, mid-fight
     grep -q '^var state = 1$' "$OUT/main.txt" ||
         fail "the session should end still flying"
-    note "story ok — the title, the start, the descent, two hits, still flying"
+    note "story ok — the full descent, the ground, the boss, still flying"
 
     # --- 3) record -> replay round trip ------------------------------------
     # the round trip is checked on the first 1200 frames: the mechanism is

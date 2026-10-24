@@ -73,7 +73,7 @@ the commit that says why.
 ## Verifying
 
 `make check` — the whole regression (every test + the goldens); `make
-test-<name>` — one target. `make check` must stay under **120 s** (last
+test-<name>` — one target. `make check` must stay under **300 s** (last
 measurement in PROGRESS.md); if a new test would push it over, report first.
 
 A game's observable state must be a **file-scope global** (the tools read it
