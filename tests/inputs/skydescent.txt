@@ -1,0 +1,18 @@
+# SKY DESCENT session: the title, the start, and the long descent through
+# the stratosphere into the high cloud. The ship charges up into the
+# incoming waves and back down (fire held throughout), the cadence gun
+# cuts formations apart, and it takes two hits on the way — the session
+# ends still flying, one life left, with the ground still far below.
+0   9    none
+10  11   a
+12  12   none
+13  262  a up
+263 512  a down
+513 762  a up
+763 1012 a down
+1013 1262 a up
+1263 1512 a down
+1513 1762 a up
+1763 2012 a down
+2013 2262 a up
+2263 2399 a down
