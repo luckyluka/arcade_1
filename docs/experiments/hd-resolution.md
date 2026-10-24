@@ -1,49 +1,171 @@
-# HD experiment — what an HD machine would additionally need
+# ARCADE-1 — the HD experiment: does a higher resolution earn its cost?
 
-**Card H4** of `HD_EXPERIMENT.md` (analysis, no code). H5 appends the method,
-the measured table, the FPGA table, the art findings, the §6 decision matrix
-and the recommendation to this same file.
+**Cards H4 + H5** of `HD_EXPERIMENT.md`. H1–H3 built and measured it; this
+file is the analysis, the decision matrix and the recommendation. It stops
+here — **the owner decides.**
 
-**How to read the marks.** `needed` = H1–H3 measured or estimated a real cost
-that only this item pays; `nice` = would improve things but nothing measured
-fails without it; `not evidenced` = H1–H3 found no case that needs it. Marks
-are for the resolution §6 gates, **960×540**; the `k = 4` (1920×1080) figures
-are given in the same cell for context, since H2 measured all three scales.
+## The answer first
 
-**Measured vs estimated.** `measured` = read out of the committed artifacts of
-H1–H3 (`hd-measurements.csv`, the generated `assets.h` headers, the captures,
-`arc1-art ingest`'s own `report.json`); the only measured *timing* on any row
-is host wall clock, on an **Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz**.
-`estimated` = a printed formula — H2's, unless the cell prints its own — with
-`1 Mbit = 1e6 bits` as H2's file states. No FPGA was built and no device was
-timed, so every FPGA-side figure is an estimate by construction.
+> **Recommendation: stay at 480x270.** `HD_EXPERIMENT.md` §6 pre-registers
+> that if *any* gate fails the answer is "stay at 480x270, improve
+> output-stage polish (smooth scaling, bloom/soft-CRT shaders outside the
+> machine contract) and the pixel art itself". One gate fails outright and a
+> second cannot be evaluated as written, so the rule decides it — the
+> thresholds were not tuned afterwards.
+>
+> **Confidence: high** that an HD machine is not worth building *now*; **moderate**
+> on the FPGA half specifically, because no FPGA exists (M33) and the gate
+> that would settle it names a budget the repository never states.
 
----
-
-## 1. The table
-
-| item | mark | the evidence from H1–H3 | the cost |
-|---|---|---|---|
-| **per-pixel alpha** | **not evidenced** | SPEC excludes alpha blend (v0.1 rule 8: adding it needs an architecture revision and a re-test of the games). **H1**: every framebuffer write already funnels through one plot path, and it is a plain store — there is no read-modify-write in the machine. **H3**: both scenes need only *hard* transparency (palette index 0 = transparent, opaque everything else) plus opaque `FILL` rects for the sky, and both are correct; `docs/art/INGEST.md` keys the background with hard alpha ("the alpha is hard (0 or 1)"), so the art pipeline never produces a partial alpha to draw. | A blend makes every plot a read-modify-write: the write side's bus traffic at least doubles, from H2's measured 161.32 MB/s at 960×540 to **≥ 322.64 MB/s** (estimated, formula: `px_max × 2 B × 60 × 2`). |
-| **more than 16 colours per sprite** | **not evidenced** | **H3 measured** every drawn sprite's visible colours: hero **8/15** — the *same* 8 at 28×40 and at 56×80 — ridge 5/15, coin 4/15, tiles 14/15; the tightest pair anywhere is **9/255 (3.5%)**, in the tileset. Density did not change a single count, because the bank is a property of the sprite, not of the pixel grid. The ingest saturates 15/15 on the test's messy sheet (`colour_count = 15` in its `report.json`), but that is median cut filling its budget by construction, not a measured want. H3's sky already escapes the bank entirely with direct RGB565 `FILL` rects. | 8 bpp instead of 4 doubles asset bytes (H2's own formula `W×H×bits/8`): all sprites 39,952 → **79,904 B**, the scene's asset set 49,704 → **99,408 B = 37.9% of 262,144** (estimated). The bank upload itself is 16 × 16-bit = **32 B** and does not scale with anything. |
-| **larger ROM** | **needed** | **H3 measured** the rule H2 predicted: regenerated assets quadruple **exactly** — 9,440 → 37,760 B = **4.000×, +0.0% dev** — and the scene's asset set goes 21,384 B (**8.2%**) → 49,704 B (**19.0%**) of 262,144. **H2 estimated** one full-width parallax strip at 960×540 = 259,200 B = **98.9% of today's ROM**, and an 8-frame HD hero cycle = 184,320 B = **70.3%**. H2 also **measured** that guest instructions are identical at every k (petalblade 3783 avg / 5895 max at k = 1, 2 and 4), so code bytes do not scale — the pressure is assets alone. | ≈ **4× the asset bytes per density step**. A full native-HD art set does not fit 262,144 B (H2's single strip is 98.9% of it); today's art does, because H3's scene kept tiles and the pickup at 1× and paid only 19.0%. |
-| **larger RAM** (device framebuffer) | **needed** | **H2 estimated** framebuffer RAM = `W×H×16` bits: **2.074 Mbit** (480×270) → **8.294 Mbit** (960×540) → **33.178 Mbit** (1920×1080). Under H2's stated convention, 960×540 fits **none** of the 2/4/8 Mbit budgets §6 considers. The *guest's* 64 KB is a separate question and is **not evidenced** as needing to grow: assets are `static const` → `.rodata` → **ROM only** (`programs/link.ld`), so an HD asset set never enters RAM unless it is made resident (H2: an HD hero cycle would be 281.2% of 64 KB *if* resident — a reason not to make it resident). | ×4 per density step, and ×2 again if double-buffered (16.589 Mbit at 960×540). The framebuffer is in neither guest map (`arcade1 info`: rom 262144, ram 65536), so this is device-side silicon, not a guest-visible budget. |
-| **wider blitter** | **not evidenced** (at 960×540) | **H2 measured** pixel work scaling as k² — petalblade's worst frame 336,078 → 1,344,312 → 5,377,248 px — with **overdraw unchanged** (2.5829 avg / 2.5932 max at every k) and guest instructions unchanged, so the pixel *rate* is the only thing that quadruples. **H2 estimated** the clock it implies: **80.66 MHz at 1 px/clk** for 960×540, which is inside §6's ≤ 100 MHz gate — one pixel per clock is enough at the gated resolution. At 1920×1080 it is not: 322.63 MHz at 1 px/clk. | Nothing at 960×540 (the gate fits at 1 px/clk). At 1920×1080 the blitter must be **≥ 4 pixels per clock** (80.66 MHz) or the clock must reach 322.63 MHz (estimated, formula: `px_max × 60 / P`). |
-| **double buffering** | **not evidenced** | SPEC excludes it (v0.1 rule 8), and SPEC's display-conformance clause makes *how* the host buffers, double-buffers or scans out **not part of the contract** — an implementation may do it internally without a guest-visible feature. H1–H3 measured nothing that shows tearing: every golden and every capture compares framebuffer **content**, and H3's two scenes are static (`fb` hash identical on all 5 frames), so a tear would have been invisible **by construction**. That absence of evidence is not evidence of absence, and the row is marked accordingly. | H2: ×2 framebuffer RAM → **4.147 / 16.589 / 66.355 Mbit** at k = 1 / 2 / 4. At 960×540 that fits none of 2/4/8 Mbit, so double buffering forces the framebuffer to external memory (next row). |
-| **external framebuffer memory** | **needed** | **H2 estimated** 8.294 Mbit for 960×540 against an 8 Mbit budget → **does not fit**; 1920×1080 needs 33.178 Mbit = **4.1×** it. Caveat, so the conclusion can be checked rather than trusted: H2 defines `1 Mbit = 1e6 bits`, and under the binary convention (8 Mbit = 8,388,608 bits) 960×540 would occupy **98.9%** of one block RAM — it fits, with ~1% spare and no room for a second buffer, so the row's verdict does not turn on the convention. | The external part must carry scan-out **and** writes: **223.53 MB/s** at 960×540 and **894.10 MB/s** at 1920×1080 (estimated, formula: the sum of H2's two bandwidth rows for that k). |
-| **wider scan-out** | **not evidenced** | There is **no scan-out path to widen** in the reference implementation: the VM draws into one RGB565 framebuffer and the host reads it out-of-band, and H1's choke point is a framebuffer **write** path — H2 measures writes only, and SPEC makes scan-out an implementation detail. So H1–H3 measure this item at all: never. | The *requirement* still scales, from H2's formula `W×H×2×60`: **15.55 → 62.21 → 248.83 MB/s** per density step (estimated). The write : scan-out ratio is a constant **2.59×** at all three scales because measured overdraw does not change with k — the write side is dominated by redrawn pixels, not by the resolution. |
-
-**Summary of the marks:** two `needed` that pay for the pixel grid itself
-(larger ROM, larger RAM — plus external framebuffer memory, which is where the
-RAM goes), and five `not evidenced`. No item in H1–H3 was needed by the
-machine's *instruction set*: H1 rendered k× sizes with the resolution macros
-alone, and no guest needed a new command, a new pixel format or a blend.
+| §6 gate | verdict in one line |
+|---|---|
+| Host cost | **PASS** — petalblade, the heaviest of the five, is 4.6178 ms median at k=4 (≤ 8 ms) and 2.3933 ms at k=2 (≤ 4 ms) |
+| FPGA plausibility | **INDETERMINATE** — the pixel work fits (80.66 MHz at 1 px/clk ≤ 100 MHz) and the framebuffer must leave block RAM, but "the stated external-memory budget" exists nowhere in the repository, so the condition it guards cannot be checked |
+| Art gain | **FAIL** — the 960 scene beats the 480 scene on **2 of 5** critique criteria (silhouette, noise), ties 2, and 1 is a no-contest; the gate needs 3 |
+| Asset cost | **PASS** on the gate's literal set — 39,808 B = 15.2% of 256 KB — though a *full* native-HD art set does not fit |
+| No new machine feature | **PASS** — the entire gain came from density alone: no alpha, no extra colours, no new command |
 
 ---
 
-## 2. Does a higher resolution remove the AI-art consistency problem?
+## 1. Method — what is exact and what is estimated
 
-**No — and H4 can say why from measurements rather than opinion.** Every
+**Exact (read out of committed artifacts, reproducible with the commands in
+§9):**
+
+| quantity | why it is exact |
+|---|---|
+| machine constants (480x270, 129600 px, 60 fps, rom 262144, ram 65536) | printed by `arcade1 info` from the same macros the VM compiles with |
+| per-frame pixels, overdraw, guest instructions, ROM bytes | counted by the deterministic VM over 600 scripted frames (`arcade1 run --bench`), not sampled |
+| compiled asset bytes | read from the `*_sheet[N]` lengths in the generated `assets.h` headers |
+| capture bytes, dimensions, colour counts | read from the PNG files themselves |
+| golden frame hashes | byte-compared against `tests/golden/` |
+
+**Estimated (a printed formula, never a measurement):** every FPGA-side number
+in §3 — pixel throughput, the clock it implies, framebuffer RAM, scan-out and
+write bandwidth — comes from `experiments/hd/fpga_estimates.py`, which prints
+its formulas and states `1 Mbit = 1e6 bits`. So do the costs in §5 that no
+one has drawn: an 8 bpp asset set, a blend's extra bus read, a full native-HD
+art set. **No FPGA was built and no device was timed.**
+
+**Measured but soft:** host wall clock. It is reported as `bench_ms_median`
+on an **Intel(R) Core(TM) i7-6820HQ CPU @ 2.70GHz**, on a loaded desktop
+(where `make check` itself already runs 176–214 s against a 120 s budget).
+It is used only for §6's host-cost gate, which it passes by 42% (4.6178 vs
+the 8 ms line); nothing else rests on it.
+
+---
+
+## 2. The measured table
+
+`docs/experiments/hd-measurements.csv`, 5 committed guests x k = 1, 2, 4 x
+600 frames each. **All quantities below are exact.**
+
+| game | px/frame worst (k=1) | (k=2) | (k=4) | overdraw avg | guest inst avg | ROM bytes | host median ms k=1 / k=2 / k=4 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| petalblade | 336,078 | 1,344,312 | 5,377,248 | 2.5829 | 3783.4 | 59,984 | 0.7628 / 2.3933 / 4.6178 |
+| shmup | 196,260 | 785,040 | 3,140,160 | 1.3008 | 10260.0 | 42,874 | 0.4085 / 1.2206 / 2.3286 |
+| brickstorm | 191,111 | 764,444 | 3,057,776 | 0.3295 | 15034.8 | 34,564 | 0.4067 / 0.5046 / 0.7641 |
+| asteroid_run | 158,653 | 634,612 | 2,538,448 | 1.0676 | 2740.2 | 11,284 | 0.3173 / 1.0130 / 1.8923 |
+| flappy | 158,893 | 635,572 | 2,542,288 | 1.1775 | 405.0 | 2,008 | 0.0936 / 0.8692 / 1.8427 |
+
+Three facts fall straight out of that table, and they carry most of the
+argument:
+
+1. **Guest work does not scale with resolution.** `inst_avg` and `rom_bytes`
+   are *identical* at k = 1, 2 and 4 for all five games — the guest computes
+   the same thing, the machine just repaints more of it.
+2. **Overdraw does not scale either.** Every game's `overdraw_avg` and
+   `overdraw_max` are identical at all three scales (petalblade 2.5829 /
+   2.5932 at every k). So the write:scan-out ratio is a constant 2.59x, and
+   pixel work multiplies by exactly k^2, not by something worse.
+3. **Only pixels scale**, and they scale exactly: every `px_max` is 4x the
+   previous k (336,078 -> 1,344,312 -> 5,377,248).
+
+Framebuffer bytes: 259,200 -> 1,036,800 -> 4,147,200 B (k = 1 / 2 / 4),
+which is `W*H*2` exactly.
+
+---
+
+## 3. The FPGA table (all estimated)
+
+Generated by `experiments/hd/fpga_estimates.py` from the measured
+`pixels_written_max`; formulas printed in `hd-fpga-estimates.md`.
+
+**Pixel throughput and the clock it implies** (`throughput = px_max * 60`,
+`clock = throughput / pixels_per_clock`):
+
+| k | resolution | px/frame worst (measured) | throughput @60 fps | 1 px/clk | 4 px/clk | 8 px/clk |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | 480x270 | 336,078 | 20.165 Mpx/s | 20.16 MHz | 5.04 MHz | 2.52 MHz |
+| 2 | 960x540 | 1,344,312 | 80.659 Mpx/s | **80.66 MHz** | 20.16 MHz | 10.08 MHz |
+| 4 | 1920x1080 | 5,377,248 | 322.635 Mpx/s | 322.63 MHz | 80.66 MHz | 40.33 MHz |
+
+**Framebuffer RAM** (`W*H*16` bits, RGB565; doubled when double buffered; the three fit columns judge the single-buffered figure, exactly as in H2's table):
+
+| k | single buffered | double buffered | fits 2 Mbit | fits 4 Mbit | fits 8 Mbit |
+|---|---:|---:|---|---|---|
+| 1 | 2.074 Mbit | 4.147 Mbit | NO | yes | yes |
+| 2 | 8.294 Mbit | 16.589 Mbit | NO | NO | **NO** |
+| 4 | 33.178 Mbit | 66.355 Mbit | NO | NO | NO |
+
+**Bandwidth** (`scan-out = W*H*2*60`, `write = px_max*2*60`):
+
+| k | scan-out read | write (worst frame) | write : scan-out |
+|---|---:|---:|---:|
+| 1 | 15.55 MB/s | 40.33 MB/s | 2.59x |
+| 2 | 62.21 MB/s | 161.32 MB/s | 2.59x |
+| 4 | 248.83 MB/s | 645.27 MB/s | 2.59x |
+
+Summed for a design whose framebuffer sits outside block RAM: **223.53 MB/s**
+at 960x540, **894.10 MB/s** at 1920x1080 (estimated: the sum of the two rows
+above for that k).
+
+**Units caveat, so the conclusion can be checked rather than trusted:** H2
+defines `1 Mbit = 1e6 bits`, under which 960x540 (8,294,400 bits) does *not*
+fit an 8 Mbit block RAM. Under the binary convention (8 Mbit = 8,388,608
+bits) it would fit, at **98.9%** of that block RAM — with ~1% left over and
+no room for a second buffer or anything else. Either way the framebuffer is
+at its limit, and either way double buffering is out of reach. No threshold
+was moved to accommodate this.
+
+**Note on a stale number:** `ARCHITECTURE.md` §3(a) states the floor
+bandwidth as ~9.2 MB/s — that is computed at the **320x240** screen that was
+current when it was written. The same formula at today's 480x270 gives
+15.55 MB/s (the k=1 row above) and 62.21 MB/s at 960x540. No gate depends on
+the stale figure; it is recorded here because this file is where the
+bandwidth numbers are now read from.
+
+---
+
+## 4. The art findings (H3, measured)
+
+Two scenes of one composition — `experiments/hd/scene_480.c` at 480x270 and
+`experiments/hd/scene_960.c` at 960x540, one shared `scene_body.h`, both
+captured at 1920x1080 so neither is simply bigger — reviewed against
+`art/CRITIQUE.md` in `docs/experiments/hd-art.md`.
+
+| measurement | 480 | 960 | read |
+|---|---:|---:|---|
+| regenerated asset bytes (hero + ridge) | 9,440 B | 37,760 B | **4.000x, +0.0%** vs H2's rule |
+| all sprites | 11,632 B | 39,952 B | 3.435x (tiles + coin stayed 1x) |
+| asset set vs 262,144 B ROM | 21,384 B (8.2%) | 49,704 B (19.0%) | 4x the bytes for the same picture |
+| hero visible colours | 8 of 15 | 8 of 15 | identical — density does not raise colour demand |
+| tightest colour pair, hero | 42/255 | 42/255 | 16.5% apart: no gradient to band |
+| tightest colour pair, tileset | 9/255 | 9/255 | 3.5%: the only asset near its bank's limit (14/15) |
+| outline ring px / share of sprite | 83 / 10.1% | 169 / 5.6% | ring doubles with the perimeter, area quadruples |
+| speckle rate, hero | 1.540% | 0.474% | fell — a clean scale makes 1-px speckle into a 2x2 block |
+| speckle rate, ridge | 0.424% | 0.220% | fell |
+| distinct colours in the capture | 39 | 39 | HD adds no colour |
+
+**H3's verdict, stated plainly there:** the 960 scene looks **the same, only
+sharper** — not bigger (the protocol equalised the on-screen size), not
+better (composition, palette, colour count, lighting and detail are
+identical), not worse (the one out-of-proportion element, the coin, was
+deliberately not regenerated).
+
+### Does a higher resolution remove the AI-art consistency problem?
+
+**No — and this can be answered from measurements rather than opinion.** Every
 failure mode the art pipeline fights is a property of the *drawing*, decided
 long before any output resolution: `docs/art/INGEST.md` lists exactly what it
 fixes (background keyed from the border colour, frames aligned onto one feet
@@ -53,47 +175,197 @@ between the frames") — and not one of those operations reads the output size:
 keying floods the source corners, alignment crops to content, quantisation
 counts source colours, so the same sheet ingested at 24 px tall or at 48 px
 tall comes out equally consistent or equally inconsistent. Measured on the
-test's own messy sheet (128×64, 8 cells, a per-cell gradient background, soft
+test's own messy sheet (128x64, 8 cells, a per-cell gradient background, soft
 edges and 40 specks — synthesised "the way an image model leaves things",
-`tests/test_art_ingest.sh`), one ingest produced 8 frames at 27×24, **15/15
+`tests/test_art_ingest.sh`), one ingest produced 8 frames at 27x24, **15/15
 palette colours, 0 orphans, 7 blobs removed, and identical bounding boxes in
 all 8 frames** (`bbox_jitter` is the same `[0,0,27,24]` eight times over) —
 a run whose parameters come from the source sheet's own geometry
 (`--grid 4x2 --target-h 24`), with no machine resolution anywhere in the
-command line, the manifest or the report. Where consistency
-*is* achieved it is achieved **by construction**, not by pixels:
-`docs/experiments/art-pass.md` found the rig's 28 frames are "the same
-character by construction" where 11 hand-painted frames had to be
-hand-checked, and H3 re-measured the same fact at twice the density — the
-hero needed **8 visible colours at 28×40 and at 56×80**, the tileset 14/15
-in both, so the constraint that shapes the art (15 colours per bank, a
-silhouette that reads at 28 px) is unchanged by the grid it is drawn on. What
-a higher resolution *does* change is the bill: H3 measured the regenerated art
-at exactly **4.000×** the bytes for the same picture, and H3's verdict is that
-the 960 scene is "the same, only sharper". More pixels buy edge fineness on
-whatever consistency you already have; they buy none of the consistency
-itself.
+command line, the manifest or the report. Where consistency *is* achieved it
+is achieved **by construction**, not by pixels: `docs/experiments/art-pass.md`
+found the rig's 28 frames are "the same character by construction" where 11
+hand-painted frames had to be hand-checked, and H3 re-measured the same fact
+at twice the density — the hero needed **8 visible colours at 28x40 and at
+56x80**, the tileset 14/15 in both, so the constraint that shapes the art (15
+colours per bank, a silhouette that reads at 28 px) is unchanged by the grid
+it is drawn on. What a higher resolution *does* change is the bill: H3
+measured the regenerated art at exactly **4.000x** the bytes for the same
+picture, which it calls "the same, only sharper". More pixels buy edge
+fineness on whatever consistency you already have; they buy none of the
+consistency itself.
 
 ---
 
-## 3. Where the evidence comes from
+## 5. What an HD machine would additionally need (card H4)
+
+Marks are for the gated resolution, **960x540**; `k = 4` figures are given
+in the same cell for context, since H2 measured all three scales.
+
+| item | mark | the evidence from H1–H3 | the cost |
+|---|---|---|---|
+| **per-pixel alpha** | **not evidenced** | SPEC excludes alpha blend (v0.1 rule 8: adding it needs an architecture revision and a re-test of the games). **H1**: every framebuffer write already funnels through one plot path, and it is a plain store — there is no read-modify-write in the machine. **H3**: both scenes need only *hard* transparency (palette index 0 = transparent, opaque everything else) plus opaque `FILL` rects for the sky, and both are correct; `docs/art/INGEST.md` keys the background with hard alpha ("the alpha is hard (0 or 1)"), so the art pipeline never produces a partial alpha to draw. | A blend makes every plot a read-modify-write: the write side's bus traffic at least doubles, from H2's measured 161.32 MB/s at 960×540 to **≥ 322.64 MB/s** (estimated, formula: `px_max × 2 B × 60 × 2`). |
+| **more than 16 colours per sprite** | **not evidenced** | **H3 measured** every drawn sprite's visible colours: hero **8/15** — the *same* 8 at 28×40 and at 56×80 — ridge 5/15, coin 4/15, tiles 14/15; the tightest pair anywhere is **9/255 (3.5%)**, in the tileset. Density did not change a single count, because the bank is a property of the sprite, not of the pixel grid. The ingest saturates 15/15 on the test's messy sheet (`colour_count = 15` in its `report.json`), but that is median cut filling its budget by construction, not a measured want. H3's sky already escapes the bank entirely with direct RGB565 `FILL` rects. | 8 bpp instead of 4 doubles asset bytes (H2's own formula `W×H×bits/8`): all sprites 39,952 → **79,904 B**, the scene's asset set 49,704 → **99,408 B = 37.9% of 262,144** (estimated). The bank upload itself is 16 × 16-bit = **32 B** and does not scale with anything. |
+| **larger ROM** | **needed** | **H3 measured** the rule H2 predicted: regenerated assets quadruple **exactly** — 9,440 → 37,760 B = **4.000×, +0.0% dev** — and the scene's asset set goes 21,384 B (**8.2%**) → 49,704 B (**19.0%**) of 262,144. **H2 estimated** one full-width parallax strip at 960×540 = 259,200 B = **98.9% of today's ROM**, and an 8-frame HD hero cycle = 184,320 B = **70.3%**. H2 also **measured** that guest instructions are identical at every k (petalblade 3783 avg / 5895 max at k = 1, 2 and 4), so code bytes do not scale — the pressure is assets alone. | ≈ **4× the asset bytes per density step**. A full native-HD art set does not fit 262,144 B (H2's single strip is 98.9% of it); today's art does, because H3's scene kept tiles and the pickup at 1× and paid only 19.0%. |
+| **larger RAM** (device framebuffer) | **needed** | **H2 estimated** framebuffer RAM = `W×H×16` bits: **2.074 Mbit** (480×270) → **8.294 Mbit** (960×540) → **33.178 Mbit** (1920×1080). Under H2's stated convention, 960×540 fits **none** of the 2/4/8 Mbit budgets §6 considers. The *guest's* 64 KB is a separate question and is **not evidenced** as needing to grow: assets are `static const` → `.rodata` → **ROM only** (`programs/link.ld`), so an HD asset set never enters RAM unless it is made resident (H2: an HD hero cycle would be 281.2% of 64 KB *if* resident — a reason not to make it resident). | ×4 per density step, and ×2 again if double-buffered (16.589 Mbit at 960×540). The framebuffer is in neither guest map (`arcade1 info`: rom 262144, ram 65536), so this is device-side silicon, not a guest-visible budget. |
+| **wider blitter** | **not evidenced** (at 960×540) | **H2 measured** pixel work scaling as k² — petalblade's worst frame 336,078 → 1,344,312 → 5,377,248 px — with **overdraw unchanged** (2.5829 avg / 2.5932 max at every k) and guest instructions unchanged, so the pixel *rate* is the only thing that quadruples. **H2 estimated** the clock it implies: **80.66 MHz at 1 px/clk** for 960×540, which is inside §6's ≤ 100 MHz gate — one pixel per clock is enough at the gated resolution. At 1920×1080 it is not: 322.63 MHz at 1 px/clk. | Nothing at 960×540 (the gate fits at 1 px/clk). At 1920×1080 the blitter must be **≥ 4 pixels per clock** (80.66 MHz) or the clock must reach 322.63 MHz (estimated, formula: `px_max × 60 / P`). |
+| **double buffering** | **not evidenced** | SPEC excludes it (v0.1 rule 8), and SPEC's display-conformance clause makes *how* the host buffers, double-buffers or scans out **not part of the contract** — an implementation may do it internally without a guest-visible feature. H1–H3 measured nothing that shows tearing: every golden and every capture compares framebuffer **content**, and H3's two scenes are static (`fb` hash identical on all 5 frames), so a tear would have been invisible **by construction**. That absence of evidence is not evidence of absence, and the row is marked accordingly. | H2: ×2 framebuffer RAM → **4.147 / 16.589 / 66.355 Mbit** at k = 1 / 2 / 4. At 960×540 that fits none of 2/4/8 Mbit, so double buffering forces the framebuffer to external memory (next row). |
+| **external framebuffer memory** | **needed** | **H2 estimated** 8.294 Mbit for 960×540 against an 8 Mbit budget → **does not fit**; 1920×1080 needs 33.178 Mbit = **4.1×** it. The units caveat in §3 applies: under the binary convention 960×540 occupies 98.9% of one block RAM — it fits, with ~1% spare and no room for a second buffer, so the row's verdict does not turn on the convention. | The external part must carry scan-out **and** writes: **223.53 MB/s** at 960×540 and **894.10 MB/s** at 1920×1080 (estimated, formula: the sum of H2's two bandwidth rows for that k). |
+| **wider scan-out** | **not evidenced** | There is **no scan-out path to widen** in the reference implementation: the VM draws into one RGB565 framebuffer and the host reads it out-of-band, and H1's choke point is a framebuffer **write** path — H2 measures writes only, and SPEC makes scan-out an implementation detail. H1–H3 therefore never measure this item. | The *requirement* still scales, from H2's formula `W×H×2×60`: **15.55 → 62.21 → 248.83 MB/s** per density step (estimated). The write : scan-out ratio is a constant **2.59×** at all three scales because measured overdraw does not change with k. |
+
+**Summary of the marks:** three `needed` (larger ROM, larger RAM, external
+framebuffer memory — the last is where the first two go), five `not
+evidenced`, nothing `nice`. **No item was needed by the machine's
+instruction set:** H1 rendered k× sizes from the same guest sources with the
+resolution macros alone, and no guest needed a new command, a new pixel
+format or a blend.
+
+---
+
+## 6. The decision matrix (§6), filled in
+
+Thresholds are reproduced **verbatim** from `HD_EXPERIMENT.md` §6 and were not
+tuned afterwards.
+
+| Gate | Threshold (verbatim) | Evidence | Verdict |
+|---|---|---|---|
+| **Host cost** | 1920x1080 (`k = 4`) median frame time of the heaviest game ≤ 8 ms on the recorded laptop CPU, or 960x540 ≤ 4 ms | The heaviest of the five measured games is petalblade at both scales: **4.6178 ms** median at k=4 (≤ 8, 42% headroom) and **2.3933 ms** at k=2 (≤ 4, 40% headroom), i7-6820HQ @2.70GHz. Both branches pass. (Tail, for honesty: p95 5.8538 ms and max 8.2649 ms at k=4 — the gate says *median*, and the median passes.) | **PASS** |
+| **FPGA plausibility (estimated)** | 960x540 worst-frame pixel work fits ≤ 1 pixel per clock at ≤ 100 MHz with the framebuffer outside block RAM only if bandwidth ≤ the stated external-memory budget; otherwise HD is out of reach for the target FPGA class | Pixel work: **80.66 MHz at 1 px/clk** ≤ 100 MHz — **fits**, with 19% of the clock left. Memory: 8.294 Mbit does not fit 8 Mbit, so the framebuffer **does** go outside block RAM, which makes the condition live: bandwidth would be **223.53 MB/s**. **No external-memory budget is stated anywhere in this repository** — not in `HD_EXPERIMENT.md`, `DEVICE_BUDGET.md`, `ARCHITECTURE.md` (whose only bandwidth numbers are a stale 320x240 floor) or SPEC. The condition therefore cannot be checked, and no FPGA exists (M33) to measure it. | **INDETERMINATE — cannot pass as written** |
+| **Art gain** | The 960 scene beats the 480 scene on at least 3 of the 5 critique criteria, with the reviewer saying why | From `docs/experiments/hd-art.md` §3: **silhouette** — 960, marginally (the 1-px ring traces the crest in 2-screen-px steps instead of 4); **noise** — 960 (speckle 1.540% → 0.474% hero, 0.424% → 0.220% ridge); **lighting** — a tie, identical by construction (same 17 sky bands at the same screen heights, same shading ramps); **palette harmony** — a tie (39 distinct colours in *both* captures, same banks, same counts); **outline consistency** — no contest: consistent in both, with 960's ring at half the weight (10.1% → 5.6%), which the reviewer declined to call a win in either direction. **2 wins, 2 ties, 1 no-contest.** The gate needs 3 wins. | **FAIL** (2 of 5) |
+| **Asset cost** | HD hero cycle + tile set + one ridge fit in ≤ 256 KB (today's ROM) or the report states the ROM size that would be needed | H3 measured, at native 960x540: hero cycle (4 frames of 56x80) **8,960 B** + ridge (480x120) **28,800 B** + tile set (64x64, the escape-hatch 1x art) **2,048 B** = **39,808 B = 15.2% of 262,144**. With the tiles regenerated at native 128x128 (H2's 8,192 B) it is 45,952 B = **17.5%**. The literal set fits. Stating the ROM a *full* native-HD art set would need, as the gate asks: H2 estimated one full-width parallax strip alone at **259,200 B = 98.9%** of today's ROM and an 8-frame hero cycle at **184,320 B = 70.3%**, so a complete set is **not** inside 256 KB: one full-width strip *plus* one 8-frame hero cycle is **443,520 B = 169.2% of today's entire ROM** (estimated, H2's two rows added), before a single tile or any other sprite — and guest code does not scale to help (guest instructions are identical at every k, measured). So the ROM a full native-HD game would need is at least **~1.7x 256 KB for art alone**, on top of today's unchanged code. | **PASS** on the literal set; a full native-HD art set needs ≥ ~1.7x 256 KB for art alone (stated above) |
+| **No new machine feature** | The gain is not purely from features this card did not test (alpha, more colours) | H3's entire gain is edge fineness from *density*: no alpha (hard key only), no extra colours (8/15 hero in both scenes), no new command, no palette change (39 colours in both captures). H1 rendered k=1/2/4 with no guest change at all. | **PASS** |
+
+**Result: one FAIL, one INDETERMINATE.** §6's rule is unambiguous — *"If any
+gate fails, the recommendation is: stay at 480x270."*
+
+---
+
+## 7. Recommendation and confidence
+
+> **Stay at 480x270.** Keep the machine contract as it is (SPEC v0.1: no
+> alpha, no extra colour depth, no double buffering, no external framebuffer
+> requirement) and spend where §6's fallback says: **output-stage polish
+> outside the machine contract** — smooth scaling, bloom or a soft-CRT shader
+> at the point where the 480x270 framebuffer meets the display — and **the
+> pixel art itself**, which is where H3 says the real gain would have to come
+> from anyway (its 960 scene was "the same, only sharper", and its own
+> weak spots were art, not resolution: a tileset at 14/15 colours with its
+> tightest pair 9/255 apart, and a pickup nobody regenerated).
+
+**Confidence: high** that this is the right call *now*:
+
+- The one gate that measurement could decide **fails on the art itself**, and
+  it fails the way the whole experiment predicted: equalising on-screen size
+  removed "bigger" and left "sharper", which is worth exactly nothing to
+  composition, palette or detail.
+- The cost side is unambiguous and *measured*: **4.000x** the asset bytes for
+  that same picture, 8.2% → 19.0% of the ROM for a scene's worth of art, with
+  H2's estimates saying a full HD set does not fit 256 KB at all.
+- The host-cost gate passes comfortably, but it was never the binding
+  constraint — it only says a laptop can *emulate* 1920x1080, not that the
+  machine should.
+
+**Confidence: moderate** on the FPGA half specifically: 80.66 MHz at one
+pixel per clock is comfortably inside the 100 MHz budget, but the gate that
+would confirm it cannot be evaluated (no stated external-memory budget), and
+no FPGA has been built. The estimates could be wrong in either direction and
+this experiment has no way to find out.
+
+**What would change the answer** (in order of how much it would take):
+
+1. **A stated external-memory budget** that makes 223.53 MB/s at 960x540
+   cheap — gate 2 goes from indeterminate to pass, and the case rests on the
+   art gate alone.
+2. **A native-HD art set that wins on content, not edges** — a reviewer
+   saying the 960 picture is *better* on 3 of 5 criteria because the art
+   could do something at that density it could not at 480. H3 found no such
+   thing on two scenes built from existing art; it would need real,
+   purpose-drawn HD art.
+3. **An FPGA measurement (M33)** replacing H2's estimates for throughput,
+   framebuffer fit and bandwidth.
+4. **The opposite result from §6's own fallback**: if the pixel art improves
+   substantially at 480x270 first, the case for paying 4x for "sharper"
+   gets *weaker*, not stronger — polish at the output stage is what makes a
+   low resolution look deliberate rather than small.
+
+**Stop. The owner decides.**
+
+---
+
+## 8. What the experiment could not show
+
+1. **No FPGA (M33).** Every FPGA-side number in §3 and §5 is estimated from
+   H2's printed formulas against a *measured* pixel count. Throughput,
+   framebuffer fit, scan-out and external bandwidth are all unvalidated, and
+   §6's FPGA gate cannot be settled because the repository states no
+   external-memory budget to check against.
+2. **Motion never ran.** H3's two scenes are static by the card's own
+   instruction (`fb` hash identical on all 5 frames), so parallax, camera
+   motion and tearing were never exercised — which is precisely why the
+   *double buffering* row is marked "not evidenced" rather than "not needed":
+   a tear could not have been observed even if one occurred.
+3. **Two assets never went to 2x.** The tiles (generator over the card's
+   one-hour escape hatch) and the pickup (not in the card's 2x list) stayed
+   at 1x, so the *full*-regeneration art cost is H2's estimate, not a
+   measurement — and the pickup's shrinking relative size (H3's control
+   element) shows what happens to art nobody regenerates.
+4. **1920x1080 never got a native scene.** H3 built 960x540. k=4's art cost
+   rests on H2's hypothetical dimensions (96x120 / 192x240 hero frames,
+   128x128 tile), which H3 showed are *not* this game's art — the row-sharing
+   note in `hd-art.md` §5 documents exactly which of H2's rows this scene
+   actually draws (only the 64x64 tile, to 0.0%).
+5. **One reviewer, two synthetic scenes.** The critique was mine, on scenes
+   assembled from an existing game's art — not players, not a shipped game's
+   complete art set, and no blind comparison. Gate 2's art verdict would look
+   different with real HD art, for better or worse.
+6. **No committed AI-painterly sheet.** `tests/test_art_ingest.sh` states
+   that no third-party image is committed and synthesises the equivalent
+   messy sheet instead, so the AI-art paragraph answers from that test's
+   pinned acceptance and a fresh ingest I ran on it — real measurements, but
+   of a *synthetic* image model's output.
+7. **Host timing is soft.** One loaded desktop, wall clock, i7-6820HQ;
+   `make check` on the same box already runs 176–214 s against its 120 s
+   budget, so the timing columns are indicative. Gate 1 passes by 42% at the
+   median, but petalblade's k=4 *max* frame was 8.2649 ms — above the 8 ms
+   line the gate does not use.
+8. **Two stale pointers in the card**, recorded rather than followed: the
+   painterly sheet and ingest result are not in `docs/experiments/` (see §9),
+   and `ROADMAP_V5.md` does not exist in this repository, so §6's "hero
+   shootout from ROADMAP V5 preparation" cannot be read here — the fallback's
+   pixel-art advice is taken from §6's own words instead.
+
+---
+
+## 9. Where the evidence comes from, and how to re-run it
+
+```sh
+make hd-measure      # H2: regenerates hd-measurements.csv (~18 s)
+make hd-scene        # H3: both art sets, both guests, both captures
+experiments/hd/verify_h2.sh   # H2 acceptance A-C
+experiments/hd/verify_h3.sh   # H3 acceptance A-E
+python3 experiments/hd/art_metrics.py   # every asset/colour number in §4
+arcade1 info                     # the machine constants in §1
+sh tests/test_art_ingest.sh      # the ingest acceptance behind §4's paragraph
+make check                       # the whole regression, goldens included
+```
 
 | claim | file |
 |---|---|
-| pixel work, overdraw, guest instructions, host timing, framebuffer RAM, bandwidth, the HD asset table | `docs/experiments/hd-measurements.csv`, `docs/experiments/hd-fpga-estimates.md` (H2) |
-| compiled asset bytes, colour counts, tightest colour pair, outline ring, speckle rate, both captures | `experiments/hd/art_metrics.py` output, quoted in `docs/experiments/hd-art.md` (H3) |
-| every framebuffer write through one path, k = 1/2/4 rendered by the same sources, default machine unchanged | H1's commits (`src/arcade1/` guards + choke point, `tests/test_hd_default.sh`) |
+| pixel work, overdraw, guest instructions, host timing | `docs/experiments/hd-measurements.csv` (H2, measured) |
+| framebuffer RAM, throughput, bandwidth, the HD asset table | `docs/experiments/hd-fpga-estimates.md` (H2, estimated, formulas printed) |
+| compiled asset bytes, colour counts, tightest pair, outline ring, speckle rate, both captures, the verdict | `experiments/hd/art_metrics.py` output, quoted in `docs/experiments/hd-art.md` (H3, measured) |
+| every framebuffer write through one path; k = 1/2/4 from the same sources; default machine unchanged | H1's commits (`src/arcade1/` guards + choke point, `tests/test_hd_default.sh`) |
 | what is excluded from v0.1 (alpha blend, double buffering), the 4-bit formats, palette banks, display conformance | `SPEC.md` |
 | the ingest pipeline, its fixed list and its one stated limit | `docs/art/INGEST.md`, `tests/test_art_ingest.sh` |
 | consistency from construction, and its honest cost | `docs/experiments/art-pass.md` |
 
-**One correction to the card's pointer.** H4 cites "the owner's painterly
+**Correction to a pointer in the card:** H4 cites "the owner's painterly
 sheet and the ingest result in `docs/experiments/`". No painterly sheet is
-committed anywhere in the repository — `tests/test_art_ingest.sh` states that
+committed anywhere in the repository — `tests/test_art_ingest.sh` says so
 deliberately ("No third-party image is committed, and none is needed") and
 synthesises the equivalent messy sheet instead — and the ingest result lives
-in `docs/art/INGEST.md` plus the test's own pinned acceptance, not in
-`docs/experiments/`. The paragraph above therefore cites the committed
-evidence; the card's pointer is stale. The conclusion it pre-states — that
-frame consistency, background removal and pose variation do not depend on
-output resolution — is the one the evidence supports.
+in `docs/art/INGEST.md` plus that test's pinned acceptance, not in
+`docs/experiments/`. The committed evidence is what §4 cites; the pointer is
+stale. The conclusion it pre-states — that frame consistency, background
+removal and pose variation do not depend on output resolution — is the one
+the evidence supports.
