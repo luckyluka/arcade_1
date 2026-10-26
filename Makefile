@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
 GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
                  -msmall-data-limit=0
 GUEST_BUILD   := programs/build
-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup brickstorm skydescent
+GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup brickstorm skydescent neontap
 GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
 GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
 # Since M17 every guest is also packaged into a proper .arc1 game image.
@@ -68,7 +68,7 @@ GOLDEN_ROMDIR := tests/roms
 GOLDEN_DIR    := tests/golden
 GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
                   m29game asteroid_run flappy petalblade petalblade_rig shmup \
-                  brickstorm skydescent
+                  brickstorm skydescent neontap
 # Image/ELF base name for a golden game (test-target name -> guest name).
 golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
                 $(if $(filter color,$(1)),color_demo,\
@@ -149,7 +149,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-mapdemo test-asteroid_run test-flappy \
         test-golden-conditions test-inspect test-inspect-commands test-info \
         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
-        test-shmup test-brickstorm test-skydescent \
+        test-shmup test-brickstorm test-skydescent test-neontap \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
         test-art-rig test-art-ingest test-art-qa test-art-faces \
         test-doc-gaps test-hd-default
@@ -1346,6 +1346,11 @@ test-brickstorm: $(CLI_BIN) $(ARC1_ROM_DIR)/brickstorm.arc1 | $(TESTDIR)
 test-skydescent: $(CLI_BIN) $(ARC1_ROM_DIR)/skydescent.arc1 | $(TESTDIR)
 	sh tests/test_skydescent.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
+# --- NEON TAP: a vector arena shooter whose signature mechanic is tap speed ---
+# No art pipeline: every shape is drawn by the guest from lines and polygons.
+test-neontap: $(CLI_BIN) $(ARC1_ROM_DIR)/neontap.arc1 | $(TESTDIR)
+	sh tests/test_neontap.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+
 # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
 # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
 # (<name>.syms) the golden regression runs against (tests/golden/,
@@ -1355,7 +1360,7 @@ test-skydescent: $(CLI_BIN) $(ARC1_ROM_DIR)/skydescent.arc1 | $(TESTDIR)
 # behaviour change — see docs.md "Golden regression policy").
 # This target needs the RISC-V cross-compiler; test-golden does not.
 GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
-                  m29game flappy petalblade petalblade_rig shmup brickstorm skydescent
+                  m29game flappy petalblade petalblade_rig shmup brickstorm skydescent neontap
 
 roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
 	mkdir -p $(GOLDEN_ROMDIR)

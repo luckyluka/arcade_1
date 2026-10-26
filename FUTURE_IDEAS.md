@@ -255,3 +255,19 @@ AI-generated complete games
 ROM as the universal game artifact
 Headless AI/CI tooling
 Explicit principle that these remain future ideas and must not affect the current roadmap prematurely
+
+---
+
+## 9. Neon Tap beyond the shipped ROM
+
+`programs/neontap.c` (integrated 2026-10-26) implements roughly milestone
+M0 plus part of M1 of `programs/neon_tap/Neon Tap Design Document.md`.
+The rest of that document is a design inventory, not a commitment — promote
+individual items into a roadmap card only if a real need shows up:
+
+- the remaining five enemy kinds (Turret, Shield, Bomber, Weaver, Phantom)
+- the five-sector run structure with bosses and per-sector arena rules
+- overdrive / clean-sweep / no-damage scoring and extra lives
+- two-player co-op with the shared lives pool and the sync bomb
+- replay verification, ghosts, daily seeds
+- the effort-driven music layers
