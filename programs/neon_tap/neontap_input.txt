@@ -1,0 +1,1775 @@
+# NEON TAP scripted session (tests/test_neontap.sh + golden game neontap).
+# Title for 30 frames, A starts, the ship circles the arena tapping A every 4 frames,
+# then alternates A/B to charge (frames 1000-1049) and spends it with START at 1060.
+# Every press is released the next frame so each one is a new edge.
+0 29 none
+30 30 a down right
+31 31 down right
+32 32 a down right
+33 33 down right
+34 34 down right
+35 35 down right
+36 36 a down right
+37 37 down right
+38 38 down right
+39 39 down right
+40 40 a down right
+41 41 down right
+42 42 down right
+43 43 down right
+44 44 a down right
+45 45 down right
+46 46 down right
+47 47 down right
+48 48 a down right
+49 49 down right
+50 50 down right
+51 51 down right
+52 52 a down right
+53 53 down right
+54 54 down right
+55 55 down right
+56 56 a down right
+57 57 down right
+58 58 down right
+59 59 down right
+60 60 a down right
+61 61 down right
+62 62 down right
+63 63 down right
+64 64 a down right
+65 65 down right
+66 66 down right
+67 67 down right
+68 68 a down right
+69 69 down right
+70 70 down right
+71 71 down right
+72 72 a down right
+73 73 down right
+74 74 down right
+75 75 down right
+76 76 a down right
+77 77 down right
+78 78 down right
+79 79 down right
+80 80 a down right
+81 81 down right
+82 82 down right
+83 83 down right
+84 84 a down right
+85 85 down right
+86 86 down right
+87 87 down right
+88 88 a down right
+89 89 down
+90 90 down
+91 91 down
+92 92 a down
+93 93 down
+94 94 down
+95 95 down
+96 96 a down
+97 97 down
+98 98 down
+99 99 down
+100 100 a down
+101 101 down
+102 102 down
+103 103 down
+104 104 a down
+105 105 down
+106 106 down
+107 107 down
+108 108 a down
+109 109 down
+110 110 down
+111 111 down
+112 112 a down
+113 113 down
+114 114 down
+115 115 down
+116 116 a down
+117 117 down
+118 118 down
+119 119 down
+120 120 a down
+121 121 down
+122 122 down
+123 123 down
+124 124 a down
+125 125 down
+126 126 down
+127 127 down
+128 128 a down
+129 129 down
+130 130 down
+131 131 down
+132 132 a down left
+133 133 down left
+134 134 down left
+135 135 down left
+136 136 a down left
+137 137 down left
+138 138 down left
+139 139 down left
+140 140 a down left
+141 141 down left
+142 142 down left
+143 143 down left
+144 144 a down left
+145 145 down left
+146 146 down left
+147 147 down left
+148 148 a down left
+149 149 down left
+150 150 down left
+151 151 down left
+152 152 a down left
+153 153 down left
+154 154 down left
+155 155 down left
+156 156 a down left
+157 157 down left
+158 158 down left
+159 159 down left
+160 160 a down left
+161 161 down left
+162 162 down left
+163 163 down left
+164 164 a down left
+165 165 down left
+166 166 down left
+167 167 down left
+168 168 a down left
+169 169 down left
+170 170 down left
+171 171 down left
+172 172 a down left
+173 173 down left
+174 174 down left
+175 175 down left
+176 176 a down left
+177 177 down left
+178 178 down left
+179 179 down left
+180 180 a down left
+181 181 down left
+182 182 down left
+183 183 down left
+184 184 a down left
+185 185 down left
+186 186 down left
+187 187 down left
+188 188 a down left
+189 189 down left
+190 190 down left
+191 191 down left
+192 192 a down left
+193 193 down left
+194 194 down left
+195 195 down left
+196 196 a down left
+197 197 down left
+198 198 down left
+199 199 left
+200 200 a left
+201 201 left
+202 202 left
+203 203 left
+204 204 a left
+205 205 left
+206 206 left
+207 207 left
+208 208 a left
+209 209 left
+210 210 left
+211 211 left
+212 212 a left
+213 213 left
+214 214 left
+215 215 left
+216 216 a left
+217 217 left
+218 218 left
+219 219 left
+220 220 a left
+221 221 left
+222 222 left
+223 223 left
+224 224 a left
+225 225 left
+226 226 left
+227 227 left
+228 228 a left
+229 229 left
+230 230 left
+231 231 left
+232 232 a left
+233 233 left
+234 234 left
+235 235 left
+236 236 a left
+237 237 left
+238 238 left
+239 239 left
+240 240 a left
+241 241 left
+242 242 left up
+243 243 left up
+244 244 a left up
+245 245 left up
+246 246 left up
+247 247 left up
+248 248 a left up
+249 249 left up
+250 250 left up
+251 251 left up
+252 252 a left up
+253 253 left up
+254 254 left up
+255 255 left up
+256 256 a left up
+257 257 left up
+258 258 left up
+259 259 left up
+260 260 a left up
+261 261 left up
+262 262 left up
+263 263 left up
+264 264 a left up
+265 265 left up
+266 266 left up
+267 267 left up
+268 268 a left up
+269 269 left up
+270 270 left up
+271 271 left up
+272 272 a left up
+273 273 left up
+274 274 left up
+275 275 left up
+276 276 a left up
+277 277 left up
+278 278 left up
+279 279 left up
+280 280 a left up
+281 281 left up
+282 282 left up
+283 283 left up
+284 284 a left up
+285 285 left up
+286 286 left up
+287 287 left up
+288 288 a left up
+289 289 left up
+290 290 left up
+291 291 left up
+292 292 a left up
+293 293 left up
+294 294 left up
+295 295 left up
+296 296 a left up
+297 297 left up
+298 298 left up
+299 299 left up
+300 300 a left up
+301 301 left up
+302 302 left up
+303 303 left up
+304 304 a left up
+305 305 left up
+306 306 left up
+307 307 left up
+308 308 a left up
+309 309 up
+310 310 up
+311 311 up
+312 312 a up
+313 313 up
+314 314 up
+315 315 up
+316 316 a up
+317 317 up
+318 318 up
+319 319 up
+320 320 a up
+321 321 up
+322 322 up
+323 323 up
+324 324 a up
+325 325 up
+326 326 up
+327 327 up
+328 328 a up
+329 329 up
+330 330 up
+331 331 up
+332 332 a up
+333 333 up
+334 334 up
+335 335 up
+336 336 a up
+337 337 up
+338 338 up
+339 339 up
+340 340 a up
+341 341 up
+342 342 up
+343 343 up
+344 344 a up
+345 345 up
+346 346 up
+347 347 up
+348 348 a up
+349 349 up
+350 350 up
+351 351 up
+352 352 a right up
+353 353 right up
+354 354 right up
+355 355 right up
+356 356 a right up
+357 357 right up
+358 358 right up
+359 359 right up
+360 360 a right up
+361 361 right up
+362 362 right up
+363 363 right up
+364 364 a right up
+365 365 right up
+366 366 right up
+367 367 right up
+368 368 a right up
+369 369 right up
+370 370 right up
+371 371 right up
+372 372 a right up
+373 373 right up
+374 374 right up
+375 375 right up
+376 376 a right up
+377 377 right up
+378 378 right up
+379 379 right up
+380 380 a right up
+381 381 right up
+382 382 right up
+383 383 right up
+384 384 a right up
+385 385 right up
+386 386 right up
+387 387 right up
+388 388 a right up
+389 389 right up
+390 390 right up
+391 391 right up
+392 392 a right up
+393 393 right up
+394 394 right up
+395 395 right up
+396 396 a right up
+397 397 right up
+398 398 right up
+399 399 right up
+400 400 a right up
+401 401 right up
+402 402 right up
+403 403 right up
+404 404 a right up
+405 405 right up
+406 406 right up
+407 407 right up
+408 408 a right up
+409 409 right up
+410 410 right up
+411 411 right up
+412 412 a right up
+413 413 right up
+414 414 right up
+415 415 right up
+416 416 a right up
+417 417 right up
+418 418 right up
+419 419 right
+420 420 a right
+421 421 right
+422 422 right
+423 423 right
+424 424 a right
+425 425 right
+426 426 right
+427 427 right
+428 428 a right
+429 429 right
+430 430 right
+431 431 right
+432 432 a right
+433 433 right
+434 434 right
+435 435 right
+436 436 a right
+437 437 right
+438 438 right
+439 439 right
+440 440 a right
+441 441 right
+442 442 right
+443 443 right
+444 444 a right
+445 445 right
+446 446 right
+447 447 right
+448 448 a right
+449 449 right
+450 450 right
+451 451 right
+452 452 a right
+453 453 right
+454 454 right
+455 455 right
+456 456 a right
+457 457 right
+458 458 right
+459 459 right
+460 460 a right
+461 461 right
+462 462 down right
+463 463 down right
+464 464 a down right
+465 465 down right
+466 466 down right
+467 467 down right
+468 468 a down right
+469 469 down right
+470 470 down right
+471 471 down right
+472 472 a down right
+473 473 down right
+474 474 down right
+475 475 down right
+476 476 a down right
+477 477 down right
+478 478 down right
+479 479 down right
+480 480 a down right
+481 481 down right
+482 482 down right
+483 483 down right
+484 484 a down right
+485 485 down right
+486 486 down right
+487 487 down right
+488 488 a down right
+489 489 down right
+490 490 down right
+491 491 down right
+492 492 a down right
+493 493 down right
+494 494 down right
+495 495 down right
+496 496 a down right
+497 497 down right
+498 498 down right
+499 499 down right
+500 500 a down right
+501 501 down right
+502 502 down right
+503 503 down right
+504 504 a down right
+505 505 down right
+506 506 down right
+507 507 down right
+508 508 a down right
+509 509 down right
+510 510 down right
+511 511 down right
+512 512 a down right
+513 513 down right
+514 514 down right
+515 515 down right
+516 516 a down right
+517 517 down right
+518 518 down right
+519 519 down right
+520 520 a down right
+521 521 down right
+522 522 down right
+523 523 down right
+524 524 a down right
+525 525 down right
+526 526 down right
+527 527 down right
+528 528 a down right
+529 529 down
+530 530 down
+531 531 down
+532 532 a down
+533 533 down
+534 534 down
+535 535 down
+536 536 a down
+537 537 down
+538 538 down
+539 539 down
+540 540 a down
+541 541 down
+542 542 down
+543 543 down
+544 544 a down
+545 545 down
+546 546 down
+547 547 down
+548 548 a down
+549 549 down
+550 550 down
+551 551 down
+552 552 a down
+553 553 down
+554 554 down
+555 555 down
+556 556 a down
+557 557 down
+558 558 down
+559 559 down
+560 560 a down
+561 561 down
+562 562 down
+563 563 down
+564 564 a down
+565 565 down
+566 566 down
+567 567 down
+568 568 a down
+569 569 down
+570 570 down
+571 571 down
+572 572 a down left
+573 573 down left
+574 574 down left
+575 575 down left
+576 576 a down left
+577 577 down left
+578 578 down left
+579 579 down left
+580 580 a down left
+581 581 down left
+582 582 down left
+583 583 down left
+584 584 a down left
+585 585 down left
+586 586 down left
+587 587 down left
+588 588 a down left
+589 589 down left
+590 590 down left
+591 591 down left
+592 592 a down left
+593 593 down left
+594 594 down left
+595 595 down left
+596 596 a down left
+597 597 down left
+598 598 down left
+599 599 down left
+600 600 a down left
+601 601 down left
+602 602 down left
+603 603 down left
+604 604 a down left
+605 605 down left
+606 606 down left
+607 607 down left
+608 608 a down left
+609 609 down left
+610 610 down left
+611 611 down left
+612 612 a down left
+613 613 down left
+614 614 down left
+615 615 down left
+616 616 a down left
+617 617 down left
+618 618 down left
+619 619 down left
+620 620 a down left
+621 621 down left
+622 622 down left
+623 623 down left
+624 624 a down left
+625 625 down left
+626 626 down left
+627 627 down left
+628 628 a down left
+629 629 down left
+630 630 down left
+631 631 down left
+632 632 a down left
+633 633 down left
+634 634 down left
+635 635 down left
+636 636 a down left
+637 637 down left
+638 638 down left
+639 639 left
+640 640 a left
+641 641 left
+642 642 left
+643 643 left
+644 644 a left
+645 645 left
+646 646 left
+647 647 left
+648 648 a left
+649 649 left
+650 650 left
+651 651 left
+652 652 a left
+653 653 left
+654 654 left
+655 655 left
+656 656 a left
+657 657 left
+658 658 left
+659 659 left
+660 660 a left
+661 661 left
+662 662 left
+663 663 left
+664 664 a left
+665 665 left
+666 666 left
+667 667 left
+668 668 a left
+669 669 left
+670 670 left
+671 671 left
+672 672 a left
+673 673 left
+674 674 left
+675 675 left
+676 676 a left
+677 677 left
+678 678 left
+679 679 left
+680 680 a left
+681 681 left
+682 682 left up
+683 683 left up
+684 684 a left up
+685 685 left up
+686 686 left up
+687 687 left up
+688 688 a left up
+689 689 left up
+690 690 left up
+691 691 left up
+692 692 a left up
+693 693 left up
+694 694 left up
+695 695 left up
+696 696 a left up
+697 697 left up
+698 698 left up
+699 699 left up
+700 700 a left up
+701 701 left up
+702 702 left up
+703 703 left up
+704 704 a left up
+705 705 left up
+706 706 left up
+707 707 left up
+708 708 a left up
+709 709 left up
+710 710 left up
+711 711 left up
+712 712 a left up
+713 713 left up
+714 714 left up
+715 715 left up
+716 716 a left up
+717 717 left up
+718 718 left up
+719 719 left up
+720 720 a left up
+721 721 left up
+722 722 left up
+723 723 left up
+724 724 a left up
+725 725 left up
+726 726 left up
+727 727 left up
+728 728 a left up
+729 729 left up
+730 730 left up
+731 731 left up
+732 732 a left up
+733 733 left up
+734 734 left up
+735 735 left up
+736 736 a left up
+737 737 left up
+738 738 left up
+739 739 left up
+740 740 a left up
+741 741 left up
+742 742 left up
+743 743 left up
+744 744 a left up
+745 745 left up
+746 746 left up
+747 747 left up
+748 748 a left up
+749 749 up
+750 750 up
+751 751 up
+752 752 a up
+753 753 up
+754 754 up
+755 755 up
+756 756 a up
+757 757 up
+758 758 up
+759 759 up
+760 760 a up
+761 761 up
+762 762 up
+763 763 up
+764 764 a up
+765 765 up
+766 766 up
+767 767 up
+768 768 a up
+769 769 up
+770 770 up
+771 771 up
+772 772 a up
+773 773 up
+774 774 up
+775 775 up
+776 776 a up
+777 777 up
+778 778 up
+779 779 up
+780 780 a up
+781 781 up
+782 782 up
+783 783 up
+784 784 a up
+785 785 up
+786 786 up
+787 787 up
+788 788 a up
+789 789 up
+790 790 up
+791 791 up
+792 792 a right up
+793 793 right up
+794 794 right up
+795 795 right up
+796 796 a right up
+797 797 right up
+798 798 right up
+799 799 right up
+800 800 a right up
+801 801 right up
+802 802 right up
+803 803 right up
+804 804 a right up
+805 805 right up
+806 806 right up
+807 807 right up
+808 808 a right up
+809 809 right up
+810 810 right up
+811 811 right up
+812 812 a right up
+813 813 right up
+814 814 right up
+815 815 right up
+816 816 a right up
+817 817 right up
+818 818 right up
+819 819 right up
+820 820 a right up
+821 821 right up
+822 822 right up
+823 823 right up
+824 824 a right up
+825 825 right up
+826 826 right up
+827 827 right up
+828 828 a right up
+829 829 right up
+830 830 right up
+831 831 right up
+832 832 a right up
+833 833 right up
+834 834 right up
+835 835 right up
+836 836 a right up
+837 837 right up
+838 838 right up
+839 839 right up
+840 840 a right up
+841 841 right up
+842 842 right up
+843 843 right up
+844 844 a right up
+845 845 right up
+846 846 right up
+847 847 right up
+848 848 a right up
+849 849 right up
+850 850 right up
+851 851 right up
+852 852 a right up
+853 853 right up
+854 854 right up
+855 855 right up
+856 856 a right up
+857 857 right up
+858 858 right up
+859 859 right
+860 860 a right
+861 861 right
+862 862 right
+863 863 right
+864 864 a right
+865 865 right
+866 866 right
+867 867 right
+868 868 a right
+869 869 right
+870 870 right
+871 871 right
+872 872 a right
+873 873 right
+874 874 right
+875 875 right
+876 876 a right
+877 877 right
+878 878 right
+879 879 right
+880 880 a right
+881 881 right
+882 882 right
+883 883 right
+884 884 a right
+885 885 right
+886 886 right
+887 887 right
+888 888 a right
+889 889 right
+890 890 right
+891 891 right
+892 892 a right
+893 893 right
+894 894 right
+895 895 right
+896 896 a right
+897 897 right
+898 898 right
+899 899 right
+900 900 a right
+901 901 down right
+902 902 down right
+903 903 down right
+904 904 a down right
+905 905 down right
+906 906 down right
+907 907 down right
+908 908 a down right
+909 909 down right
+910 910 down right
+911 911 down right
+912 912 a down right
+913 913 down right
+914 914 down right
+915 915 down right
+916 916 a down right
+917 917 down right
+918 918 down right
+919 919 down right
+920 920 a down right
+921 921 down right
+922 922 down right
+923 923 down right
+924 924 a down right
+925 925 down right
+926 926 down right
+927 927 down right
+928 928 a down right
+929 929 down right
+930 930 down right
+931 931 down right
+932 932 a down right
+933 933 down right
+934 934 down right
+935 935 down right
+936 936 a down right
+937 937 down right
+938 938 down right
+939 939 down right
+940 940 a down right
+941 941 down right
+942 942 down right
+943 943 down right
+944 944 a down right
+945 945 down right
+946 946 down right
+947 947 down right
+948 948 a down right
+949 949 down right
+950 950 down right
+951 951 down right
+952 952 a down right
+953 953 down right
+954 954 down right
+955 955 down right
+956 956 a down right
+957 957 down right
+958 958 down right
+959 959 down right
+960 960 a down right
+961 961 down right
+962 962 down right
+963 963 down right
+964 964 a down right
+965 965 down right
+966 966 down right
+967 967 down right
+968 968 a down right
+969 969 down
+970 970 down
+971 971 down
+972 972 a down
+973 973 down
+974 974 down
+975 975 down
+976 976 a down
+977 977 down
+978 978 down
+979 979 down
+980 980 a down
+981 981 down
+982 982 down
+983 983 down
+984 984 a down
+985 985 down
+986 986 down
+987 987 down
+988 988 a down
+989 989 down
+990 990 down
+991 991 down
+992 992 a down
+993 993 down
+994 994 down
+995 995 down
+996 996 a down
+997 997 down
+998 998 down
+999 999 down
+1000 1000 a down
+1001 1001 down
+1002 1002 down
+1003 1003 down
+1004 1004 down
+1005 1005 b down
+1006 1006 down
+1007 1007 down
+1008 1008 down
+1009 1009 down
+1010 1010 a down
+1011 1011 down left
+1012 1012 down left
+1013 1013 down left
+1014 1014 down left
+1015 1015 b down left
+1016 1016 down left
+1017 1017 down left
+1018 1018 down left
+1019 1019 down left
+1020 1020 a down left
+1021 1021 down left
+1022 1022 down left
+1023 1023 down left
+1024 1024 down left
+1025 1025 b down left
+1026 1026 down left
+1027 1027 down left
+1028 1028 down left
+1029 1029 down left
+1030 1030 a down left
+1031 1031 down left
+1032 1032 down left
+1033 1033 down left
+1034 1034 down left
+1035 1035 b down left
+1036 1036 down left
+1037 1037 down left
+1038 1038 down left
+1039 1039 down left
+1040 1040 a down left
+1041 1041 down left
+1042 1042 down left
+1043 1043 down left
+1044 1044 down left
+1045 1045 b down left
+1046 1046 down left
+1047 1047 down left
+1048 1048 down left
+1049 1049 down left
+1050 1050 down left
+1051 1051 down left
+1052 1052 a down left
+1053 1053 down left
+1054 1054 down left
+1055 1055 down left
+1056 1056 a down left
+1057 1057 down left
+1058 1058 down left
+1059 1059 down left
+1060 1060 down left start
+1061 1061 down left
+1062 1062 down left
+1063 1063 down left
+1064 1064 a down left
+1065 1065 down left
+1066 1066 down left
+1067 1067 down left
+1068 1068 a down left
+1069 1069 down left
+1070 1070 down left
+1071 1071 down left
+1072 1072 a down left
+1073 1073 down left
+1074 1074 down left
+1075 1075 down left
+1076 1076 a down left
+1077 1077 down left
+1078 1078 down left
+1079 1079 left
+1080 1080 a left
+1081 1081 left
+1082 1082 left
+1083 1083 left
+1084 1084 a left
+1085 1085 left
+1086 1086 left
+1087 1087 left
+1088 1088 a left
+1089 1089 left
+1090 1090 left
+1091 1091 left
+1092 1092 a left
+1093 1093 left
+1094 1094 left
+1095 1095 left
+1096 1096 a left
+1097 1097 left
+1098 1098 left
+1099 1099 left
+1100 1100 a left
+1101 1101 left
+1102 1102 left
+1103 1103 left
+1104 1104 a left
+1105 1105 left
+1106 1106 left
+1107 1107 left
+1108 1108 a left
+1109 1109 left
+1110 1110 left
+1111 1111 left
+1112 1112 a left
+1113 1113 left
+1114 1114 left
+1115 1115 left
+1116 1116 a left
+1117 1117 left
+1118 1118 left
+1119 1119 left
+1120 1120 a left
+1121 1121 left up
+1122 1122 left up
+1123 1123 left up
+1124 1124 a left up
+1125 1125 left up
+1126 1126 left up
+1127 1127 left up
+1128 1128 a left up
+1129 1129 left up
+1130 1130 left up
+1131 1131 left up
+1132 1132 a left up
+1133 1133 left up
+1134 1134 left up
+1135 1135 left up
+1136 1136 a left up
+1137 1137 left up
+1138 1138 left up
+1139 1139 left up
+1140 1140 a left up
+1141 1141 left up
+1142 1142 left up
+1143 1143 left up
+1144 1144 a left up
+1145 1145 left up
+1146 1146 left up
+1147 1147 left up
+1148 1148 a left up
+1149 1149 left up
+1150 1150 left up
+1151 1151 left up
+1152 1152 a left up
+1153 1153 left up
+1154 1154 left up
+1155 1155 left up
+1156 1156 a left up
+1157 1157 left up
+1158 1158 left up
+1159 1159 left up
+1160 1160 a left up
+1161 1161 left up
+1162 1162 left up
+1163 1163 left up
+1164 1164 a left up
+1165 1165 left up
+1166 1166 left up
+1167 1167 left up
+1168 1168 a left up
+1169 1169 left up
+1170 1170 left up
+1171 1171 left up
+1172 1172 a left up
+1173 1173 left up
+1174 1174 left up
+1175 1175 left up
+1176 1176 a left up
+1177 1177 left up
+1178 1178 left up
+1179 1179 left up
+1180 1180 a left up
+1181 1181 left up
+1182 1182 left up
+1183 1183 left up
+1184 1184 a left up
+1185 1185 left up
+1186 1186 left up
+1187 1187 left up
+1188 1188 a left up
+1189 1189 up
+1190 1190 up
+1191 1191 up
+1192 1192 a up
+1193 1193 up
+1194 1194 up
+1195 1195 up
+1196 1196 a up
+1197 1197 up
+1198 1198 up
+1199 1199 up
+1200 1200 a up
+1201 1201 up
+1202 1202 up
+1203 1203 up
+1204 1204 a up
+1205 1205 up
+1206 1206 up
+1207 1207 up
+1208 1208 a up
+1209 1209 up
+1210 1210 up
+1211 1211 up
+1212 1212 a up
+1213 1213 up
+1214 1214 up
+1215 1215 up
+1216 1216 a up
+1217 1217 up
+1218 1218 up
+1219 1219 up
+1220 1220 a up
+1221 1221 up
+1222 1222 up
+1223 1223 up
+1224 1224 a up
+1225 1225 up
+1226 1226 up
+1227 1227 up
+1228 1228 a up
+1229 1229 up
+1230 1230 up
+1231 1231 right up
+1232 1232 a right up
+1233 1233 right up
+1234 1234 right up
+1235 1235 right up
+1236 1236 a right up
+1237 1237 right up
+1238 1238 right up
+1239 1239 right up
+1240 1240 a right up
+1241 1241 right up
+1242 1242 right up
+1243 1243 right up
+1244 1244 a right up
+1245 1245 right up
+1246 1246 right up
+1247 1247 right up
+1248 1248 a right up
+1249 1249 right up
+1250 1250 right up
+1251 1251 right up
+1252 1252 a right up
+1253 1253 right up
+1254 1254 right up
+1255 1255 right up
+1256 1256 a right up
+1257 1257 right up
+1258 1258 right up
+1259 1259 right up
+1260 1260 a right up
+1261 1261 right up
+1262 1262 right up
+1263 1263 right up
+1264 1264 a right up
+1265 1265 right up
+1266 1266 right up
+1267 1267 right up
+1268 1268 a right up
+1269 1269 right up
+1270 1270 right up
+1271 1271 right up
+1272 1272 a right up
+1273 1273 right up
+1274 1274 right up
+1275 1275 right up
+1276 1276 a right up
+1277 1277 right up
+1278 1278 right up
+1279 1279 right up
+1280 1280 a right up
+1281 1281 right up
+1282 1282 right up
+1283 1283 right up
+1284 1284 a right up
+1285 1285 right up
+1286 1286 right up
+1287 1287 right up
+1288 1288 a right up
+1289 1289 right up
+1290 1290 right up
+1291 1291 right up
+1292 1292 a right up
+1293 1293 right up
+1294 1294 right up
+1295 1295 right up
+1296 1296 a right up
+1297 1297 right up
+1298 1298 right up
+1299 1299 right
+1300 1300 a right
+1301 1301 right
+1302 1302 right
+1303 1303 right
+1304 1304 a right
+1305 1305 right
+1306 1306 right
+1307 1307 right
+1308 1308 a right
+1309 1309 right
+1310 1310 right
+1311 1311 right
+1312 1312 a right
+1313 1313 right
+1314 1314 right
+1315 1315 right
+1316 1316 a right
+1317 1317 right
+1318 1318 right
+1319 1319 right
+1320 1320 a right
+1321 1321 right
+1322 1322 right
+1323 1323 right
+1324 1324 a right
+1325 1325 right
+1326 1326 right
+1327 1327 right
+1328 1328 a right
+1329 1329 right
+1330 1330 right
+1331 1331 right
+1332 1332 a right
+1333 1333 right
+1334 1334 right
+1335 1335 right
+1336 1336 a right
+1337 1337 right
+1338 1338 right
+1339 1339 right
+1340 1340 a right
+1341 1341 down right
+1342 1342 down right
+1343 1343 down right
+1344 1344 a down right
+1345 1345 down right
+1346 1346 down right
+1347 1347 down right
+1348 1348 a down right
+1349 1349 down right
+1350 1350 down right
+1351 1351 down right
+1352 1352 a down right
+1353 1353 down right
+1354 1354 down right
+1355 1355 down right
+1356 1356 a down right
+1357 1357 down right
+1358 1358 down right
+1359 1359 down right
+1360 1360 a down right
+1361 1361 down right
+1362 1362 down right
+1363 1363 down right
+1364 1364 a down right
+1365 1365 down right
+1366 1366 down right
+1367 1367 down right
+1368 1368 a down right
+1369 1369 down right
+1370 1370 down right
+1371 1371 down right
+1372 1372 a down right
+1373 1373 down right
+1374 1374 down right
+1375 1375 down right
+1376 1376 a down right
+1377 1377 down right
+1378 1378 down right
+1379 1379 down right
+1380 1380 a down right
+1381 1381 down right
+1382 1382 down right
+1383 1383 down right
+1384 1384 a down right
+1385 1385 down right
+1386 1386 down right
+1387 1387 down right
+1388 1388 a down right
+1389 1389 down right
+1390 1390 down right
+1391 1391 down right
+1392 1392 a down right
+1393 1393 down right
+1394 1394 down right
+1395 1395 down right
+1396 1396 a down right
+1397 1397 down right
+1398 1398 down right
+1399 1399 down right
+1400 1400 a down right
+1401 1401 down right
+1402 1402 down right
+1403 1403 down right
+1404 1404 a down right
+1405 1405 down right
+1406 1406 down right
+1407 1407 down right
+1408 1408 a down right
+1409 1409 down
+1410 1410 down
+1411 1411 down
+1412 1412 a down
+1413 1413 down
+1414 1414 down
+1415 1415 down
+1416 1416 a down
+1417 1417 down
+1418 1418 down
+1419 1419 down
+1420 1420 a down
+1421 1421 down
+1422 1422 down
+1423 1423 down
+1424 1424 a down
+1425 1425 down
+1426 1426 down
+1427 1427 down
+1428 1428 a down
+1429 1429 down
+1430 1430 down
+1431 1431 down
+1432 1432 a down
+1433 1433 down
+1434 1434 down
+1435 1435 down
+1436 1436 a down
+1437 1437 down
+1438 1438 down
+1439 1439 down
+1440 1440 a down
+1441 1441 down
+1442 1442 down
+1443 1443 down
+1444 1444 a down
+1445 1445 down
+1446 1446 down
+1447 1447 down
+1448 1448 a down
+1449 1449 down
+1450 1450 down
+1451 1451 down left
+1452 1452 a down left
+1453 1453 down left
+1454 1454 down left
+1455 1455 down left
+1456 1456 a down left
+1457 1457 down left
+1458 1458 down left
+1459 1459 down left
+1460 1460 a down left
+1461 1461 down left
+1462 1462 down left
+1463 1463 down left
+1464 1464 a down left
+1465 1465 down left
+1466 1466 down left
+1467 1467 down left
+1468 1468 a down left
+1469 1469 down left
+1470 1470 down left
+1471 1471 down left
+1472 1472 a down left
+1473 1473 down left
+1474 1474 down left
+1475 1475 down left
+1476 1476 a down left
+1477 1477 down left
+1478 1478 down left
+1479 1479 down left
+1480 1480 a down left
+1481 1481 down left
+1482 1482 down left
+1483 1483 down left
+1484 1484 a down left
+1485 1485 down left
+1486 1486 down left
+1487 1487 down left
+1488 1488 a down left
+1489 1489 down left
+1490 1490 down left
+1491 1491 down left
+1492 1492 a down left
+1493 1493 down left
+1494 1494 down left
+1495 1495 down left
+1496 1496 a down left
+1497 1497 down left
+1498 1498 down left
+1499 1499 down left
+1500 1500 a down left
+1501 1501 down left
+1502 1502 down left
+1503 1503 down left
+1504 1504 a down left
+1505 1505 down left
+1506 1506 down left
+1507 1507 down left
+1508 1508 a down left
+1509 1509 down left
+1510 1510 down left
+1511 1511 down left
+1512 1512 a down left
+1513 1513 down left
+1514 1514 down left
+1515 1515 down left
+1516 1516 a down left
+1517 1517 down left
+1518 1518 down left
+1519 1519 left
+1520 1520 a left
+1521 1521 left
+1522 1522 left
+1523 1523 left
+1524 1524 a left
+1525 1525 left
+1526 1526 left
+1527 1527 left
+1528 1528 a left
+1529 1529 left
+1530 1530 left
+1531 1531 left
+1532 1532 a left
+1533 1533 left
+1534 1534 left
+1535 1535 left
+1536 1536 a left
+1537 1537 left
+1538 1538 left
+1539 1539 left
+1540 1540 a left
+1541 1541 left
+1542 1542 left
+1543 1543 left
+1544 1544 a left
+1545 1545 left
+1546 1546 left
+1547 1547 left
+1548 1548 a left
+1549 1549 left
+1550 1550 left
+1551 1551 left
+1552 1552 a left
+1553 1553 left
+1554 1554 left
+1555 1555 left
+1556 1556 a left
+1557 1557 left
+1558 1558 left
+1559 1559 left
+1560 1560 a left
+1561 1561 left up
+1562 1562 left up
+1563 1563 left up
+1564 1564 a left up
+1565 1565 left up
+1566 1566 left up
+1567 1567 left up
+1568 1568 a left up
+1569 1569 left up
+1570 1570 left up
+1571 1571 left up
+1572 1572 a left up
+1573 1573 left up
+1574 1574 left up
+1575 1575 left up
+1576 1576 a left up
+1577 1577 left up
+1578 1578 left up
+1579 1579 left up
+1580 1580 a left up
+1581 1581 left up
+1582 1582 left up
+1583 1583 left up
+1584 1584 a left up
+1585 1585 left up
+1586 1586 left up
+1587 1587 left up
+1588 1588 a left up
+1589 1589 left up
+1590 1590 left up
+1591 1591 left up
+1592 1592 a left up
+1593 1593 left up
+1594 1594 left up
+1595 1595 left up
+1596 1596 a left up
+1597 1597 left up
+1598 1598 left up
+1599 1599 left up
+1600 1600 a left up
+1601 1601 left up
+1602 1602 left up
+1603 1603 left up
+1604 1604 a left up
+1605 1605 left up
+1606 1606 left up
+1607 1607 left up
+1608 1608 a left up
+1609 1609 left up
+1610 1610 left up
+1611 1611 left up
+1612 1612 a left up
+1613 1613 left up
+1614 1614 left up
+1615 1615 left up
+1616 1616 a left up
+1617 1617 left up
+1618 1618 left up
+1619 1619 left up
+1620 1620 a left up
+1621 1621 left up
+1622 1622 left up
+1623 1623 left up
+1624 1624 a left up
+1625 1625 left up
+1626 1626 left up
+1627 1627 left up
+1628 1628 a left up
+1629 1629 up
+1630 1630 up
+1631 1631 up
+1632 1632 a up
+1633 1633 up
+1634 1634 up
+1635 1635 up
+1636 1636 a up
+1637 1637 up
+1638 1638 up
+1639 1639 up
+1640 1640 a up
+1641 1641 up
+1642 1642 up
+1643 1643 up
+1644 1644 a up
+1645 1645 up
+1646 1646 up
+1647 1647 up
+1648 1648 a up
+1649 1649 up
+1650 1650 up
+1651 1651 up
+1652 1652 a up
+1653 1653 up
+1654 1654 up
+1655 1655 up
+1656 1656 a up
+1657 1657 up
+1658 1658 up
+1659 1659 up
+1660 1660 a up
+1661 1661 up
+1662 1662 up
+1663 1663 up
+1664 1664 a up
+1665 1665 up
+1666 1666 up
+1667 1667 up
+1668 1668 a up
+1669 1669 up
+1670 1670 up
+1671 1671 right up
+1672 1672 a right up
+1673 1673 right up
+1674 1674 right up
+1675 1675 right up
+1676 1676 a right up
+1677 1677 right up
+1678 1678 right up
+1679 1679 right up
+1680 1680 a right up
+1681 1681 right up
+1682 1682 right up
+1683 1683 right up
+1684 1684 a right up
+1685 1685 right up
+1686 1686 right up
+1687 1687 right up
+1688 1688 a right up
+1689 1689 right up
+1690 1690 right up
+1691 1691 right up
+1692 1692 a right up
+1693 1693 right up
+1694 1694 right up
+1695 1695 right up
+1696 1696 a right up
+1697 1697 right up
+1698 1698 right up
+1699 1699 right up
+1700 1700 a right up
+1701 1701 right up
+1702 1702 right up
+1703 1703 right up
+1704 1704 a right up
+1705 1705 right up
+1706 1706 right up
+1707 1707 right up
+1708 1708 a right up
+1709 1709 right up
+1710 1710 right up
+1711 1711 right up
+1712 1712 a right up
+1713 1713 right up
+1714 1714 right up
+1715 1715 right up
+1716 1716 a right up
+1717 1717 right up
+1718 1718 right up
+1719 1719 right up
+1720 1720 a right up
+1721 1721 right up
+1722 1722 right up
+1723 1723 right up
+1724 1724 a right up
+1725 1725 right up
+1726 1726 right up
+1727 1727 right up
+1728 1728 a right up
+1729 1729 right up
+1730 1730 right up
+1731 1731 right up
+1732 1732 a right up
+1733 1733 right up
+1734 1734 right up
+1735 1735 right up
+1736 1736 a right up
+1737 1737 right up
+1738 1738 right
+1739 1739 right
+1740 1740 a right
+1741 1741 right
+1742 1742 right
+1743 1743 right
+1744 1744 a right
+1745 1745 right
+1746 1746 right
+1747 1747 right
+1748 1748 a right
+1749 1749 right
+1750 1750 right
+1751 1751 right
+1752 1752 a right
+1753 1753 right
+1754 1754 right
+1755 1755 right
+1756 1756 a right
+1757 1757 right
+1758 1758 right
+1759 1759 right
+1760 1760 a right
+1761 1761 right
+1762 1762 right
+1763 1763 right
+1764 1764 a right
+1765 1765 right
+1766 1766 right
+1767 1767 right
+1768 1768 a right
+1769 1769 right
+1770 1770 right
+1771 1771 right
+1772 1772 a right
+1773 1773 right
+1774 1774 right
+1775 1775 right
+1776 1776 a right
+1777 1777 right
+1778 1778 right
+1779 1779 right
+1780 1780 a right
+1781 1781 down right
+1782 1782 down right
+1783 1783 down right
+1784 1784 a down right
+1785 1785 down right
+1786 1786 down right
+1787 1787 down right
+1788 1788 a down right
+1789 1789 down right
+1790 1790 down right
+1791 1791 down right
+1792 1792 a down right
+1793 1793 down right
+1794 1794 down right
+1795 1795 down right
+1796 1796 a down right
+1797 1797 down right
+1798 1798 down right
+1799 1799 down right
