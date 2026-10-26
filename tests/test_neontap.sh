@@ -1,13 +1,15 @@
 #!/bin/sh
 # ARCADE-1 - neontap test (the vector arena shooter): a scripted session that
 # plays the title, starts, fires at the three effort tiers, charges with A/B
-# alternation and spends the charge on a bomb.
+# alternation and spends the charge on a bomb; a second charge+bomb late in
+# the session sweeps the late-unlocked enemy vocabulary.
 #
 # The assertions are made through the game's named variables:
 #   1. determinism   - two identical sessions, identical output
 #   2. the story     - the title waits; play starts; the score climbs; kills
 #                      happen; the tap-speed meter fills; the charge meter
-#                      fills and is then spent by the bomb
+#                      fills and is then spent by the bomb; the whole enemy
+#                      vocabulary of the design document appears (M1)
 #   3. record->replay - the recorded session replays bit-identically
 #   4. budget        - the heaviest frame stays under half the instruction cap
 #
@@ -33,7 +35,7 @@ GAME=$ROM/neontap.arc1
 SCRIPT=$(dirname "$0")/inputs/neontap.txt
 [ -f "$SCRIPT" ] || fail "missing $SCRIPT"
 
-FRAMES=1800
+FRAMES=2400
 SYMS=$ROM/neontap.syms
 if [ ! -f "$SYMS" ] && [ -f "$ROM/neontap.elf" ] &&
    command -v riscv64-unknown-elf-nm >/dev/null 2>&1; then
@@ -57,8 +59,8 @@ if [ -f "$SYMS" ]; then
 
     # --- 2) the story ------------------------------------------------------
     "$CLI" run "$GAME" --frames $FRAMES --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state,lives,kills,tap_speed,charge --var-every 10 \
-        > "$OUT/main.txt" 2>/dev/null
+        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped \
+        --var-every 10 > "$OUT/main.txt" 2>/dev/null
     cat "$OUT/main.txt"
     grep '^vars' "$OUT/main.txt" > "$OUT/trace.txt"
 
@@ -75,7 +77,20 @@ if [ -f "$SYMS" ]; then
     awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^charge=/) { v = substr($i, 8) + 0; if (prev >= 20000 && v == 0) ok = 1; prev = v } }
          END { exit ok ? 0 : 1 }' "$OUT/trace.txt" ||
         fail "the bomb should spend a nearly full charge meter"
-    note "story ok - title, play, score, kills, full tap meter, charge, bomb"
+    # M1 enemy grammar: all 11 kinds appear (kinds_seen bits 0..10 = 2047) and
+    # the session kills every direct-queue kind except the bomber, plus the
+    # weaver segments and phantoms (kinds_killed = 1663 = bits 0-6,9,10;
+    # bombers out-bounce the bot and a half-killed weaver chain is cleared by
+    # the next death, so no chain ever dies to its last segment)
+    grep -qE '^vars +[0-9]+ .*kinds_seen=2047( |$)' "$OUT/trace.txt" ||
+        fail "every enemy kind in the design document's vocabulary should appear"
+    grep -qE '^vars +[0-9]+ .*kinds_killed=1663( |$)' "$OUT/trace.txt" ||
+        fail "the session should kill the measured set of enemy kinds"
+    grep -qE '^vars +[0-9]+ .*eh_fired=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "turrets should fire at the player"
+    grep -qE '^vars +[0-9]+ .*mines_dropped=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "bombers should drop mines"
+    note "story ok - title, play, score, kills, meters, bomb, full enemy vocabulary"
 
     # --- 3) record -> replay ----------------------------------------------
     "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
@@ -91,7 +106,7 @@ fi
 
 # --- 4) instruction budget: heaviest sampled frame under half the cap ------
 MAX=0
-for f in 200 600 1000 1062 1070 1400 1790; do
+for f in 200 600 1000 1062 1070 1400 2390; do
     N=$("$CLI" inspect "$GAME" --frames $f --input "$SCRIPT" 2>/dev/null | awk '$1=="INSTRET_FRAME"{print $2}')
     [ -n "$N" ] || fail "inspect gave no INSTRET_FRAME at frame $f"
     [ "$N" -gt "$MAX" ] && MAX=$N
