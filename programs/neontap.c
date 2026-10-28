@@ -21,7 +21,14 @@
  *   state, score, lives, mult, kills, tap_speed, charge, n_enemies, secs,
  *   kinds_seen (bit per enemy kind, once it has appeared this session),
  *   kinds_killed (bit per enemy kind, once one has been killed this session),
- *   eh_fired (turret shots taken), mines_dropped (bomber mines laid)
+ *   eh_fired (enemy shots taken: turrets and the Sentinel),
+ *   mines_dropped (bomber mines laid),
+ *   sector, loop (run structure: sectors within a credit, credits looped),
+ *   sweeps (clean-sweep bombs this session), extras (extra lives this credit),
+ *   nd (sectors cleared without a hit), overdrive (1 while it is on),
+ *   boss_seen, boss_kills (the Sentinel, this session),
+ *   boss_hp (its hits left: plates + core, 0 when it is not out),
+ *   boss_plates (shield plates still up, 0..4)
  * States: 0 = title, 1 = playing, 2 = game over.
  */
 #include "arcade1.h"
@@ -45,6 +52,11 @@
 /* ---- observable state (file-scope globals, read by the HUD so -Os keeps them) ---- */
 int state, score, lives, mult, kills, tap_speed, charge, n_enemies, secs;
 int kinds_seen, kinds_killed, eh_fired, mines_dropped;   /* session-cumulative, not reset */
+int sector, loop;                      /* run structure: sector 1..5 of a credit (M3 fills 2-5), then the run loops */
+int sweeps, nd;                        /* session-cumulative: clean sweeps, no-damage sectors */
+int extras;                            /* extra lives granted this credit */
+int overdrive;                         /* 1 while the overdrive score boost is on */
+int boss_seen, boss_kills, boss_hp, boss_plates;   /* the Sentinel: session flags + live state */
 
 /* ---- sine table, Q8, 256 steps per turn ---- */
 static const short SINT[256] = {
@@ -101,7 +113,9 @@ enum { K_SEEK, K_DRIFT, K_SPLIT, K_MINI, K_PIN, K_TURRET, K_SHIELD, K_BOMBER, K_
 typedef struct { int x, y, vx, vy; short hp, ph, a, t; unsigned char k, on; } enemy;
 typedef struct { int x, y, vx, vy; short life; unsigned char on; } bullet;
 typedef struct { int x, y; short life; unsigned char k, on; } marker;
-typedef struct { int x, y, r, R; short life; unsigned char on; } ring;
+typedef struct { int x, y, r, R; short life, n, cr; unsigned char b, d, on; } ring;
+/* ring: b = bomb ring (n = kills it scored, cr = charge it refunds), d = already
+ * hit the Sentinel this expansion, otherwise the death ring from a player hit */
 typedef struct { int x, y, vx, vy; short life; unsigned short col; unsigned char on; } spark;
 #define NE 64
 #define NB 96
@@ -135,7 +149,23 @@ static const kind_t KIND[K_KINDS] = {
 /* ---- player ---- */
 static int px, py, pvx, pvy, aim, inv, fcd, mult_t, spawn_cd, swarm_cd, frame_t, shake, flash, msg_t, over_t;
 static int unlock_t;                              /* play frames this SESSION: survives death (gates the vocabulary) */
+static int sec_t;                                 /* play frames in the current SECTOR (the waves phase) */
+static int sec_hit;                               /* the player was hit this sector: kills the no-damage bonus */
+static int od_t;                                  /* frames of tap speed > 0.8 building toward overdrive */
+static int msg_k;                                 /* banner: 0 swarm, 1 sentinel, 2 overdrive, 3 clear, 4 sweep */
+static int cur_ring;                              /* the ring whose kill-counter is open, or -1 */
 static unsigned prev_pad;
+
+/* ---- the Sentinel: Sector 1's boss (design doc 5). A rotating polygon with
+ * four shield plates — hits land on the nearest intact plate until all four
+ * are gone, then on the core. M2 builds Sector 1 only; sectors 2-5 are M3,
+ * so the run keeps counting sectors up over Sector 1's rules. ---- */
+#define BOR 15                                     /* core radius, px        */
+#define BPHP 3                                     /* hits per plate         */
+#define BCHP 8                                     /* hits on the core       */
+#define BMAX (BCHP + 4 * BPHP)                     /* boss_hp at full health */
+static int bo_on, bo_x, bo_y, bo_vx, bo_vy, bo_a, bo_t, bo_cd;
+static short bo_php[4], bo_chp;
 
 /* ---- warping grid: spring lattice, pushed by shots, kills, hits and bombs ---- */
 #define GX 17
@@ -239,6 +269,16 @@ static void burst(int x, int y, unsigned col, int n, int sp) {
 static const short GATE[K_KINDS] = { 0, 600, 900, 0, 1200, 1600, 1700, 1800, 1950, 0, 2100 };
 static const unsigned char WGT[K_KINDS] = { 40, 18, 8, 0, 7, 7, 7, 6, 3, 0, 3 };
 
+/* Run structure and scoring (design doc 5 and 6), compressed to the session
+ * length the golden test can watch: the design's 90-110 s waves + 45-60 s
+ * boss per sector become SEC_FRAMES waves frames + a Sentinel that dies
+ * under fire in a few seconds (docs/experiments/neontap-m2-sector-1.md). */
+#define SEC_FRAMES 1100                            /* waves frames before the Sentinel */
+#define SWEEP_BONUS 2000                           /* flat: a clean-sweep bomb          */
+#define ND_BONUS 5000                              /* flat: a sector cleared untouched  */
+#define BOSS_PTS 5000                              /* the Sentinel, times the chain     */
+static const int EXTRA[2] = { 50000, 200000 };     /* extra-life score marks            */
+
 static int kind_pending(int k) { for (int i = 0; i < NM; i++) if (M[i].on && M[i].k == k) return 1; return 0; }
 static int weaver_alive(void) { for (int i = 0; i < NE; i++) if (E[i].on && E[i].k == K_WEAVER) return 1; return 0; }
 /* the phantom is only there half the time: visible, hittable and dangerous
@@ -270,13 +310,19 @@ static void queue(int k) {
     }
     for (int i = 0; i < NM; i++) if (!M[i].on) { M[i].on = 1; M[i].k = (unsigned char)k; M[i].x = x; M[i].y = y; M[i].life = 45; return; }
 }
+/* every point goes through here, so the extra-life marks are checked once */
+static void score_add(int v) {
+    score += v;
+    while (extras < 2 && score >= EXTRA[extras]) { extras++; lives++; snd(1200, 24, 4, 6); }
+}
 static void kill_enemy(enemy *e, int bonus_x256) {
     const kind_t *d = &KIND[e->k]; int x = e->x >> 8, y = e->y >> 8;
     burst(x, y, d->core, e->k == K_SPLIT ? 22 : 12, 700); shake = shake > 3 ? shake : 3;
     grid_warp(x, y, 1100, 54);
-    mult = mult + 64 > 2560 ? 2560 : mult + 64; mult_t = 110;
-    score += d->pts * (mult >> 8) * bonus_x256 / 256; kills++;
+    mult += overdrive ? 128 : 64; if (mult > 2560) mult = 2560; mult_t = 110;   /* overdrive doubles the chain gain */
+    score_add(d->pts * (mult >> 8) * bonus_x256 / 256); kills++;
     kinds_killed |= 1 << e->k;
+    if (cur_ring >= 0) R[cur_ring].n++;             /* the bomb ring's clean-sweep count */
     snd(900 + 40 * (mult >> 8), 3, -60, 1);
     if (e->k == K_SPLIT) for (int i = 0; i < 3; i++) { spawn_enemy(K_MINI, x, y); for (int q = NE - 1; q >= 0; q--) if (E[q].on && E[q].k == K_MINI && !E[q].vx && !E[q].vy) { int a = i * 85 + rnd(40); E[q].vx = COS(a) * 369 >> 8; E[q].vy = SIN(a) * 369 >> 8; break; } }
     e->on = 0;
@@ -287,10 +333,11 @@ static void kill_enemy(enemy *e, int bonus_x256) {
         for (int i = 0; i < NE; i++) if (E[i].on) { if (E[i].k == K_WSEG) left++; if (E[i].k == K_WEAVER) head = i; }
         if (!left && head >= 0) kill_enemy(&E[head], 256); }
 }
-static void add_ring(int x, int y, int R_, int kill) { for (int i = 0; i < NR; i++) if (!R[i].on) { R[i].on = 1; R[i].x = x; R[i].y = y; R[i].r = kill ? 2 : 0; R[i].R = R_; R[i].life = kill ? 34 : 24; return; } }
+/* returns the slot taken, or -1 if every ring is busy */
+static int add_ring(int x, int y, int R_, int kill) { for (int i = 0; i < NR; i++) if (!R[i].on) { R[i].on = 1; R[i].x = x; R[i].y = y; R[i].r = kill ? 2 : 0; R[i].R = R_; R[i].life = kill ? 34 : 24; R[i].n = 0; R[i].cr = 0; R[i].b = 0; R[i].d = 0; return i; } return -1; }
 static void hit_player(void) {
     grid_warp(px >> 8, py >> 8, 2600, 120); lives--; inv = 130; shake = 7; flash = 3; burst(px >> 8, py >> 8, C_WHITE, 40, 900);
-    add_ring(px >> 8, py >> 8, 72, 1); mult = 256; snd(300, 14, -14, 5);
+    add_ring(px >> 8, py >> 8, 72, 1); mult = 256; snd(300, 14, -14, 5); sec_hit = 1;
     if (lives <= 0) { state = 2; over_t = 0; snd(220, 40, -4, 9); }
 }
 static void reset_game(void) {
@@ -298,18 +345,79 @@ static void reset_game(void) {
     memset(F, 0, sizeof F); memset(MN, 0, sizeof MN); wt = 0; wcount = 0;
     state = 1; score = 0; lives = 3; mult = 256; kills = 0; px = (SW / 2) << 8; py = (SH / 2) << 8; pvx = pvy = 0; aim = 192;
     inv = 0; fcd = 0; mult_t = 0; spawn_cd = 60; swarm_cd = 1500; frame_t = 0; shake = flash = msg_t = 0; rng_state = 5; tc_reset(); snd_n = 0;
-    /* kinds_seen / kinds_killed / eh_fired / mines_dropped / unlock_t are
-     * SESSION-cumulative: a death does not un-learn the vocabulary */
+    sector = 1; loop = 0; extras = 0; overdrive = 0; od_t = 0; sec_t = 0; sec_hit = 0; bo_on = 0; boss_hp = boss_plates = 0; cur_ring = -1;
+    /* kinds_seen / kinds_killed / eh_fired / mines_dropped / unlock_t /
+     * sweeps / nd / boss_seen / boss_kills are SESSION-cumulative: a death
+     * does not un-learn the vocabulary or un-count the run's achievements */
 }
 static void bomb(void) {
     if (charge < 2048) return;
     int c = charge / 100;                                  /* 0..256 */
-    charge = 0; add_ring(px >> 8, py >> 8, 54 + (180 * c >> 8), 1);
+    int refund = charge / 4;                               /* a clean sweep gives a quarter back */
+    charge = 0;
+    int i = add_ring(px >> 8, py >> 8, 54 + (180 * c >> 8), 1);
+    if (i >= 0) { R[i].b = 1; R[i].cr = (short)refund; }
     shake = 4 + (6 * c >> 8); flash = 2; snd(700, 22, -26, 6);
 }
 
+/* ---- the Sentinel: waves stop, the arena clears, it drifts and shoots ---- */
+static int sec_frames(void) { int f = SEC_FRAMES - 120 * (sector - 1); return f < 700 ? 700 : f; }
+static void boss_sync(void) {                            /* mirror the plates + core to boss_hp / boss_plates */
+    int hp = bo_chp, pl = 0;
+    for (int i = 0; i < 4; i++) if (bo_php[i] > 0) { hp += bo_php[i]; pl++; }
+    boss_hp = hp; boss_plates = pl;
+}
+static void boss_spawn(void) {
+    bo_on = 1; bo_x = (SW / 2) << 8; bo_y = (SH / 3) << 8; bo_vx = 0; bo_vy = 0; bo_a = 0; bo_t = 0; bo_cd = 90;
+    for (int i = 0; i < 4; i++) bo_php[i] = BPHP;
+    bo_chp = BCHP; boss_sync(); boss_seen = 1; msg_t = 100; msg_k = 1; snd(140, 26, 3, 5);
+    /* the arena clears for the boss: whatever is still alive bursts, unscored */
+    for (int i = 0; i < NE; i++) if (E[i].on) { E[i].on = 0; burst(E[i].x >> 8, E[i].y >> 8, C_WHITE, 6, 500); }
+    memset(M, 0, sizeof M); memset(MN, 0, sizeof MN);
+}
+static void boss_kill(void) {
+    int bx = bo_x >> 8, by = bo_y >> 8;
+    burst(bx, by, C_WHITE, 40, 900); grid_warp(bx, by, 2600, 120); shake = 7; flash = 3;
+    bo_on = 0; boss_hp = boss_plates = 0; boss_kills++; kills++;
+    mult += overdrive ? 128 : 64; if (mult > 2560) mult = 2560; mult_t = 110;
+    score_add(BOSS_PTS * (mult >> 8));
+    if (!sec_hit) { nd++; score_add(ND_BONUS); }
+    snd(500, 30, -10, 6);
+    sector++; if (sector > 5) { sector = 1; loop++; }   /* five sectors per design credit, then the run loops */
+    sec_t = 0; sec_hit = 0; spawn_cd = 60; swarm_cd = 1500; msg_t = 100; msg_k = 3;
+}
+static void boss_hit(int hx, int hy) {                   /* hx,hy = the hit, relative to the core */
+    int best = -1, bd = 1 << 30;
+    for (int i = 0; i < 4; i++) if (bo_php[i] > 0) {     /* nearest intact plate takes the hit */
+        int a = bo_a + i * 64, ox = COS(a) * BOR >> 8, oy = SIN(a) * BOR >> 8;
+        int d = (hx - ox) * (hx - ox) + (hy - oy) * (hy - oy);
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) {
+        int a = bo_a + best * 64, px_ = (bo_x >> 8) + (COS(a) * BOR >> 8), py_ = (bo_y >> 8) + (SIN(a) * BOR >> 8);
+        if (--bo_php[best] <= 0) { burst(px_, py_, C_YELLOW, 14, 600); snd(300, 10, -20, 4); }
+        else burst(px_, py_, C_WHITE, 4, 300);
+    } else if (--bo_chp <= 0) { boss_kill(); return; }
+    else burst(bo_x >> 8, bo_y >> 8, C_ORANGE, 6, 400);
+    boss_sync();
+}
+static void boss_update(void) {
+    bo_t++; bo_a += 2;
+    if (bo_t % 128 == 0) {                               /* a slow drift, re-aimed at you every 2 s */
+        int dx = px - bo_x, dy = py - bo_y, dist = (int)isqrt((unsigned)(((dx >> 8) * (dx >> 8) + (dy >> 8) * (dy >> 8)))) + 1;
+        bo_vx = (dx >> 8) * 90 / dist; bo_vy = (dy >> 8) * 90 / dist;
+    }
+    bo_x = clampi(bo_x + bo_vx, 30 << 8, (SW - 30) << 8); bo_y = clampi(bo_y + bo_vy, 30 << 8, (SH - 30) << 8);
+    if (--bo_cd <= 0) { bo_cd = 120;                     /* two aimed shots every 2 s */
+        int dx = px - bo_x, dy = py - bo_y, dist = (int)isqrt((unsigned)(((dx >> 8) * (dx >> 8) + (dy >> 8) * (dy >> 8)))) + 1;
+        for (int j = 0; j < 2; j++) for (int q = 0; q < NF; q++) if (!F[q].on) {
+            F[q].on = 1; F[q].life = 240; F[q].x = bo_x; F[q].y = bo_y;
+            F[q].vx = (dx >> 8) * 256 / dist * (3 - j) / 2; F[q].vy = (dy >> 8) * 256 / dist * (3 - j) / 2;
+            eh_fired++; snd(400, 3, 0, 2); break; } }
+}
+
 static void step_play(unsigned pad, unsigned edge) {
-    frame_t++; unlock_t++;
+    frame_t++; unlock_t++; sec_t++;
     if (edge & BTN_A) tc_press(0);
     if (edge & BTN_B) tc_press(1);
     tc_frame();
@@ -320,6 +428,11 @@ static void step_play(unsigned pad, unsigned edge) {
     px = clampi(px + pvx, 10 << 8, (SW - 10) << 8); py = clampi(py + pvy, 10 << 8, (SH - 10) << 8);
     if (mx || my) { static const unsigned char A8[9] = { 224, 192, 160, 0, 0, 128, 32, 64, 96 }; aim = A8[(my + 1) * 3 + (mx + 1)]; }
     int s = tc_speed(); tap_speed = s;
+    /* overdrive (design doc 6): 3 s above 0.8 tap speed doubles the chain gain
+     * and whitens the ship; it ends the moment speed drops below 0.5 */
+    if (s > 204) { if (++od_t >= 180 && !overdrive) { overdrive = 1; msg_t = 80; msg_k = 2; snd(800, 18, 8, 4); } }
+    else od_t = 0;
+    if (overdrive && s < 128) overdrive = 0;
     int chg = tc_charging(), hold = (pad & (BTN_A | BTN_B)) != 0;
     if (--fcd <= 0 && !chg) {
         int base = (hold || s > 13) ? 9 : 22; fcd = (base * 256 - (base - 3) * s + 128) >> 8;
@@ -329,9 +442,11 @@ static void step_play(unsigned pad, unsigned edge) {
             B[k].x = px + (COS(aim) * 8); B[k].y = py + (SIN(aim) * 8); B[k].vx = COS(a) * 6; B[k].vy = SIN(a) * 6; break;
         }
     }
-    /* spawning: difficulty ramps with time; the vocabulary widens with unlock_t */
+    /* spawning: difficulty ramps with time; the vocabulary widens with unlock_t.
+     * The Sentinel owns the arena while it is out: no waves, no swarm. */
     int d = clampi(frame_t * 256 / (60 * 150), 0, 256);
-    if (--spawn_cd <= 0) {
+    if (!bo_on && sec_t >= sec_frames()) boss_spawn();
+    if (!bo_on && --spawn_cd <= 0) {
         spawn_cd = 60 - (40 * d >> 8); int n = 1 + (rnd(256) < d / 2) + (rnd(256) < d * 30 / 100);
         int tot = 0;
         for (int k = 0; k < K_KINDS; k++) if (unlock_t >= GATE[k] && WGT[k]) tot += WGT[k];
@@ -342,10 +457,10 @@ static void step_play(unsigned pad, unsigned edge) {
             queue(k); }
     }
     /* force-intro: the first enemy of a newly unlocked kind is guaranteed */
-    for (int k = 1; k < K_KINDS; k++)
+    if (!bo_on) for (int k = 1; k < K_KINDS; k++)
         if (unlock_t >= GATE[k] && WGT[k] && !(kinds_seen & (1 << k)) && !kind_pending(k)) { queue(k); break; }
-    if (--swarm_cd <= 0) {
-        swarm_cd = 1500; msg_t = 100; snd(120, 18, 6, 3); int a0 = rnd(256);
+    if (!bo_on && --swarm_cd <= 0) {
+        swarm_cd = 1500; msg_t = 100; msg_k = 0; snd(120, 18, 6, 3); int a0 = rnd(256);
         for (int i = 0; i < 14; i++) for (int k = 0; k < NM; k++) if (!M[k].on) { int a = a0 + i * 256 / 14; M[k].on = 1; M[k].k = K_SEEK; M[k].life = 60;
             M[k].x = clampi(SW / 2 + (COS(a) * (SW / 2 - 14) >> 8), 8, SW - 8); M[k].y = clampi(SH / 2 + (SIN(a) * (SH / 2 - 14) >> 8), 8, SH - 8); break; }
     }
@@ -400,15 +515,32 @@ static void step_play(unsigned pad, unsigned edge) {
         if (inv <= 0 && hittable) { int bx = (px >> 8) - ex, by = (py >> 8) - ey; if (bx * bx + by * by < (er + 5) * (er + 5)) { hit_player(); if (state != 1) return; kill_enemy(e, 0); } }
     }
     n_enemies = ne;
+    if (bo_on) {                                       /* the Sentinel: drift, then take the shots */
+        boss_update();
+        for (int k = 0; k < NB; k++) if (B[k].on) {
+            int bx = (B[k].x >> 8) - (bo_x >> 8), by = (B[k].y >> 8) - (bo_y >> 8);
+            if (bx * bx + by * by < (BOR + 4) * (BOR + 4)) { B[k].on = 0; boss_hit(bx, by); if (!bo_on) break; }
+        }
+        if (bo_on && inv <= 0) { int bx = (px >> 8) - (bo_x >> 8), by = (py >> 8) - (bo_y >> 8);
+            if (bx * bx + by * by < (BOR + 6) * (BOR + 6)) { hit_player(); if (state != 1) return; } }
+    }
     for (int i = 0; i < NR; i++) if (R[i].on) {
         R[i].r += (((R[i].R - R[i].r) * 46) >> 8) + 2; grid_ring(R[i].x, R[i].y, R[i].r, 28, 700);
+        cur_ring = R[i].b ? i : -1;
         for (int q = 0; q < NE; q++) if (E[q].on && evis(&E[q])) { int dx = (E[q].x >> 8) - R[i].x, dy = (E[q].y >> 8) - R[i].y, rr = R[i].r + KIND[E[q].k].r;
             if (dx * dx + dy * dy < rr * rr) kill_enemy(&E[q], 256); }
+        cur_ring = -1;
+        if (R[i].b && bo_on) { int dx = (bo_x >> 8) - R[i].x, dy = (bo_y >> 8) - R[i].y, rr = R[i].r + BOR;   /* a bomb cracks the Sentinel too, once */
+            if (!R[i].d && dx * dx + dy * dy < rr * rr) { R[i].d = 1; boss_hit(dx, dy); } }
         for (int q = 0; q < NF; q++) if (F[q].on) { int dx = (F[q].x >> 8) - R[i].x, dy = (F[q].y >> 8) - R[i].y, rr = R[i].r + 3;
             if (dx * dx + dy * dy < rr * rr) F[q].on = 0; }
         for (int q = 0; q < NN; q++) if (MN[q].on) { int dx = MN[q].x - R[i].x, dy = MN[q].y - R[i].y, rr = R[i].r + 6;
             if (dx * dx + dy * dy < rr * rr) { MN[q].on = 0; burst(MN[q].x, MN[q].y, RGB(255, 240, 200), 6, 400); } }
-        if (--R[i].life <= 0) R[i].on = 0;
+        if (--R[i].life <= 0) {
+            R[i].on = 0;
+            if (R[i].b && R[i].n >= 8) {                /* clean sweep (design doc 6): flat bonus, quarter charge back */
+                sweeps++; score_add(SWEEP_BONUS); charge = clampi(charge + R[i].cr, 0, 25600); msg_t = 60; msg_k = 4; snd(1000, 14, -20, 4); }
+        }
     }
     for (int k = 0; k < NS; k++) if (S[k].on) { S[k].x += S[k].vx; S[k].y += S[k].vy; S[k].vx -= S[k].vx >> 5; S[k].vy -= S[k].vy >> 5; if (--S[k].life <= 0) S[k].on = 0; }
     if (inv > 0) inv--;
@@ -450,11 +582,20 @@ static void draw_world(void) {
     for (int k = 0; k < NF; k++) if (F[k].on) { int x = F[k].x >> 8, y = F[k].y >> 8; line(x, y, x - (F[k].vx >> 7), y - (F[k].vy >> 7), 3, RGB(40, 90, 100)); line(x, y, x - (F[k].vx >> 8), y - (F[k].vy >> 8), 1, RGB(159, 232, 255)); }
     for (int k = 0; k < NS; k++) if (S[k].on) line(S[k].x >> 8, S[k].y >> 8, (S[k].x - S[k].vx * 3) >> 8, (S[k].y - S[k].vy * 3) >> 8, 1, S[k].col);
     for (int i = 0; i < NR; i++) if (R[i].on) { circle(R[i].x, R[i].y, R[i].r, 5, RGB(30, 90, 120)); circle(R[i].x, R[i].y, R[i].r, 2, RGB(159, 232, 255)); }
+    if (bo_on) {                                        /* the Sentinel: core + four plates on the spinning frame */
+        int x = bo_x >> 8, y = bo_y >> 8;
+        for (int i = 0; i < 4; i++) if (bo_php[i] > 0) {
+            int a = bo_a + i * 64, qx = x + (COS(a) * BOR >> 8), qy = y + (SIN(a) * BOR >> 8);
+            poly(qx, qy, 5, 4, -bo_a + i * 64, C_YELLOW, RGB(90, 75, 30));
+            glow_line(x, y, qx, qy, RGB(60, 50, 20), RGB(40, 34, 14));
+        }
+        poly(x, y, BOR - 2, 6, bo_a, boss_plates ? RGB(159, 232, 255) : C_ORANGE, RGB(25, 60, 80));
+    }
     if (state == 1 || state == 0) {
         int x = px >> 8, y = py >> 8;
         if (!(inv > 0 && ((frame_t >> 2) & 1))) {
             if (charge > 400) { int rr = 14 + (charge >> 9); circle(x, y, rr, 2, charge > 24000 ? C_WHITE : C_ORANGE); }
-            unsigned core = s > 150 ? C_WHITE : RGB(159, 255, 224), glow = RGB(25, 80, 70);
+            unsigned core = (s > 150 || overdrive) ? C_WHITE : RGB(159, 255, 224), glow = RGB(25, 80, 70);
             int fx = x + (COS(aim) * 13 >> 8), fy = y + (SIN(aim) * 13 >> 8);
             int lx = x + (COS(aim + 106) * 11 >> 8), ly = y + (SIN(aim + 106) * 11 >> 8), rx = x + (COS(aim - 106) * 11 >> 8), ry = y + (SIN(aim - 106) * 11 >> 8);
             int bx = x - (COS(aim) * 4 >> 8), by = y - (SIN(aim) * 4 >> 8);
@@ -469,9 +610,23 @@ static void draw_hud(void) {
     text_draw(8, 16, "X", C_YELLOW); text_u32(16, 16, (unsigned)(mult >> 8), 2, C_YELLOW);
     text_draw(SW - 96, 6, "LIVES", C_HUD); for (int i = 0; i < lives; i++) arcade1_rect(SW - 48 + i * 10, 7, 6, 6, RGB(159, 255, 224));
     text_u32(SW - 40, 16, (unsigned)secs / 60, 2, RGB(120, 150, 170)); text_draw(SW - 24, 16, ":", RGB(120, 150, 170)); text_u32(SW - 16, 16, (unsigned)secs % 60, 2, RGB(120, 150, 170));
+    text_draw(SW / 2 - 24, 6, "S", RGB(120, 150, 170)); text_u32(SW / 2 - 16, 6, (unsigned)sector, 2, RGB(120, 150, 170));   /* sector N (loop L) */
+    text_draw(SW / 2 - 16, 16, "L", RGB(90, 110, 130)); text_u32(SW / 2 - 8, 16, (unsigned)loop, 2, RGB(90, 110, 130));
+    if (overdrive) text_draw(8, 26, "DRIVE", C_WHITE);
     text_draw(8, SH - 30, "TAP", RGB(150, 170, 190)); arcade1_rect(40, SH - 29, 100, 6, RGB(20, 20, 50)); arcade1_rect(40, SH - 29, 100 * tap_speed >> 8, 6, C_YELLOW);
     text_draw(8, SH - 18, "PWR", RGB(150, 170, 190)); arcade1_rect(40, SH - 17, 100, 6, RGB(20, 20, 50)); arcade1_rect(40, SH - 17, 100 * charge / 25600, 6, charge >= 25000 ? C_WHITE : C_ORANGE);
-    if (msg_t > 0 && state == 1) { msg_t--; text_draw(SW / 2 - 16, 44, "SWARM", RGB(255, 63, 164)); }
+    if (bo_on) {                                        /* the Sentinel's health, centre-top */
+        arcade1_rect(SW / 2 - 60, 26, 120, 5, RGB(20, 20, 50));
+        arcade1_rect(SW / 2 - 60, 26, 120 * boss_hp / BMAX, 5, boss_plates ? C_YELLOW : C_ORANGE);
+    }
+    if (msg_t > 0 && state == 1) {
+        msg_t--;
+        if (msg_k == 1) text_draw(SW / 2 - 32, 44, "SENTINEL", C_ORANGE);
+        else if (msg_k == 2) text_draw(SW / 2 - 40, 44, "OVERDRIVE", C_WHITE);
+        else if (msg_k == 3) text_draw(SW / 2 - 16, 44, "CLEAR", C_HUD);
+        else if (msg_k == 4) text_draw(SW / 2 - 24, 44, "SWEEP", C_YELLOW);
+        else text_draw(SW / 2 - 16, 44, "SWARM", RGB(255, 63, 164));
+    }
 }
 
 int main(void) {

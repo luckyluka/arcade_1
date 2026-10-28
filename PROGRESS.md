@@ -222,6 +222,7 @@ regression, ~72 s each). Measured on this machine:
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-28 | Neon Tap M2 (Sector 1 + the Sentinel + scoring) | 6 m 10 s (370 s) |
 | 2026-10-26 | Neon Tap M1 (enemy grammar; session extended to 2400 frames) | 6 m 27 s (387 s) |
 | 2026-10-26 | NEON TAP integrated (budget raised to 500 s in this card) | 7 m 25 s (445 s) |
 | 2026-10-24 | skydescent's full-descent session (budget raised to 300 s in this card) | 4 m 9 s (249 s) |

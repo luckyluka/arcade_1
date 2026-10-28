@@ -2,14 +2,18 @@
 # ARCADE-1 - neontap test (the vector arena shooter): a scripted session that
 # plays the title, starts, fires at the three effort tiers, charges with A/B
 # alternation and spends the charge on a bomb; a second charge+bomb late in
-# the session sweeps the late-unlocked enemy vocabulary.
+# the session sweeps the late-unlocked enemy vocabulary. The session runs the
+# whole of Sector 1: waves, then the Sentinel boss, then Sector 2's waves.
 #
 # The assertions are made through the game's named variables:
 #   1. determinism   - two identical sessions, identical output
 #   2. the story     - the title waits; play starts; the score climbs; kills
 #                      happen; the tap-speed meter fills; the charge meter
 #                      fills and is then spent by the bomb; the whole enemy
-#                      vocabulary of the design document appears (M1)
+#                      vocabulary of the design document appears (M1);
+#                      overdrive latches under fast tapping; a clean-sweep
+#                      bomb pays out; the Sentinel comes out, loses its
+#                      plates, dies, and the run advances to Sector 2 (M2)
 #   3. record->replay - the recorded session replays bit-identically
 #   4. budget        - the heaviest frame stays under half the instruction cap
 #
@@ -59,7 +63,7 @@ if [ -f "$SYMS" ]; then
 
     # --- 2) the story ------------------------------------------------------
     "$CLI" run "$GAME" --frames $FRAMES --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped \
+        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped,sector,loop,sweeps,nd,extras,overdrive,boss_seen,boss_hp,boss_plates \
         --var-every 10 > "$OUT/main.txt" 2>/dev/null
     cat "$OUT/main.txt"
     grep '^vars' "$OUT/main.txt" > "$OUT/trace.txt"
@@ -78,19 +82,37 @@ if [ -f "$SYMS" ]; then
          END { exit ok ? 0 : 1 }' "$OUT/trace.txt" ||
         fail "the bomb should spend a nearly full charge meter"
     # M1 enemy grammar: all 11 kinds appear (kinds_seen bits 0..10 = 2047) and
-    # the session kills every direct-queue kind except the bomber, plus the
-    # weaver segments and phantoms (kinds_killed = 1663 = bits 0-6,9,10;
-    # bombers out-bounce the bot and a half-killed weaver chain is cleared by
-    # the next death, so no chain ever dies to its last segment)
+    # the session kills every kind but the weaver chain (kinds_killed = 1279
+    # = bits 0-7,10): a chain still alive when the Sentinel clears the arena
+    # is destroyed without kill credit, and no chain ever dies to its last
+    # segment under this bot
     grep -qE '^vars +[0-9]+ .*kinds_seen=2047( |$)' "$OUT/trace.txt" ||
         fail "every enemy kind in the design document's vocabulary should appear"
-    grep -qE '^vars +[0-9]+ .*kinds_killed=1663( |$)' "$OUT/trace.txt" ||
+    grep -qE '^vars +[0-9]+ .*kinds_killed=1279( |$)' "$OUT/trace.txt" ||
         fail "the session should kill the measured set of enemy kinds"
     grep -qE '^vars +[0-9]+ .*eh_fired=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
         fail "turrets should fire at the player"
     grep -qE '^vars +[0-9]+ .*mines_dropped=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
         fail "bombers should drop mines"
-    note "story ok - title, play, score, kills, meters, bomb, full enemy vocabulary"
+    # M2 scoring: the scripted taps hold speed above 0.8 for 3 s, so overdrive
+    # latches; one bomb in the session kills 8+ enemies at once, which pays
+    # the clean-sweep bonus (sweeps counts them)
+    has overdrive 1 || fail "holding tap speed above 0.8 for 3 s should latch overdrive"
+    grep -qE '^vars +[0-9]+ .*sweeps=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "a bomb killing 8+ enemies should count as a clean sweep"
+    # M2 run structure: waves, then the Sentinel at full plates, then the
+    # plates breaking, the core dying and the run advancing to Sector 2.
+    # (nd stays 0 here - the bot is hit inside Sector 1 - and extras stays 0:
+    # the session's score peaks under the 50,000 mark)
+    has boss_seen 1 || fail "the Sentinel should come out at the end of Sector 1's waves"
+    has boss_plates 4 || fail "the Sentinel should start with four shield plates"
+    # a mid-fight sample: the boss alive AND already missing plates (plain
+    # boss_plates=0 also matches before it spawns and after it dies)
+    grep -qE '^vars +[0-9]+ .*boss_seen=1 .*boss_plates=[123]( |$)' "$OUT/trace.txt" ||
+        fail "the shield plates should break under fire"
+    grep -qE '^vars +[0-9]+ .*sector=2( |$)' "$OUT/trace.txt" ||
+        fail "killing the Sentinel should advance the run to Sector 2"
+    note "story ok - title, play, score, meters, bomb, vocabulary, overdrive, sweep, Sentinel, Sector 2"
 
     # --- 3) record -> replay ----------------------------------------------
     "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
@@ -105,8 +127,11 @@ else
 fi
 
 # --- 4) instruction budget: heaviest sampled frame under half the cap ------
+# Samples: quiet early play (200), mid waves (600, 1000), the first bomb
+# expanding (1062, 1070), the Sentinel fight (1160, 1200, 1400: plates then
+# core), Sector 2 waves (1900) and the tail (2390).
 MAX=0
-for f in 200 600 1000 1062 1070 1400 2390; do
+for f in 200 600 1000 1062 1070 1160 1200 1400 1900 2390; do
     N=$("$CLI" inspect "$GAME" --frames $f --input "$SCRIPT" 2>/dev/null | awk '$1=="INSTRET_FRAME"{print $2}')
     [ -n "$N" ] || fail "inspect gave no INSTRET_FRAME at frame $f"
     [ "$N" -gt "$MAX" ] && MAX=$N
