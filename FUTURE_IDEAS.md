@@ -262,18 +262,17 @@ Explicit principle that these remain future ideas and must not affect the curren
 
 `programs/neontap.c` (integrated 2026-10-26; M1 enemy grammar added
 2026-10-26; M2 Sector 1, the Sentinel and the §6 scoring rules added
-2026-10-28) implements milestones M0, M1 and M2 of
+2026-10-28; M3 Sectors 2-5, their arenas and the four later bosses added
+2026-10-29) implements milestones M0, M1, M2 and M3 of
 `programs/neon_tap/Neon Tap Design Document.md`.
 The rest of that document is a design inventory, not a commitment — promote
 individual items into a roadmap card only if a real need shows up:
 
-- sectors 2 to 5 with their arena rules and bosses (Hydra, ...); today
-  `sector` counts up over Sector 1's rules and the waves clock tightens
-- two-player co-op with the shared lives pool and the sync bomb
-  (blocked by the machine contract: one `INPUT_PAD`, see
-  `docs/experiments/neontap-m4-blocked.md`)
 - replay verification, ghosts, daily seeds — replays/ghosts are M5 and
   reachable; a *daily seed* can only live host-side (a tool picks the day's
   seed and writes it into the input script or a load-time `--seed`; the guest
   stays deterministic), since the machine has no wall clock by design
+- two-player co-op with the shared lives pool and the sync bomb
+  (blocked by the machine contract: one `INPUT_PAD`, see
+  `docs/experiments/neontap-m4-blocked.md`)
 - the effort-driven music layers

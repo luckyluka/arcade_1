@@ -1,19 +1,25 @@
 #!/bin/sh
 # ARCADE-1 - neontap test (the vector arena shooter): a scripted session that
 # plays the title, starts, fires at the three effort tiers, charges with A/B
-# alternation and spends the charge on a bomb; a second charge+bomb late in
-# the session sweeps the late-unlocked enemy vocabulary. The session runs the
-# whole of Sector 1: waves, then the Sentinel boss, then Sector 2's waves.
+# alternation and spends the charge on a bomb; charge+bomb cycles recur through
+# the session so the run survives the sector bosses. The session watches a
+# whole design credit: Sector 1's waves and Sentinel, then Sectors 2-5, each
+# with its arena rule and its boss (Hydra, Orbiter, Weaver, Core), then the
+# run looping back into Sector 1 for a second credit.
 #
 # The assertions are made through the game's named variables:
 #   1. determinism   - two identical sessions, identical output
 #   2. the story     - the title waits; play starts; the score climbs; kills
 #                      happen; the tap-speed meter fills; the charge meter
 #                      fills and is then spent by the bomb; the whole enemy
-#                      vocabulary of the design document appears (M1);
-#                      overdrive latches under fast tapping; a clean-sweep
-#                      bomb pays out; the Sentinel comes out, loses its
-#                      plates, dies, and the run advances to Sector 2 (M2)
+#                      vocabulary of the design document appears, turrets fire
+#                      and bombers mine (M1); overdrive latches under fast
+#                      tapping; a clean-sweep bomb pays out; the Sentinel
+#                      comes out, loses its plates, dies, and the run advances
+#                      to Sector 2 (M2); the four later bosses fight with the
+#                      grammars the design gives them, every arena rule shows,
+#                      the 50,000 mark grants an extra life and the credit
+#                      completes so the run loops (M3)
 #   3. record->replay - the recorded session replays bit-identically
 #   4. budget        - the heaviest frame stays under half the instruction cap
 #
@@ -39,7 +45,7 @@ GAME=$ROM/neontap.arc1
 SCRIPT=$(dirname "$0")/inputs/neontap.txt
 [ -f "$SCRIPT" ] || fail "missing $SCRIPT"
 
-FRAMES=2400
+FRAMES=4000
 SYMS=$ROM/neontap.syms
 if [ ! -f "$SYMS" ] && [ -f "$ROM/neontap.elf" ] &&
    command -v riscv64-unknown-elf-nm >/dev/null 2>&1; then
@@ -63,7 +69,7 @@ if [ -f "$SYMS" ]; then
 
     # --- 2) the story ------------------------------------------------------
     "$CLI" run "$GAME" --frames $FRAMES --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped,sector,loop,sweeps,nd,extras,overdrive,boss_seen,boss_hp,boss_plates \
+        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped,sector,loop,sweeps,nd,extras,overdrive,boss_seen,boss_k,boss_hp,boss_plates,boss_n,boss_ph,arena,gates,pyl_hits,wall_in,boss_kills \
         --var-every 10 > "$OUT/main.txt" 2>/dev/null
     cat "$OUT/main.txt"
     grep '^vars' "$OUT/main.txt" > "$OUT/trace.txt"
@@ -81,15 +87,14 @@ if [ -f "$SYMS" ]; then
     awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^charge=/) { v = substr($i, 8) + 0; if (prev >= 20000 && v == 0) ok = 1; prev = v } }
          END { exit ok ? 0 : 1 }' "$OUT/trace.txt" ||
         fail "the bomb should spend a nearly full charge meter"
-    # M1 enemy grammar: all 11 kinds appear (kinds_seen bits 0..10 = 2047) and
-    # the session kills every kind but the weaver chain (kinds_killed = 1279
-    # = bits 0-7,10): a chain still alive when the Sentinel clears the arena
-    # is destroyed without kill credit, and no chain ever dies to its last
-    # segment under this bot
+    # M1 enemy grammar: all 11 kinds appear (kinds_seen bits 0..10 = 2047), and
+    # the two credits the session runs kill every kind too (kinds_killed =
+    # 2047: the weaver chain that used to outlive Sector 1's arena clear is
+    # hunted down in the later sectors)
     grep -qE '^vars +[0-9]+ .*kinds_seen=2047( |$)' "$OUT/trace.txt" ||
         fail "every enemy kind in the design document's vocabulary should appear"
-    grep -qE '^vars +[0-9]+ .*kinds_killed=1279( |$)' "$OUT/trace.txt" ||
-        fail "the session should kill the measured set of enemy kinds"
+    grep -qE '^vars +[0-9]+ .*kinds_killed=2047( |$)' "$OUT/trace.txt" ||
+        fail "the session should kill every enemy kind"
     grep -qE '^vars +[0-9]+ .*eh_fired=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
         fail "turrets should fire at the player"
     grep -qE '^vars +[0-9]+ .*mines_dropped=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
@@ -101,9 +106,7 @@ if [ -f "$SYMS" ]; then
     grep -qE '^vars +[0-9]+ .*sweeps=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
         fail "a bomb killing 8+ enemies should count as a clean sweep"
     # M2 run structure: waves, then the Sentinel at full plates, then the
-    # plates breaking, the core dying and the run advancing to Sector 2.
-    # (nd stays 0 here - the bot is hit inside Sector 1 - and extras stays 0:
-    # the session's score peaks under the 50,000 mark)
+    # plates breaking, the core dying and the run advancing to Sector 2
     has boss_seen 1 || fail "the Sentinel should come out at the end of Sector 1's waves"
     has boss_plates 4 || fail "the Sentinel should start with four shield plates"
     # a mid-fight sample: the boss alive AND already missing plates (plain
@@ -112,7 +115,48 @@ if [ -f "$SYMS" ]; then
         fail "the shield plates should break under fire"
     grep -qE '^vars +[0-9]+ .*sector=2( |$)' "$OUT/trace.txt" ||
         fail "killing the Sentinel should advance the run to Sector 2"
-    note "story ok - title, play, score, meters, bomb, vocabulary, overdrive, sweep, Sentinel, Sector 2"
+    # M3 arenas: every sector past 1 changes the room (design doc 5), and the
+    # rules do something measurable - pylons block shots and the ship, the
+    # ring's gates admit the waves, the crush walls close to their full inset
+    has arena 2 || fail "Sector 2 should be the pylon arena"
+    has arena 3 || fail "Sector 3 should be the ring arena"
+    has arena 4 || fail "Sector 4 should be the crush arena"
+    has arena 5 || fail "Sector 5 should be the dark-grid arena"
+    grep -qE '^vars +[0-9]+ .*pyl_hits=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "the pylons should block shots and the ship"
+    grep -qE '^vars +[0-9]+ .*gates=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "the ring's gates should admit the waves"
+    has wall_in 90 || fail "the crush walls should close to their full 90 px inset"
+    # M3 bosses: each sector's boss comes out and fights with its own grammar
+    # (design doc 5) - the Hydra splits into three bodies at 66% of its hits
+    # left and again at 33%; the Orbiter is a core with four satellites; the
+    # Weaver is a chain you kill head-or-all-segments; the Core is a
+    # three-phase fortress whose last phase must be seen
+    has boss_k 2 || fail "the Hydra should come out at the end of Sector 2"
+    grep -qE '^vars +[0-9]+ .*boss_k=2 .*boss_n=[2-9]( |$)' "$OUT/trace.txt" ||
+        fail "the Hydra should split into three bodies"
+    has boss_k 3 || fail "the Orbiter should come out at the end of Sector 3"
+    grep -qE '^vars +[0-9]+ .*boss_k=3 .*boss_n=4( |$)' "$OUT/trace.txt" ||
+        fail "the Orbiter should carry four satellites"
+    has boss_k 4 || fail "the Weaver should come out at the end of Sector 4"
+    grep -qE '^vars +[0-9]+ .*boss_k=4 .*boss_n=[5-8]( |$)' "$OUT/trace.txt" ||
+        fail "the Weaver should be a chain of segments"
+    has boss_k 5 || fail "the Core should come out at the end of Sector 5"
+    grep -qE '^vars +[0-9]+ .*boss_k=5 .*boss_ph=2( |$)' "$OUT/trace.txt" ||
+        fail "the Core's second phase should arrive"
+    grep -qE '^vars +[0-9]+ .*boss_k=5 .*boss_ph=3( |$)' "$OUT/trace.txt" ||
+        fail "the Core's third phase should arrive"
+    # M3 run economy: the whole credit plays out - five bosses fall, untouched
+    # sectors pay the no-damage bonus, the 50,000 mark grants the extra life
+    # the run then lives on, and Sector 5's boss dying loops the run back to
+    # Sector 1 with loop = 1
+    has boss_kills 5 || fail "the credit should kill all five bosses"
+    grep -qE '^vars +[0-9]+ .*nd=[1-9][0-9]*( |$)' "$OUT/trace.txt" ||
+        fail "a sector should be cleared without a hit"
+    has extras 1 || fail "the 50,000 mark should grant an extra life"
+    has sector 5 || fail "the run should reach Sector 5"
+    has loop 1 || fail "completing five sectors should loop the run"
+    note "story ok - title, play, meters, vocabulary, overdrive, sweep, all five sectors, all five bosses, the loop"
 
     # --- 3) record -> replay ----------------------------------------------
     "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
@@ -127,11 +171,13 @@ else
 fi
 
 # --- 4) instruction budget: heaviest sampled frame under half the cap ------
-# Samples: quiet early play (200), mid waves (600, 1000), the first bomb
-# expanding (1062, 1070), the Sentinel fight (1160, 1200, 1400: plates then
-# core), Sector 2 waves (1900) and the tail (2390).
+# Samples across the whole credit: quiet early play (200), the first bomb
+# expanding (1062), the Sentinel fight (1200), the Hydra mid-split (1610),
+# the ring arena's waves and gates (1950), the Orbiter with its satellites
+# (2200), the crush walls fully closed (2370), the Weaver chain (2450), the
+# Core in phase 2 (2900) and phase 3, with the vocabulary it summons (3400).
 MAX=0
-for f in 200 600 1000 1062 1070 1160 1200 1400 1900 2390; do
+for f in 200 1062 1200 1610 1950 2200 2370 2450 2900 3400; do
     N=$("$CLI" inspect "$GAME" --frames $f --input "$SCRIPT" 2>/dev/null | awk '$1=="INSTRET_FRAME"{print $2}')
     [ -n "$N" ] || fail "inspect gave no INSTRET_FRAME at frame $f"
     [ "$N" -gt "$MAX" ] && MAX=$N
