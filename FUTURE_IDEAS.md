@@ -264,7 +264,8 @@ Explicit principle that these remain future ideas and must not affect the curren
 2026-10-26; M2 Sector 1, the Sentinel and the §6 scoring rules added
 2026-10-28; M3 Sectors 2-5, their arenas and the four later bosses added
 2026-10-29; M5 replay recording, verification and the ghost added
-2026-10-30) implements milestones M0, M1, M2, M3 and M5 of
+2026-10-30; M6 the effort-driven music layers added 2026-10-30) implements
+milestones M0, M1, M2, M3, M5 and M6 of
 `programs/neon_tap/Neon Tap Design Document.md`.
 The rest of that document is a design inventory, not a commitment — promote
 individual items into a roadmap card only if a real need shows up:
@@ -284,4 +285,3 @@ individual items into a roadmap card only if a real need shows up:
 - two-player co-op with the shared lives pool and the sync bomb
   (blocked by the machine contract: one `INPUT_PAD`, see
   `docs/experiments/neontap-m4-blocked.md`)
-- the effort-driven music layers

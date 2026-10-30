@@ -42,7 +42,10 @@
  *   bits), rec_crc (its rolling checksum - a replay that recomputes the same
  *   rec_crc and the same score is the design's verification step),
  *   gst_score (the score the ghost's run ended with), gh_on (1 while the
- *   ghost is flying: the best run so far, replayed as an outline ship)
+ *   ghost is flying: the best run so far, replayed as an outline ship),
+ *   mus_bar (M6: the effort-driven music's step count within the current
+ *   8-step bar; its rate tracks the tap tier - auto 2 steps/s, regular 4,
+ *   tap 7.5 - so a faster tap makes the bar turn quicker)
  * States: 0 = title, 1 = playing, 2 = game over.
  */
 #include "arcade1.h"
@@ -298,11 +301,59 @@ static void circle(int cx, int cy, int r, int t, unsigned col) {
 #define AUDIO_FREQ (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x300u))
 #define AUDIO_CTRL (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x304u))
 static int snd_f, snd_n, snd_sweep, snd_pri;
+static int mus_hold;                                /* M6: one-frame tail after an sfx, so it reads as a tick */
+static void music_frame(void);                      /* M6: the effort-driven music, defined below snd_frame */
+static void music_tick(void);                       /* M6: advance the music tempo, called every play frame */
 static void snd(int f, int n, int sweep, int pri) { if (snd_n > 0 && pri < snd_pri) return; snd_f = f; snd_n = n; snd_sweep = sweep; snd_pri = pri; }
 static void snd_frame(void) {
-    if (snd_n > 0) { AUDIO_FREQ = (unsigned)snd_f; __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1; snd_f += snd_sweep; if (snd_f < 40) snd_f = 40; snd_n--; }
+    if (snd_n > 0) { AUDIO_FREQ = (unsigned)snd_f; __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1; snd_f += snd_sweep; if (snd_f < 40) snd_f = 40; snd_n--; if (snd_n == 0) mus_hold = 1; }
     else if (tc_charging() && state == 1) { AUDIO_FREQ = (unsigned)(160 + (charge >> 5)); __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1; }
-    else AUDIO_CTRL = 0;
+    else if (mus_hold) mus_hold = 0;                 /* one frame of decay after a hit, so sfx reads as a tick not a click */
+    else music_frame();                              /* the music owns the voice whenever no sfx/whine is sounding */
+}
+
+/* ---- M6: the effort-driven music (design doc 8) ----
+ * The machine has one square-wave voice, so the three "layers" the design
+ * names cannot sound at once; the layers are carried by tempo and brightness
+ * instead. One bar = 8 steps; the step rate and the note pattern are picked
+ * from the effort tier, so the music literally follows your tap speed:
+ *   auto   (tap_speed <=  63)  2 steps/s   low bass notes  - a sparse drone
+ *   regular( 63 <  s     <=170) 4 steps/s   mid pulses      - a driving beat
+ *   tap    (s > 170)           7.5 steps/s high staccato   - a frantic lead
+ * The music clock ticks every play frame regardless of sfx, so the bar's
+ * tempo tracks effort even mid-combat - otherwise the busiest, fastest tier
+ * would starve the music exactly when it should sing loudest. SFX still own
+ * the pitch: when one is sounding it writes the voice, and the music's step
+ * lands on the next free frame (mus_hold). mus_bar observable: steps in the
+ * current bar, so a test can measure the tempo and prove it tracks effort.
+ */
+static const unsigned char MUS_PAT[3][8] = {          /* one bar of notes per tier, a rising arpeggio */
+    { 0, 0, 3, 3, 5, 5, 3, 3 },                       /* auto:   a slow open fifth                       */
+    { 0, 3, 5, 7, 0, 3, 5, 7 },                       /* regular: a steady climb                          */
+    { 0, 7, 5, 7, 10, 7, 5, 3 }                       /* tap:    a leaping lead                           */
+};
+static const unsigned char MUS_ROOT[3] = { 55, 110, 220 };   /* bass, mid, lead base frequency (Hz) */
+static const unsigned char MUS_STEP[3] = { 30, 15, 8 };     /* frames per step: 2, 4 then 7.5 steps/s */
+static int mus_tier, mus_step, mus_cnt, mus_due;      /* tier 0..2, step in bar, frames since step, a step is owed */
+int mus_bar;                                          /* observable: steps taken in the current bar (resets each bar) */
+static int music_tier(int s) { return s > 170 ? 2 : (s > 63 ? 1 : 0); }
+static void music_tick(void) {                        /* advance the tempo every play frame; pick the note when due */
+    if (state != 1) return;
+    int t = music_tier(tap_speed);
+    if (t != mus_tier) { mus_tier = t; mus_step = 0; mus_cnt = 0; }   /* a tier change restarts the bar cleanly */
+    if (++mus_cnt >= MUS_STEP[t]) {                   /* 30, 15 or 8 frames per step: 2, 4 or 7.5 steps/s */
+        mus_cnt = 0; mus_due = 1;
+        mus_step++; if (mus_step >= 8) mus_step = 0;
+        mus_bar++; if (mus_bar >= 8) mus_bar = 0;
+    }
+}
+static void music_frame(void) {                       /* sound the current note, or the sfx that outranks it */
+    if (state != 1) { AUDIO_CTRL = 0; return; }
+    if (mus_due && snd_n <= 0) {                      /* the music's turn: no sfx is holding the voice */
+        unsigned hz = (unsigned)MUS_ROOT[mus_tier] << MUS_PAT[mus_tier][mus_step];
+        AUDIO_FREQ = hz; __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1;
+        mus_due = 0; mus_hold = 1;
+    } else if (snd_n <= 0 && !mus_hold) AUDIO_CTRL = 0;   /* the one-frame tail after a step or an sfx */
 }
 
 /* ---- game logic ---- */
@@ -450,6 +501,7 @@ static void reset_game(void) {
     state = 1; score = 0; lives = 3; mult = 256; kills = 0; px = (SW / 2) << 8; py = (SH / 2) << 8; pvx = pvy = 0; aim = 192;
     gh_on = gst_n > 0; gh_i = 0; gpx = px; gpy = py; gh_vx = gh_vy = 0; gh_aim = 192;   /* the ghost flies the recorded start */
     inv = 0; fcd = 0; mult_t = 0; spawn_cd = 60; swarm_cd = 1500; frame_t = 0; shake = flash = msg_t = 0; rng_state = 5; tc_reset(); snd_n = 0;
+    mus_tier = 0; mus_step = 0; mus_cnt = 0; mus_bar = 0; mus_hold = 0; mus_due = 0;   /* M6: the music restarts its bar with the credit */
     sector = 1; extras = 0; overdrive = 0; od_t = 0; sec_t = sec_k = 0; sec_hit = 0; arena = 1; wall_in = 0; gate_a = 0;
     bo_on = 0; bo_k = 0; boss_k = boss_n = boss_ph = boss_hp = boss_plates = 0; cur_ring = -1;
     /* kinds_seen / kinds_killed / eh_fired / mines_dropped / unlock_t /
@@ -751,7 +803,7 @@ static void step_play(unsigned pad, unsigned edge) {
         unsigned char b = pack_pad(pad); REC[rec_n++] = b; rec_crc = rec_crc * 33 + b;
     }
     if (mx || my) aim = A8[(my + 1) * 3 + (mx + 1)];
-    int s = tc_speed(); tap_speed = s;
+    int s = tc_speed(); tap_speed = s; music_tick();   /* M6: the music's tempo tracks this frame's effort */
     /* overdrive (design doc 6): 3 s above 0.8 tap speed doubles the chain gain
      * and whitens the ship; it ends the moment speed drops below 0.5 */
     if (s > 204) { if (++od_t >= 180 && !overdrive) { overdrive = 1; msg_t = 80; msg_k = 2; snd(800, 18, 8, 4); } }
