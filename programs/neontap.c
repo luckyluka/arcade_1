@@ -36,7 +36,13 @@
  *   0..2, the Sentinel's 1),
  *   arena (the sector's arena rule: 1 grid, 2 pylons, 3 ring, 4 crush, 5 dark),
  *   wall_in (crush: the walls' inset right now, px), pyl_hits, gates (session
- *   counters: things the pylons blocked, enemies that arrived through a gate)
+ *   counters: things the pylons blocked, enemies that arrived through a gate),
+ *   rec_n (frames of this credit's input stream recorded in the design doc 9
+ *   replay format: one byte per frame, four direction bits + three button
+ *   bits), rec_crc (its rolling checksum - a replay that recomputes the same
+ *   rec_crc and the same score is the design's verification step),
+ *   gst_score (the score the ghost's run ended with), gh_on (1 while the
+ *   ghost is flying: the best run so far, replayed as an outline ship)
  * States: 0 = title, 1 = playing, 2 = game over.
  */
 #include "arcade1.h"
@@ -168,6 +174,24 @@ static int od_t;                                  /* frames of tap speed > 0.8 b
 static int msg_k;                                 /* banner: 0 swarm, 1 sentinel, 2 overdrive, 3 clear, 4 sweep */
 static int cur_ring;                              /* the ring whose kill-counter is open, or -1 */
 static unsigned prev_pad;
+
+/* ---- M5: replay recording and the ghost (design doc 9) ----
+ * Every frame of a credit is packed into one byte in the design's replay
+ * format - four direction bits and three button bits - and kept in REC[].
+ * When a new credit starts the best run so far is copied to GST[] and plays
+ * back as a faint outline ship you race: it flies the recorded path through
+ * the same movement code, but it fires nothing, takes no hits and scores
+ * nothing - a ghost is a race, not a second player. rec_n / rec_crc make the
+ * stream readable to the tools; a replay that recomputes the same rec_crc and
+ * the same score is the design's verification step. */
+#define RECB 4096                                /* frames kept: 68 s of credit */
+#define GSTMIN 240                               /* a run worth racing: 4 s */
+static unsigned char REC[RECB], GST[RECB];
+static int gst_n;                                /* frames in the ghost's run */
+static int gh_on, gh_i;                          /* the ghost is flying: index into GST */
+static int gpx, gpy, gh_vx, gh_vy, gh_aim;       /* the ghost's ship */
+int rec_n, gst_score;                            /* observables: the stream's length, the best score */
+unsigned rec_crc;                                /* the stream's rolling checksum (wraps: unsigned) */
 
 /* ---- the bosses (design doc 5): one dispatcher, five shapes ----
  * When a sector's waves end the arena clears and that sector's boss warps in.
@@ -414,9 +438,17 @@ static void hit_player(void) {
     if (lives <= 0) { state = 2; over_t = 0; snd(220, 40, -4, 9); }
 }
 static void reset_game(void) {
+    /* M5: a new credit starts, so the best run so far becomes the ghost.
+     * score here is still the run that just ended (it is cleared below) */
+    if (rec_n >= GSTMIN && score > gst_score) {
+        for (int i = 0; i < RECB; i++) GST[i] = REC[i];
+        gst_n = rec_n; gst_score = score;
+    }
+    rec_n = 0; rec_crc = 0;
     memset(E, 0, sizeof E); memset(B, 0, sizeof B); memset(M, 0, sizeof M); memset(R, 0, sizeof R); memset(S, 0, sizeof S);
     memset(F, 0, sizeof F); memset(MN, 0, sizeof MN); memset(BP, 0, sizeof BP); wt = 0; wcount = 0; bwt = 0;
     state = 1; score = 0; lives = 3; mult = 256; kills = 0; px = (SW / 2) << 8; py = (SH / 2) << 8; pvx = pvy = 0; aim = 192;
+    gh_on = gst_n > 0; gh_i = 0; gpx = px; gpy = py; gh_vx = gh_vy = 0; gh_aim = 192;   /* the ghost flies the recorded start */
     inv = 0; fcd = 0; mult_t = 0; spawn_cd = 60; swarm_cd = 1500; frame_t = 0; shake = flash = msg_t = 0; rng_state = 5; tc_reset(); snd_n = 0;
     sector = 1; extras = 0; overdrive = 0; od_t = 0; sec_t = sec_k = 0; sec_hit = 0; arena = 1; wall_in = 0; gate_a = 0;
     bo_on = 0; bo_k = 0; boss_k = boss_n = boss_ph = boss_hp = boss_plates = 0; cur_ring = -1;
@@ -658,6 +690,43 @@ static void boss_update(void) {
     if (--bo_cd <= 0) { bo_cd = 120 - 20 * bo_ph; boss_fire(bo_ph + 1, 3); }
 }
 
+/* ---- M5: the replay stream and the ghost's flight (declarations above) ----
+ * pack_pad / unpack_pad turn the pad into the design doc 9 replay byte and
+ * back. ship_step is the ship's motion, shared by the player and the ghost:
+ * a pure function of the pad history and the arena clock, so a recorded
+ * stream reproduces its path exactly. */
+
+/* direction pad -> the byte the design's replay format stores, and back */
+static unsigned char pack_pad(unsigned pad) {
+    return (unsigned char)(((pad & BTN_UP) ? 1 : 0) | ((pad & BTN_DOWN) ? 2 : 0) | ((pad & BTN_LEFT) ? 4 : 0)
+                         | ((pad & BTN_RIGHT) ? 8 : 0) | ((pad & BTN_A) ? 16 : 0) | ((pad & BTN_B) ? 32 : 0)
+                         | ((pad & BOMB_BTN) ? 64 : 0));
+}
+static unsigned unpack_pad(unsigned char b) {
+    return ((b & 1) ? BTN_UP : 0) | ((b & 2) ? BTN_DOWN : 0) | ((b & 4) ? BTN_LEFT : 0) | ((b & 8) ? BTN_RIGHT : 0)
+         | ((b & 16) ? BTN_A : 0) | ((b & 32) ? BTN_B : 0) | ((b & 64) ? BOMB_BTN : 0);
+}
+static const unsigned char A8[9] = { 224, 192, 160, 0, 0, 128, 32, 64, 96 };   /* 8-way aim from (mx,my) */
+/* the ship's motion, shared by the player and the ghost: a pure function of
+ * the pad history and the arena clock, so a recorded stream reproduces its
+ * path exactly. live counts the pylons' blocks against the session counter */
+static void ship_step(unsigned pad, int *x, int *y, int *vx, int *vy, int live) {
+    int mx = ((pad & BTN_RIGHT) ? 1 : 0) - ((pad & BTN_LEFT) ? 1 : 0), my = ((pad & BTN_DOWN) ? 1 : 0) - ((pad & BTN_UP) ? 1 : 0);
+    int tx = mx * 512, ty = my * 512; if (mx && my) { tx = tx * 181 >> 8; ty = ty * 181 >> 8; }
+    *vx += (tx - *vx) >> 2; *vy += (ty - *vy) >> 2;
+    *x = clampi(*x + *vx, 10 << 8, (SW - 10) << 8); *y = clampi(*y + *vy, 10 << 8, (SH - 10) << 8);
+    if (arena >= 3) arena_clamp(x, y, 10);           /* the ring and the crush walls hold you in */
+    if (arena == 2) for (int i = 0; i < 4; i++) {    /* Pylons: static, and they block movement */
+        int dx = (*x >> 8) - PYL[i][0], dy = (*y >> 8) - PYL[i][1], rr = PYLR + 10, d2 = dx * dx + dy * dy;
+        if (d2 < rr * rr) {
+            int d = (int)isqrt((unsigned)d2);
+            if (!d) { dx = 0; dy = 1; d = 1; }       /* dead centre: lift out to the near edge */
+            *x = (PYL[i][0] + dx * rr / d) << 8; *y = (PYL[i][1] + dy * rr / d) << 8;
+            if (live) pyl_hits++;
+        }
+    }
+}
+
 static void step_play(unsigned pad, unsigned edge) {
     frame_t++; unlock_t++; sec_t++;
     if (edge & BTN_A) tc_press(0);
@@ -665,23 +734,23 @@ static void step_play(unsigned pad, unsigned edge) {
     tc_frame();
     if (edge & BOMB_BTN) bomb();
     int mx = ((pad & BTN_RIGHT) ? 1 : 0) - ((pad & BTN_LEFT) ? 1 : 0), my = ((pad & BTN_DOWN) ? 1 : 0) - ((pad & BTN_UP) ? 1 : 0);
-    int tx = mx * 512, ty = my * 512; if (mx && my) { tx = tx * 181 >> 8; ty = ty * 181 >> 8; }
-    pvx += (tx - pvx) >> 2; pvy += (ty - pvy) >> 2;
-    px = clampi(px + pvx, 10 << 8, (SW - 10) << 8); py = clampi(py + pvy, 10 << 8, (SH - 10) << 8);
     if (arena == 4) {                                    /* Crush: the walls close and open on a 2 s beat */
         int bt = sec_t % 120;
         wall_in = bt < 50 ? 0 : bt < 70 ? (bt - 50) * 90 / 20 : bt < 100 ? 90 : (120 - bt) * 90 / 20;
     } else wall_in = 0;
-    if (arena >= 3) arena_clamp(&px, &py, 10);           /* the ring and the crush walls hold you in */
-    if (arena == 2) for (int i = 0; i < 4; i++) {        /* Pylons: static, and they block movement */
-        int dx = (px >> 8) - PYL[i][0], dy = (py >> 8) - PYL[i][1], rr = PYLR + 10, d2 = dx * dx + dy * dy;
-        if (d2 < rr * rr) {
-            int d = (int)isqrt((unsigned)d2);
-            if (!d) { dx = 0; dy = 1; d = 1; }          /* dead centre: lift out to the near edge */
-            px = (PYL[i][0] + dx * rr / d) << 8; py = (PYL[i][1] + dy * rr / d) << 8; pyl_hits++;
-        }
+    ship_step(pad, &px, &py, &pvx, &pvy, 1);            /* the ship, and the pylons' block count */
+    if (gh_on) {                                        /* the ghost races the best run so far */
+        if (gh_i < gst_n) {
+            unsigned b = unpack_pad(GST[gh_i++]);
+            ship_step(b, &gpx, &gpy, &gh_vx, &gh_vy, 0);
+            int qx = ((b & BTN_RIGHT) ? 1 : 0) - ((b & BTN_LEFT) ? 1 : 0), qy = ((b & BTN_DOWN) ? 1 : 0) - ((b & BTN_UP) ? 1 : 0);
+            if (qx || qy) gh_aim = A8[(qy + 1) * 3 + (qx + 1)];
+        } else gh_on = 0;
     }
-    if (mx || my) { static const unsigned char A8[9] = { 224, 192, 160, 0, 0, 128, 32, 64, 96 }; aim = A8[(my + 1) * 3 + (mx + 1)]; }
+    if (rec_n < RECB) {                                 /* the design doc 9 stream, one byte per frame */
+        unsigned char b = pack_pad(pad); REC[rec_n++] = b; rec_crc = rec_crc * 33 + b;
+    }
+    if (mx || my) aim = A8[(my + 1) * 3 + (mx + 1)];
     int s = tc_speed(); tap_speed = s;
     /* overdrive (design doc 6): 3 s above 0.8 tap speed doubles the chain gain
      * and whitens the ship; it ends the moment speed drops below 0.5 */
@@ -895,6 +964,14 @@ static void draw_world(void) {
     for (int k = 0; k < NS; k++) if (S[k].on) line(S[k].x >> 8, S[k].y >> 8, (S[k].x - S[k].vx * 3) >> 8, (S[k].y - S[k].vy * 3) >> 8, 1, S[k].col);
     for (int i = 0; i < NR; i++) if (R[i].on) { circle(R[i].x, R[i].y, R[i].r, 5, RGB(30, 90, 120)); circle(R[i].x, R[i].y, R[i].r, 2, RGB(159, 232, 255)); }
     if (bo_on) draw_boss();
+    if (gh_on && state == 1) {                            /* the ghost: your best run, flown again */
+        unsigned gcol = RGB(70, 110, 150);                /* a faint outline, no glow: it is a memory */
+        int x = gpx >> 8, y = gpy >> 8;
+        int fx = x + (COS(gh_aim) * 13 >> 8), fy = y + (SIN(gh_aim) * 13 >> 8);
+        int lx = x + (COS(gh_aim + 106) * 11 >> 8), ly = y + (SIN(gh_aim + 106) * 11 >> 8), rx = x + (COS(gh_aim - 106) * 11 >> 8), ry = y + (SIN(gh_aim - 106) * 11 >> 8);
+        int bx = x - (COS(gh_aim) * 4 >> 8), by = y - (SIN(gh_aim) * 4 >> 8);
+        line(fx, fy, lx, ly, 1, gcol); line(lx, ly, bx, by, 1, gcol); line(bx, by, rx, ry, 1, gcol); line(rx, ry, fx, fy, 1, gcol);
+    }
     if (state == 1 || state == 0) {
         int x = px >> 8, y = py >> 8;
         if (!(inv > 0 && ((frame_t >> 2) & 1))) {

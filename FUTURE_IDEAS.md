@@ -263,15 +263,24 @@ Explicit principle that these remain future ideas and must not affect the curren
 `programs/neontap.c` (integrated 2026-10-26; M1 enemy grammar added
 2026-10-26; M2 Sector 1, the Sentinel and the §6 scoring rules added
 2026-10-28; M3 Sectors 2-5, their arenas and the four later bosses added
-2026-10-29) implements milestones M0, M1, M2 and M3 of
+2026-10-29; M5 replay recording, verification and the ghost added
+2026-10-30) implements milestones M0, M1, M2, M3 and M5 of
 `programs/neon_tap/Neon Tap Design Document.md`.
 The rest of that document is a design inventory, not a commitment — promote
 individual items into a roadmap card only if a real need shows up:
 
-- replay verification, ghosts, daily seeds — replays/ghosts are M5 and
-  reachable; a *daily seed* can only live host-side (a tool picks the day's
-  seed and writes it into the input script or a load-time `--seed`; the guest
-  stays deterministic), since the machine has no wall clock by design
+- daily seeds and an online scoreboard — the replay stream and its
+  verification hook (`rec_n` / `rec_crc` / `score`) are in the ROM as of M5
+  and the CLI already records and replays sessions bit-identically, so what
+  remains is the *host* side; a *daily seed* can only live host-side (a tool
+  picks the day's seed and writes it into the input script or a load-time
+  `--seed`; the guest stays deterministic), since the machine has no wall
+  clock by design
+- "the game hashes its state at the end of each sector so desyncs are found
+  early" (design doc 9) — a per-sector `sec_crc` observable would let a
+  replay be validated sector by sector instead of only at the end; one
+  fold of the enemy/boss arrays into a rolling checksum at each sector
+  advance, cheap and purely observable
 - two-player co-op with the shared lives pool and the sync bomb
   (blocked by the machine contract: one `INPUT_PAD`, see
   `docs/experiments/neontap-m4-blocked.md`)

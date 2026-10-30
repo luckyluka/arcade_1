@@ -222,6 +222,7 @@ regression, ~72 s each). Measured on this machine:
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-10-30 | Neon Tap M5 (replay recording + the ghost; test grew 115 -> 124 s, so ~18 s of the +47 s is this card, the rest is suite drift + a loaded box — 5 s of headroom left, **watch this**) | 8 m 14 s (494 s) |
 | 2026-10-29 | Neon Tap M3 (Sectors 2-5, their arenas + the four later bosses; session 4000 frames) | 7 m 27 s (447 s) |
 | 2026-10-28 | Neon Tap M2 (Sector 1 + the Sentinel + scoring) | 6 m 10 s (370 s) |
 | 2026-10-26 | Neon Tap M1 (enemy grammar; session extended to 2400 frames) | 6 m 27 s (387 s) |

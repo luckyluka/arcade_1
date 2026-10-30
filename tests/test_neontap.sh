@@ -19,8 +19,11 @@
 #                      to Sector 2 (M2); the four later bosses fight with the
 #                      grammars the design gives them, every arena rule shows,
 #                      the 50,000 mark grants an extra life and the credit
-#                      completes so the run loops (M3)
-#   3. record->replay - the recorded session replays bit-identically
+#                      completes so the run loops (M3); the credit's pad is
+#                      recorded into the design doc 9 replay stream and the
+#                      next credit flies the best run as a ghost (M5)
+#   3. record->replay - the recorded session replays bit-identically, and the
+#                      ghost's path is the recorded run's path, frame-exact
 #   4. budget        - the heaviest frame stays under half the instruction cap
 #
 # The verbose run prints its per-frame hash lines to stdout, which is what the
@@ -57,10 +60,13 @@ has() { grep -qE "^vars +[0-9]+ .*(^| )$1=$2( |$)" "$OUT/trace.txt"; }
 
 if [ -f "$SYMS" ]; then
     # --- 1) determinism ----------------------------------------------------
+    # rec_n / rec_crc are in the mix: the design doc 9 recording is part of
+    # what must reproduce exactly, since a replay that recomputes the same
+    # stream checksum is the design's verification step
     "$CLI" run "$GAME" --frames 600 --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state --quiet > "$OUT/r1.txt" 2>/dev/null
+        --vars score,state,rec_n,rec_crc --quiet > "$OUT/r1.txt" 2>/dev/null
     "$CLI" run "$GAME" --frames 600 --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state --quiet > "$OUT/r2.txt" 2>/dev/null
+        --vars score,state,rec_n,rec_crc --quiet > "$OUT/r2.txt" 2>/dev/null
     if ! cmp -s "$OUT/r1.txt" "$OUT/r2.txt"; then
         diff "$OUT/r1.txt" "$OUT/r2.txt" | head -5 >&2
         fail "two identical sessions produced different output"
@@ -68,10 +74,15 @@ if [ -f "$SYMS" ]; then
     note "determinism ok - two 600-frame sessions identical"
 
     # --- 2) the story ------------------------------------------------------
+    # One trace serves every section below: --var-every 1 so the ghost's
+    # path can be compared to the recorded run's path frame by frame.
     "$CLI" run "$GAME" --frames $FRAMES --input "$SCRIPT" --syms "$SYMS" \
-        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped,sector,loop,sweeps,nd,extras,overdrive,boss_seen,boss_k,boss_hp,boss_plates,boss_n,boss_ph,arena,gates,pyl_hits,wall_in,boss_kills \
-        --var-every 10 > "$OUT/main.txt" 2>/dev/null
-    cat "$OUT/main.txt"
+        --vars score,state,lives,kills,tap_speed,charge,kinds_seen,kinds_killed,eh_fired,mines_dropped,sector,loop,sweeps,nd,extras,overdrive,boss_seen,boss_k,boss_hp,boss_plates,boss_n,boss_ph,arena,gates,pyl_hits,wall_in,boss_kills,rec_n,rec_crc,gst_score,gh_on,px,py,gpx,gpy \
+        --var-every 1 > "$OUT/main.txt" 2>/dev/null
+    # The frame lines go to stdout verbatim: the golden regression
+    # (tests/golden/neontap.txt) greps them out of this test's log. The vars
+    # lines stay out of the log - 4000 of them would drown it.
+    grep '^frame ' "$OUT/main.txt"
     grep '^vars' "$OUT/main.txt" > "$OUT/trace.txt"
 
     has state 0 || fail "the session should open on the title screen"
@@ -156,16 +167,62 @@ if [ -f "$SYMS" ]; then
     has extras 1 || fail "the 50,000 mark should grant an extra life"
     has sector 5 || fail "the run should reach Sector 5"
     has loop 1 || fail "completing five sectors should loop the run"
-    note "story ok - title, play, meters, vocabulary, overdrive, sweep, all five sectors, all five bosses, the loop"
+    # M5 recording: the credit's pad is packed a byte per frame into the
+    # design doc 9 stream - it is as long as the credit was - and the second
+    # credit flies the first one as the ghost, carrying its score
+    grep -qE '^vars +[0-9]+ .*rec_n=[0-9]{3,}( |$)' "$OUT/trace.txt" ||
+        fail "the credit's frames should be recorded into the replay stream"
+    has gh_on 1 || fail "the second credit should fly the first one as a ghost"
+    # gst_score is the ghost's score = the best run's final score, and the
+    # trace's own best score must agree (the ghost is the best run, design 9)
+    awk '{ for (i = 3; i <= NF; i++) { split($i, a, "="); v[a[1]] = a[2] }
+           if (v["score"] + 0 > best) best = v["score"] + 0
+           if (v["gst_score"] + 0 > 0) gst = v["gst_score"] + 0 }
+         END { exit (gst == best && gst > 0) ? 0 : 1 }' "$OUT/trace.txt" ||
+        fail "the ghost should carry the best run's final score"
+    note "story ok - title, play, meters, vocabulary, overdrive, sweep, all five sectors, all five bosses, the loop, the recording, the ghost"
 
     # --- 3) record -> replay ----------------------------------------------
     "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
-    "$CLI" run "$GAME" --frames 900 --input "$OUT/rec.txt" --syms "$SYMS" --vars score,state > "$OUT/re.txt" 2>/dev/null
-    "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --syms "$SYMS" --vars score,state > "$OUT/main.f0" 2>/dev/null
+    "$CLI" run "$GAME" --frames 900 --input "$OUT/rec.txt" --syms "$SYMS" --vars score,state,rec_n,rec_crc > "$OUT/re.txt" 2>/dev/null
+    "$CLI" run "$GAME" --frames 900 --input "$SCRIPT" --syms "$SYMS" --vars score,state,rec_n,rec_crc > "$OUT/main.f0" 2>/dev/null
     grep '^frame ' "$OUT/main.f0" > "$OUT/main.f"
     grep '^frame ' "$OUT/re.txt"  > "$OUT/re.f"
     cmp -s "$OUT/main.f" "$OUT/re.f" || fail "the recorded session does not replay bit-identically"
+    # the design doc 11.6 round-trip, stated the way doc 9 states verification:
+    # the replayed run recomputes the same stream length, the same stream
+    # checksum and the same score as the run it was recorded from (the CLI's
+    # footer prints each named variable's final value)
+    grep '^var ' "$OUT/main.f0" > "$OUT/main.v"
+    grep '^var ' "$OUT/re.txt"  > "$OUT/re.v"
+    cmp -s "$OUT/main.v" "$OUT/re.v" ||
+        fail "the replay did not recompute the same rec_crc / rec_n / score"
     note "record->replay ok"
+
+    # --- 3b) M5: the guest's own replay, observed as the ghost -------------
+    # ship_step is a pure function of the recorded stream, so the ghost's k-th
+    # play frame must fly exactly where the player's k-th play frame flew -
+    # the design doc 11.6 round-trip, watched from inside the machine. The
+    # per-frame story trace is what makes the two sequences align by play
+    # index; the awk only reads its vars lines (the CLI also appends a
+    # `var NAME = VALUE` footer and a `ran ...` summary line).
+    awk '
+        /^vars / {
+          for (i = 3; i <= NF; i++) { split($i, a, "="); v[a[1]] = a[2] }
+          if (v["state"] == 2) over = 1                     # credit 1 has ended
+          if (v["state"] == 1 && !over) { n1++; x1[n1] = v["px"]; y1[n1] = v["py"] }
+          if (v["gh_on"] == 1) { n2++; x2[n2] = v["gpx"]; y2[n2] = v["gpy"] }
+        }
+        END {
+            if (n2 < 200) { print "the ghost flew only " n2 " frames"; exit 1 }
+            if (n2 > n1)  { print "the ghost outlived the run it replays"; exit 1 }
+            for (k = 1; k <= n2; k++) if (x1[k] != x2[k] || y1[k] != y2[k]) {
+                print "ghost path diverges at play frame " k \
+                      " (player " x1[k] "," y1[k] " ghost " x2[k] "," y2[k] ")"
+                exit 1
+            }
+        }' "$OUT/trace.txt" || fail "the ghost should fly the recorded run's exact path"
+    note "ghost ok - the best run replays as the ghost, frame-exact path"
 else
     note "named variables skipped - no neontap.syms and no riscv nm to make one"
 fi
@@ -173,11 +230,12 @@ fi
 # --- 4) instruction budget: heaviest sampled frame under half the cap ------
 # Samples across the whole credit: quiet early play (200), the first bomb
 # expanding (1062), the Sentinel fight (1200), the Hydra mid-split (1610),
-# the ring arena's waves and gates (1950), the Orbiter with its satellites
-# (2200), the crush walls fully closed (2370), the Weaver chain (2450), the
-# Core in phase 2 (2900) and phase 3, with the vocabulary it summons (3400).
+# the ring arena's waves and gates (1950), the crush walls fully closed
+# (2370), the Weaver chain (2450), the Core in phase 2 (2900) and phase 3
+# with the vocabulary it summons (3400), and the ghost flying in credit 2
+# (3900) - the M5 replay work runs every play frame alongside the real ship.
 MAX=0
-for f in 200 1062 1200 1610 1950 2200 2370 2450 2900 3400; do
+for f in 200 1062 1200 1610 1950 2370 2450 2900 3400 3900; do
     N=$("$CLI" inspect "$GAME" --frames $f --input "$SCRIPT" 2>/dev/null | awk '$1=="INSTRET_FRAME"{print $2}')
     [ -n "$N" ] || fail "inspect gave no INSTRET_FRAME at frame $f"
     [ "$N" -gt "$MAX" ] && MAX=$N
