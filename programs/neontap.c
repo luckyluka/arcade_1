@@ -758,7 +758,7 @@ static unsigned unpack_pad(unsigned char b) {
     return ((b & 1) ? BTN_UP : 0) | ((b & 2) ? BTN_DOWN : 0) | ((b & 4) ? BTN_LEFT : 0) | ((b & 8) ? BTN_RIGHT : 0)
          | ((b & 16) ? BTN_A : 0) | ((b & 32) ? BTN_B : 0) | ((b & 64) ? BOMB_BTN : 0);
 }
-static const unsigned char A8[9] = { 224, 192, 160, 0, 0, 128, 32, 64, 96 };   /* 8-way aim from (mx,my) */
+static const unsigned char A8[9] = { 160, 192, 224, 128, 0, 0, 96, 64, 32 };   /* 8-way aim from (mx,my): columns are left/none/right, so the nose (COS/SIN) points where you pressed */
 /* the ship's motion, shared by the player and the ghost: a pure function of
  * the pad history and the arena clock, so a recorded stream reproduces its
  * path exactly. live counts the pylons' blocks against the session counter */
