@@ -222,6 +222,7 @@ regression, ~72 s each). Measured on this machine:
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-11-06 | WAV dump (card 8.1, `arcade1 run --audio`; the new test costs ~4 s) | 7 m 23 s (443 s) — **57 s of headroom restored**: the 498 s spike was load/drift again (M5 precedent), not suite growth |
 | 2026-11-05 | Neon Tap aim fix (A8's east/west mirror + §3d facing probe + retuned session + deliberate golden re-lock; probe costs +2 s over the test's two runs, so ~67 s of the +69 s over M6 is load/drift again per the M5 precedent — **only 2 s of headroom now, the budget is the binding constraint**) | 8 m 18 s (498 s) |
 | 2026-10-30 | Neon Tap M6 (effort-driven music; test +1 s over M5, one 3-phase probe run instead of three — and 429 s with a slightly *bigger* test than M5's 494 s **proves M5's spike was machine load, not suite drift**) | 7 m 9 s (429 s) |
 | 2026-10-30 | Neon Tap M5 (replay recording + the ghost; test grew 115 -> 124 s, so ~18 s of the +47 s is this card, the rest is suite drift + a loaded box — 5 s of headroom left, **watch this**) | 8 m 14 s (494 s) |

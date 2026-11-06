@@ -152,7 +152,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
         test-shmup test-brickstorm test-skydescent test-neontap \
         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
         test-art-rig test-art-ingest test-art-qa test-art-faces \
-        test-doc-gaps test-hd-default
+        test-doc-gaps test-hd-default test-audio-wav
 
 all: $(TARGET)
 
@@ -489,6 +489,13 @@ test-agents-md: tests/test_agents_md.sh
 # restart; the fix releases for one frame.
 test-pad-trace: $(CLI_BIN) $(GUEST_BUILD)/probe_edge.bin tests/test_pad_trace.sh
 	sh tests/test_pad_trace.sh $(CLI_BIN) $(GUEST_BUILD) $(RISCV_NM)
+
+# Wave 8 card 8.1 (ROADMAP_V4 §5): the WAV dump (`arcade1 run --audio`).
+# The probe guest holds a 440 Hz tone; the test measures 880 zero crossings
+# per second through the file, byte-compares two dumps, pins the length rule
+# (frames x 800 samples) and proves --audio moves no hash.
+test-audio-wav: $(CLI_BIN) $(GUEST_BUILD)/probe_wav.bin tests/test_audio_wav.sh
+	sh tests/test_audio_wav.sh $(CLI_BIN) $(GUEST_BUILD)
 
 # Wave B card B2 (ROADMAP_V3 §5): inspect command records + pixel
 # provenance. tests/guests/probe_cmds.c draws a sprite, then a FILL

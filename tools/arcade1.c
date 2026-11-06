@@ -33,6 +33,8 @@
  *     --var-every K        also print the selected variables every K frames
  *     --record FILE         write the applied per-frame buttons to FILE, in the
  *                           input script format (run-length, "none" = idle)
+ *     --audio FILE          write the audio device's samples to FILE as a WAV
+ *                           (48 kHz, 16-bit, stereo, 800 samples/frame)
  *     --live               play window: an SDL3 window shows every frame and
  *                          live keys drive the pad (arrows/WASD d-pad, Z/X ->
  *                          A/B, Enter -> START); R ends the session writing
@@ -71,6 +73,15 @@
  * replays bit-identically through --input like any scripted --record. An
  * open recording is finished on every exit path (R, ESC, window close, end
  * of --frames), so a live session always leaves a complete script.
+ *
+ * AUDIO DUMP (--audio): FILE receives what the audio device produced — the
+ * machine's own per-frame sample buffer, 48 kHz 16-bit stereo, 800 samples
+ * per frame, straight from the existing mixing model (no new audio features;
+ * ROADMAP_V4 card 8.1). It is a file, never the console: stdout and every
+ * hash are byte-for-byte what they are without --audio, and two identical
+ * runs produce byte-identical WAVs. The writer is header-only (a canonical
+ * 44-byte RIFF/WAVE header with sizes patched on close), so no audio
+ * library, no dependencies, and every byte derives from integer state.
  *
  * INPUT SCRIPT FORMAT (plain text, deterministic, AI-friendly):
  *   - one run-length entry per line:  <first_frame> <last_frame> <buttons...>
@@ -293,6 +304,114 @@ static void record_close(unsigned last_frame)
         record_write_run(g_run_start, last_frame, &g_run_state);
     fclose(g_record);
     g_record = NULL;
+}
+
+/* --- Audio dump (--audio; ROADMAP_V4 card 8.1) ----------------------------
+ * `--audio FILE` writes what the audio device produced, taken from the
+ * machine's own per-frame sample buffer (arcade1_audio): 48 kHz, 16-bit,
+ * stereo, 800 samples per frame, the existing mixing model — no new audio
+ * features. The writer is header-only: a canonical 44-byte RIFF/WAVE header
+ * with zero sizes goes out at open, samples stream in behind it, and close
+ * patches the two size fields (offsets 4 and 40) from the bytes actually
+ * written. Every byte derives from integer machine state, so two identical
+ * runs produce byte-identical files. The dump is a file, never the console:
+ * stdout and every hash stay exactly what they are without --audio. */
+
+/* RIFF sizes are 32-bit: 36 + data must fit, so the data field is capped. */
+#define WAV_DATA_MAX (0xFFFFFFFFu - 36u)
+
+static FILE               *g_wav;
+static const char         *g_wav_path;     /* for error messages            */
+static unsigned long long  g_wav_bytes;    /* sample bytes written so far   */
+
+/* WAV is little-endian on every host: write the bytes explicitly. */
+static void wav_le16(FILE *f, unsigned v)
+{
+    fputc((int)(v & 0xFFu), f);
+    fputc((int)((v >> 8) & 0xFFu), f);
+}
+
+static void wav_le32(FILE *f, uint32_t v)
+{
+    fputc((int)(v & 0xFFu), f);
+    fputc((int)((v >> 8) & 0xFFu), f);
+    fputc((int)((v >> 16) & 0xFFu), f);
+    fputc((int)((v >> 24) & 0xFFu), f);
+}
+
+/* Open the dump and write the canonical header with zero sizes (patched by
+ * wav_close). Returns 0, or -1 after a clean message. */
+static int wav_open(const char *path)
+{
+    g_wav = fopen(path, "wb");
+    if (!g_wav) {
+        fprintf(stderr, "arcade1: cannot write the audio dump '%s'\n", path);
+        return -1;
+    }
+    g_wav_path = path;
+    g_wav_bytes = 0;
+    fwrite("RIFF", 1, 4, g_wav);
+    wav_le32(g_wav, 0);                            /* RIFF size: wav_close */
+    fwrite("WAVE", 1, 4, g_wav);
+    fwrite("fmt ", 1, 4, g_wav);
+    wav_le32(g_wav, 16);                           /* PCM fmt chunk: 16    */
+    wav_le16(g_wav, 1);                            /* format tag: PCM      */
+    wav_le16(g_wav, 2);                            /* channels: stereo     */
+    wav_le32(g_wav, ARCADE1_SAMPLE_RATE_INT);      /* 48000 Hz             */
+    wav_le32(g_wav, ARCADE1_SAMPLE_RATE_INT * 2 * 2); /* byte rate 192000  */
+    wav_le16(g_wav, 2 * 2);                        /* block align: 4       */
+    wav_le16(g_wav, 16);                           /* bits per sample      */
+    fwrite("data", 1, 4, g_wav);
+    wav_le32(g_wav, 0);                            /* data size: wav_close */
+    if (ferror(g_wav)) {
+        fprintf(stderr, "arcade1: cannot write the audio dump '%s'\n", path);
+        fclose(g_wav);
+        g_wav = NULL;
+        return -1;
+    }
+    return 0;
+}
+
+/* Append one frame of interleaved stereo samples (machine int16 ->
+ * little-endian on the wire). Returns 0, or -1 after a clean message
+ * (the caller closes). */
+static int wav_write(const int16_t *pcm, unsigned frames)
+{
+    const unsigned long long bytes =
+        (unsigned long long)frames * 2u /* channels */ * 2u /* bytes */;
+
+    if (g_wav_bytes + bytes > WAV_DATA_MAX) {
+        fprintf(stderr, "arcade1: --audio '%s' would exceed the 4 GiB RIFF "
+                "limit; bound the run with --frames\n", g_wav_path);
+        return -1;
+    }
+    for (unsigned long long i = 0; i < bytes / 2u; i++)
+        wav_le16(g_wav, (unsigned)(uint16_t)pcm[i]);
+    g_wav_bytes += bytes;
+    if (ferror(g_wav)) {
+        fprintf(stderr, "arcade1: write error on the audio dump '%s'\n",
+                g_wav_path);
+        return -1;
+    }
+    return 0;
+}
+
+/* Patch the two size fields from what was actually written, then close.
+ * NULL-safe: every exit path of cmd_run may call it. */
+static void wav_close(void)
+{
+    if (!g_wav)
+        return;
+    if (fseek(g_wav, 4, SEEK_SET) == 0) {
+        wav_le32(g_wav, (uint32_t)(36u + g_wav_bytes));
+        if (fseek(g_wav, 40, SEEK_SET) == 0)
+            wav_le32(g_wav, (uint32_t)g_wav_bytes);
+    }
+    if (ferror(g_wav))
+        fprintf(stderr, "arcade1: cannot finish the audio dump '%s'\n",
+                g_wav_path);
+    fclose(g_wav);
+    g_wav = NULL;
 }
 
 /* --- Play window (--live; ROADMAP_CREATION_FLOW §10, ROADMAP_V3 §4.5) -----
@@ -1254,6 +1373,7 @@ static int cmd_run(int argc, char **argv)
     const char *record_path = NULL;
     const char *syms_path = NULL, *var_list = NULL;
     const char *pad_trace_path = NULL;
+    const char *audio_path = NULL;      /* --audio FILE: the WAV dump      */
     unsigned frames = 600, capture_every = 1, var_every = 0;
     unsigned scale = 1;              /* capture upscale, 1..8 (A3) */
     int format_png = 0;              /* capture-dir extension: .png? */
@@ -1300,6 +1420,7 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(a, "--vars") && i + 1 < argc)     var_list = argv[++i];
         else if (!strcmp(a, "--var-every") && i + 1 < argc) var_every = (unsigned)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--pad-trace") && i + 1 < argc) pad_trace_path = argv[++i];
+        else if (!strcmp(a, "--audio") && i + 1 < argc) audio_path = argv[++i];
         else if (!strcmp(a, "--inspect")) inspect = 1;
         else if (!strcmp(a, "--quiet"))                    quiet = 1;
         else if (!strcmp(a, "--strict"))                   strict = 1;
@@ -1322,7 +1443,7 @@ static int cmd_run(int argc, char **argv)
                 "                   [--capture-every K] [--format png|ppm]\n"
                 "                   [--scale N] [--record FILE] [--live]\n"
                 "                   [--syms FILE] [--vars LIST] [--var-every K]\n"
-                "                   [--pad-trace FILE] [--quiet] [--strict]\n"
+                "                   [--pad-trace FILE] [--audio FILE] [--quiet] [--strict]\n"
                 "                   [--bench]\n"
                 "  --strict exits non-zero if any draw read a source address\n"
                 "  outside ROM/RAM (they silently draw nothing); see below.\n"
@@ -1337,6 +1458,10 @@ static int cmd_run(int argc, char **argv)
                 "  --record writes the applied buttons in the script format.\n"
                 "  --pad-trace FILE writes one line per frame:\n"
                 "  'frame N pad 0xXX' — the pad the guest actually saw.\n"
+                "  --audio FILE dumps the audio device's samples as a WAV:\n"
+                "  48 kHz, 16-bit, stereo, 800 samples per frame — the\n"
+                "  existing mixing model, byte-identical across runs, and\n"
+                "  never printed (stdout and the hashes are untouched).\n"
                 "  --bench times only arcade1_run_frame, per frame, on a\n"
                 "  monotonic clock, and prints BENCH_MS_MEDIAN / _P95 /\n"
                 "  _MAX plus the host CPU model. It also prints WORK_PX_\n"
@@ -1424,6 +1549,11 @@ static int cmd_run(int argc, char **argv)
         }
     }
 
+    /* The audio dump: one WAV of the device's samples, opened before the run
+     * so an unwritable path fails before any work (like --pad-trace). */
+    if (audio_path && wav_open(audio_path) != 0)
+        return 1;
+
     /* Load the image (accept a raw flat binary too, like the tests). */
     f = fopen(rom_path, "rb");
     if (!f) {
@@ -1488,6 +1618,10 @@ static int cmd_run(int argc, char **argv)
         }
         if (pad_trace)
             fclose(pad_trace);
+        if (g_wav) {                /* nothing was played: take it back */
+            wav_close();
+            unlink(g_wav_path);
+        }
         live_shutdown();
         return 3;
     }
@@ -1536,6 +1670,18 @@ static int cmd_run(int argc, char **argv)
                 work.inst_max = inst_here;
             prev_instret = (unsigned long long)m.cpu.instret;
         }
+        /* The dump takes the frame's samples the machine just rendered. It
+         * sits outside the --bench sample: host I/O, not machine work. */
+        if (g_wav && wav_write(arcade1_audio(&m),
+                               arcade1_audio_frames(&m)) != 0) {
+            wav_close();
+            record_close(fr);
+            if (pad_trace)
+                fclose(pad_trace);
+            if (live)
+                live_shutdown();
+            return 1;
+        }
         if (live)
             live_present(&m);           /* upload + show + pace to 60 Hz */
         skipped += arcade1_video_frame_totals(&m.video)->skipped_ops;
@@ -1557,6 +1703,7 @@ static int cmd_run(int argc, char **argv)
                      format_png ? "png" : "ppm");
             if (write_capture(path, arcade1_framebuffer(&m), scale) != 0) {
                 record_close(fr);
+                wav_close();
                 if (pad_trace)
                     fclose(pad_trace);
                 if (live)
@@ -1571,6 +1718,9 @@ static int cmd_run(int argc, char **argv)
 
     /* The recorded runs always end on the last frame actually played. */
     record_close(fr ? fr - 1 : 0);
+
+    /* The audio dump: patch the header with the samples actually written. */
+    wav_close();
 
     if (capture && write_capture(capture, arcade1_framebuffer(&m), scale) != 0) {
         if (live)

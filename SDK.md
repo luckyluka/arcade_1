@@ -47,6 +47,10 @@ arcade1 run <game.arc1|bin> [options]
   --pad-trace FILE      write the applied pad per frame to FILE, one line
                         per frame: "frame N pad 0xXX" (the pad the guest
                         saw — see "Edge-triggered buttons and input scripts")
+  --audio FILE          write the audio device's samples to FILE as a WAV
+                        (48 kHz, 16-bit, stereo, 800 samples per frame —
+                        the existing mixing model; two identical runs are
+                        byte-identical, and stdout/hashes are untouched)
   --quiet              suppress the per-frame hash lines (summary only)
   --inspect            print the final frame, pc, instruction count and all
                        32 registers after the run (the `inspect` subcommand
