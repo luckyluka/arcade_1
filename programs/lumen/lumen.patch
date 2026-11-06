@@ -1,0 +1,2623 @@
+diff --git a/Makefile b/Makefile
+index ed1f8cc..2677a2b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -47,7 +47,7 @@ GUEST_ARCH    := -march=rv32im -mabi=ilp32
+ GUEST_CFLAGS  := $(GUEST_ARCH) -Os -ffreestanding -nostdlib -nostartfiles \
+                  -msmall-data-limit=0
+ GUEST_BUILD   := programs/build
+-GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup brickstorm skydescent
++GUEST_PROGS   := counter mmio_demo video_demo gfx_demo sprite_demo tilemap_demo scroll_demo color_demo platformer breakout tetris bench_gfx terrain_gen raycast_demo sandbox systems example_pong example_snake example_color m29game flappy petalblade petalblade_rig shmup brickstorm skydescent lumen
+ GUEST_ELFS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .elf,$(GUEST_PROGS)))
+ GUEST_BINS    := $(addprefix $(GUEST_BUILD)/,$(addsuffix .bin,$(GUEST_PROGS)))
+ # Since M17 every guest is also packaged into a proper .arc1 game image.
+@@ -68,7 +68,7 @@ GOLDEN_ROMDIR := tests/roms
+ GOLDEN_DIR    := tests/golden
+ GOLDEN_GAMES  := breakout tetris platformer scroll color pong snake example-color \
+                   m29game asteroid_run flappy petalblade petalblade_rig shmup \
+-                  brickstorm skydescent
++                  brickstorm skydescent lumen
+ # Image/ELF base name for a golden game (test-target name -> guest name).
+ golden_rom    = $(if $(filter scroll,$(1)),scroll_demo,\
+                 $(if $(filter color,$(1)),color_demo,\
+@@ -149,7 +149,7 @@ CHECK_TARGETS := test test-input test-square test-beep test-machine \
+         test-mapdemo test-asteroid_run test-flappy \
+         test-golden-conditions test-inspect test-inspect-commands test-info \
+         test-golden-cli test-pad-trace test-color-trunc test-petalblade \
+-        test-shmup test-brickstorm test-skydescent \
++        test-shmup test-brickstorm test-skydescent test-lumen \
+         test-agents-md test-art-palettes test-art-canvas test-art-pixmap \
+         test-art-rig test-art-ingest test-art-qa test-art-faces \
+         test-doc-gaps test-hd-default
+@@ -1346,6 +1346,10 @@ test-brickstorm: $(CLI_BIN) $(ARC1_ROM_DIR)/brickstorm.arc1 | $(TESTDIR)
+ test-skydescent: $(CLI_BIN) $(ARC1_ROM_DIR)/skydescent.arc1 | $(TESTDIR)
+ 	sh tests/test_skydescent.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
+ 
++# --- LUMEN: a dark-room adventure; the game builds a vector display list and a renderer draws it ---
++test-lumen: $(CLI_BIN) $(ARC1_ROM_DIR)/lumen.arc1 | $(TESTDIR)
++	sh tests/test_lumen.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
++
+ # --- Golden ROM snapshot (Task A steps 3-4) ---------------------------------
+ # tests/roms/ holds the exact .arc1 images AND the `nm` symbol dumps
+ # (<name>.syms) the golden regression runs against (tests/golden/,
+@@ -1355,7 +1359,7 @@ test-skydescent: $(CLI_BIN) $(ARC1_ROM_DIR)/skydescent.arc1 | $(TESTDIR)
+ # behaviour change — see docs.md "Golden regression policy").
+ # This target needs the RISC-V cross-compiler; test-golden does not.
+ GOLDEN_IMGS   := breakout tetris platformer scroll_demo color_demo example_pong example_snake example_color \
+-                  m29game flappy petalblade petalblade_rig shmup brickstorm skydescent
++                  m29game flappy petalblade petalblade_rig shmup brickstorm skydescent lumen
+ 
+ roms-update: $(addprefix $(GUEST_BUILD)/,$(addsuffix .arc1,$(GOLDEN_IMGS)))
+ 	mkdir -p $(GOLDEN_ROMDIR)
+diff --git a/programs/lumen.c b/programs/lumen.c
+new file mode 100644
+index 0000000..f9d0815
+--- /dev/null
++++ b/programs/lumen.c
+@@ -0,0 +1,384 @@
++/* LUMEN - a dark-room adventure for ARCADE-1. Your tap speed is your light.
++ *
++ * Ported from the browser prototype (lumen.html). Same structure as there:
++ *   game state --build_dl()--> VECTOR DISPLAY LIST --vec_submit()--> screen
++ * The game never draws anything itself. vec_submit() below is the SOFTWARE FALLBACK
++ * (lines as runs of rects, intensity quantised to 8 levels, glow as a dim wide pass).
++ * A machine with a vector block replaces only vec_submit(); the game does not change.
++ * Display list format: arc1_vector_displaylist_spec.md (guest cap here: 900 segments,
++ * the machine's 64 KiB of RAM is the limit, not the format).
++ *
++ * Mechanic (rules identical to tapcad.h / Neon Tap):
++ *   nothing held ..... dim light, no sword
++ *   hold A or B ...... slow sword swings, brighter light
++ *   tap one button ... a swing per tap; fast taps = flurry, wide bright light, slow enemies
++ *   alternate A / B .. charge light (no swinging)
++ *   same button again, or START ... release: flash + spin attack that stuns and reveals
++ * D-pad moves and aims. Creepers are fast in the dark and slow in your light.
++ * Turrets only shoot at what is bright. The key is far from the door; taking it sets off an alarm.
++ *
++ * Freestanding RV32IM C, integer only, deterministic (frame timer, seeded LCG).
++ * Observable globals: state room hp score kills haskey tap_speed charge lr n_enemies dl_n hero_x hero_y
++ * States: 0 title, 1 playing, 2 faded (dead), 3 light restored (won).
++ */
++#include "arcade1.h"
++#include "text.h"
++
++#define SCRW 480
++#define SCRH 270
++#define TS 16
++#define MW 30
++#define MH 17
++#define RGB(r, g, b) ((((r) >> 3) << 11) | (((g) >> 2) << 5) | ((b) >> 3))
++
++int state, room, hp, score, kills, haskey, tap_speed, charge, lr, n_enemies, dl_n, hero_x, hero_y;
++
++static const short SINT[256] = {
++#include "lumen_sin.inc"
++};
++#define SIN(i) ((int)SINT[(i) & 255])
++#define COS(i) ((int)SINT[((i) + 64) & 255])
++static unsigned isqrt(unsigned n) { unsigned r = 0, b = 1u << 30; while (b > n) b >>= 2; while (b) { if (n >= r + b) { n -= r + b; r = (r >> 1) + b; } else r >>= 1; b >>= 2; } return r; }
++static int iabs(int v) { return v < 0 ? -v : v; }
++static int clampi(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
++static unsigned rs = 7;
++static int rnd(int n) { rs = rs * 1664525u + 1013904223u; return (int)(((rs >> 16) * (unsigned)n) >> 16); }
++static int dist(int ax, int ay, int bx, int by) { int dx = ax - bx, dy = ay - by; return (int)isqrt((unsigned)(dx * dx + dy * dy)); }
++
++/* ---- tap cadence (tapcad.h rules; times in ms) ---- */
++static unsigned now_ms, tc_last, tc_chg_t, tc_tick;
++static int tc_ema, tc_spd, tc_btn, tc_has, tc_has_chg;
++static void tc_reset(void) { tc_last = tc_chg_t = tc_tick = 0; tc_ema = tc_spd = tc_btn = tc_has = tc_has_chg = 0; charge = 0; }
++/* returns -1 debounced, 1 alternation (charging), 0 plain tap */
++static int tc_press(int btn) {
++    unsigned t = now_ms;
++    if (tc_has) {
++        int iv = (int)(t - tc_last);
++        if (iv < 25) return -1;
++        tc_ema = iv < 700 ? (tc_ema ? (tc_ema + iv) / 2 : iv) : 0;
++        if (btn != tc_btn && iv < 400) {
++            charge = clampi(charge + 512 + 10 * clampi((400 - iv) * 256 / 330, 0, 256), 0, 25600);
++            tc_chg_t = t; tc_has_chg = 1; tc_btn = btn; tc_last = t; return 1;
++        }
++    }
++    tc_btn = btn; tc_last = t; tc_has = 1;
++    tc_spd = tc_ema ? clampi((300 - tc_ema) * 256 / 230, 0, 256) : 0;
++    return 0;
++}
++static int tc_speed(void) { if (!tc_has) return 0; int idle = (int)(now_ms - tc_last), f = idle > 250 ? 256 - (idle - 250) * 256 / 350 : 256; return (tc_spd * clampi(f, 0, 256)) >> 8; }
++static int tc_charging(void) { return tc_has_chg && (int)(now_ms - tc_chg_t) < 350; }
++static void tc_frame(void) {
++    unsigned dt = now_ms - tc_tick; tc_tick = now_ms;
++    if (charge > 0 && tc_has && now_ms - tc_last > 500) { unsigned d = dt * 512u / 100u; charge = d >= (unsigned)charge ? 0 : charge - (int)d; }
++}
++
++/* ======================= display list ======================= */
++#define DLCAP 900
++typedef struct { short x0, y0, x1, y1; unsigned char col, inten, w, fl; } seg_t;
++typedef struct { short x, y; unsigned char col, inten; char s[28]; } txt_t;
++static seg_t DL[DLCAP];
++static txt_t TX[14];
++static int tx_n;
++static void seg(int x0, int y0, int x1, int y1, int col, int inten, int w) {
++    if (inten <= 2 || dl_n >= DLCAP) return;
++    seg_t *s = &DL[dl_n++]; s->x0 = (short)(x0 * 16); s->y0 = (short)(y0 * 16); s->x1 = (short)(x1 * 16); s->y1 = (short)(y1 * 16);
++    s->col = (unsigned char)col; s->inten = (unsigned char)(inten > 255 ? 255 : inten); s->w = (unsigned char)w; s->fl = 0;
++}
++static void poly(int cx, int cy, int r, int n, int a, int col, int inten, int w) {
++    int px = cx + (COS(a) * r >> 8), py = cy + (SIN(a) * r >> 8), fx = px, fy = py;
++    for (int i = 1; i <= n; i++) { int q = a + i * 256 / n, x = i == n ? fx : cx + (COS(q) * r >> 8), y = i == n ? fy : cy + (SIN(q) * r >> 8); seg(px, py, x, y, col, inten, w); px = x; py = y; }
++}
++static void text_at(int x, int y, const char *s, int col, int inten) {
++    if (tx_n >= 14) return;
++    txt_t *t = &TX[tx_n++];
++    t->x = (short)x;
++    t->y = (short)y;
++    t->col = (unsigned char)col;
++    t->inten = (unsigned char)(inten > 255 ? 255 : inten);
++    int i = 0; for (; s[i] && i < 27; i++) t->s[i] = s[i]; t->s[i] = 0;
++}
++static int itoa_pad(char *o, int v, int w) { for (int i = w - 1; i >= 0; i--) { o[i] = (char)('0' + v % 10); v /= 10; } o[w] = 0; return w; }
++static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
++
++/* palette: 0 hero, 1 wall, 2 creeper, 3 wisp, 4 turret/charge, 5 key, 6 door/ok, 7 white, 8 hud, 9 bolt, 10 spare */
++static const unsigned char PAL[11][3] = { {159,255,224}, {70,110,255}, {255,63,164}, {255,224,138}, {255,122,61}, {255,210,60}, {80,255,150}, {255,255,255}, {200,240,255}, {255,80,80}, {190,170,255} };
++
++/* ---- software fallback renderer for the display list ---- */
++static int shade565(int col, int inten, int mul256) {
++    int lv = (inten + 16) >> 5; if (lv > 8) lv = 8;                       /* 8 brightness levels */
++    int r = PAL[col][0] * lv / 8 * mul256 >> 8, g = PAL[col][1] * lv / 8 * mul256 >> 8, b = PAL[col][2] * lv / 8 * mul256 >> 8;
++    return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
++}
++static void line(int x0, int y0, int x1, int y1, int t, unsigned col) {
++    int dx = iabs(x1 - x0), dy = iabs(y1 - y0), h = t >> 1;
++    if (dx >= dy) { int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx / 2, y = y0, rs0 = x0, x = x0;
++        for (int i = 0; i <= dx; i++, x += sx) { int last = (i == dx), step = 0; err -= dy; if (err < 0) { err += dx; step = 1; }
++            if (step || last) { int a = rs0 < x ? rs0 : x; arcade1_rect(a, y - h, iabs(x - rs0) + 1, t, col); rs0 = x + sx; y += sy; } } }
++    else { int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dy / 2, x = x0, rs0 = y0, y = y0;
++        for (int i = 0; i <= dy; i++, y += sy) { int last = (i == dy), step = 0; err -= dx; if (err < 0) { err += dy; step = 1; }
++            if (step || last) { int a = rs0 < y ? rs0 : y; arcade1_rect(x - h, a, t, iabs(y - rs0) + 1, col); rs0 = y + sy; x += sx; } } }
++}
++static void vec_submit(void) {
++    for (int i = 0; i < dl_n; i++) {                                       /* pass 1: glows, so cores stay on top */
++        const seg_t *s = &DL[i]; if (s->w < 2) continue;
++        line(s->x0 >> 4, s->y0 >> 4, s->x1 >> 4, s->y1 >> 4, s->w == 2 ? 3 : 5, (unsigned)shade565(s->col, s->inten, 70));
++    }
++    for (int i = 0; i < dl_n; i++) {                                       /* pass 2: cores */
++        const seg_t *s = &DL[i];
++        line(s->x0 >> 4, s->y0 >> 4, s->x1 >> 4, s->y1 >> 4, s->w >= 3 ? 2 : 1, (unsigned)shade565(s->col, s->inten, 256));
++    }
++    arcade1_cam(0, 0);
++    for (int i = 0; i < tx_n; i++) text_draw(TX[i].x, TX[i].y, TX[i].s, (unsigned)shade565(TX[i].col, TX[i].inten, 256));
++}
++
++/* ======================= game ======================= */
++typedef struct { int x, y, vx, vy, sx[7], sy[7]; short hp, ph, stun, hit, cd, ar; unsigned char k, on, sw, dir; } enemy;
++typedef struct { int x, y, vx, vy; short l; unsigned char on; } bolt;
++typedef struct { int x, y, vx, vy; short l; unsigned char c, on; } part;
++typedef struct { int x, y, r, R; short l; unsigned char on; } ring;
++enum { E_CREEP, E_WISP, E_TURRET };
++#define NE 24
++#define NBL 12
++#define NPA 80
++#define NRG 3
++static enemy E[NE]; static bolt BO[NBL]; static part PA[NPA]; static ring RG[NRG];
++static unsigned char MAP[MW * MH];
++typedef struct { short x0, y0, x1, y1; } wall_t;
++static wall_t WL[330]; static int nwall;
++
++typedef struct { int x, y, vx, vy, aim, inv, flash, swing, sw_cd, hit; int lrq; } hero_t;
++static hero_t H;
++static int door_open, key_x, key_y, over_t, frame_t, msg_t, hp_carry; static const char *msg_s;
++static unsigned prev_pad;
++
++static const unsigned char P1[][4] = { {6,4,3,3}, {20,4,3,3}, {12,10,6,2} };
++static const unsigned char P2[][4] = { {5,3,2,6}, {10,8,2,6}, {15,3,2,6}, {20,8,2,6}, {25,3,2,5} };
++static const unsigned char CR1[][2] = { {10,3}, {15,13} }, CR2[][2] = { {9,2}, {22,14} }, WI2[][2] = { {8,13}, {18,2}, {24,9} }, TU2[][2] = { {14,15}, {22,1} };
++
++static int solid(int xq, int yq) { int tx = xq >> 12, ty = yq >> 12; if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return 1; int m = MAP[ty * MW + tx]; return m == 1 || (m == 2 && !door_open); }
++static int mv(int *px, int *py, int dx, int dy, int r) {
++    r <<= 8; int ok = 0;
++#define T4(x, y) (solid((x) - r, (y) - r) || solid((x) + r, (y) - r) || solid((x) - r, (y) + r) || solid((x) + r, (y) + r))
++    if (!T4(*px + dx, *py)) { *px += dx; ok |= 1; }
++    if (!T4(*px, *py + dy)) { *py += dy; ok |= 2; }
++#undef T4
++    return ok;
++}
++static void burst(int x, int y, int col, int n) {
++    for (int i = 0; i < n; i++) for (int k = 0; k < NPA; k++) if (!PA[k].on) { int a = rnd(256), s = 64 + rnd(300); PA[k].x = x << 8; PA[k].y = y << 8; PA[k].vx = COS(a) * s >> 8; PA[k].vy = SIN(a) * s >> 8; PA[k].l = (short)(14 + rnd(18)); PA[k].c = (unsigned char)col; PA[k].on = 1; break; }
++}
++
++/* sound: one voice */
++#define AUDIO_FREQ (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x300u))
++#define AUDIO_CTRL (*(volatile unsigned int *)(ARCADE1_MMIO_BASE + 0x304u))
++static int snd_f, snd_n, snd_sw, snd_pri;
++static void snd(int f, int n, int sw, int pri) { if (snd_n > 0 && pri < snd_pri) return; snd_f = f; snd_n = n; snd_sw = sw; snd_pri = pri; }
++static void snd_frame(void) {
++    if (snd_n > 0) { AUDIO_FREQ = (unsigned)snd_f; __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1; snd_f += snd_sw; if (snd_f < 40) snd_f = 40; snd_n--; }
++    else if (state == 1 && tc_charging()) { AUDIO_FREQ = (unsigned)(180 + (charge >> 5)); __asm__ volatile("" ::: "memory"); AUDIO_CTRL = 1; }
++    else AUDIO_CTRL = 0;
++}
++
++static enemy *add_enemy(int k, int tx_, int ty_) {
++    for (int i = 0; i < NE; i++) if (!E[i].on) { enemy *e = &E[i]; unsigned char *z = (unsigned char *)e; for (unsigned q = 0; q < sizeof *e; q++) z[q] = 0;
++        e->on = 1; e->k = (unsigned char)k; e->x = tx_ << 8; e->y = ty_ << 8; e->ph = (short)rnd(256);
++        e->hp = k == E_CREEP ? 3 : k == E_WISP ? 1 : 4; if (k == E_TURRET) e->cd = 60;
++        for (int q = 0; q < 7; q++) { e->sx[q] = e->x; e->sy[q] = e->y; } return e; }
++    return 0;
++}
++static void load_room(int i) {
++    room = i; for (int q = 0; q < MW * MH; q++) MAP[q] = 0;
++    for (int y = 0; y < MH; y++) for (int x = 0; x < MW; x++) if (x == 0 || y == 0 || x == MW - 1 || y == MH - 1) MAP[y * MW + x] = 1;
++    int np = i == 0 ? 3 : 5;
++    for (int p = 0; p < np; p++) { const unsigned char *r = i == 0 ? P1[p] : P2[p]; for (int y = r[1]; y < r[1] + r[3]; y++) for (int x = r[0]; x < r[0] + r[2]; x++) MAP[y * MW + x] = 1; }
++    MAP[8 * MW + MW - 1] = 2; MAP[9 * MW + MW - 1] = 2;
++    nwall = 0;
++    for (int y = 0; y < MH; y++) for (int x = 0; x < MW; x++) if (MAP[y * MW + x] == 1) {
++#define NB(a, b) ((a) < 0 || (b) < 0 || (a) >= MW || (b) >= MH || MAP[(b) * MW + (a)] == 1)
++        int X = x * TS, Y = y * TS;
++        if (!NB(x, y - 1) && nwall < 330) { WL[nwall++] = (wall_t){ X, Y, X + TS, Y }; }
++        if (!NB(x, y + 1) && nwall < 330) { WL[nwall++] = (wall_t){ X, Y + TS, X + TS, Y + TS }; }
++        if (!NB(x - 1, y) && nwall < 330) { WL[nwall++] = (wall_t){ X, Y, X, Y + TS }; }
++        if (!NB(x + 1, y) && nwall < 330) { WL[nwall++] = (wall_t){ X + TS, Y, X + TS, Y + TS }; }
++#undef NB
++    }
++    for (int q = 0; q < NE; q++) E[q].on = 0;
++    for (int q = 0; q < NBL; q++) BO[q].on = 0;
++    for (int q = 0; q < NPA; q++) PA[q].on = 0;
++    for (int q = 0; q < NRG; q++) RG[q].on = 0;
++    H.x = (26 * TS + 8) << 8; H.y = (8 * TS + 8) << 8; H.vx = H.vy = 0; H.aim = 0; H.inv = 60; H.flash = H.swing = H.sw_cd = H.hit = 0; H.lrq = 34 << 8; haskey = 0; door_open = 0;
++    if (i == 0) { key_x = 2 * TS + 8; key_y = 3 * TS + 8; for (int q = 0; q < 2; q++) add_enemy(E_CREEP, CR1[q][0] * TS + 8, CR1[q][1] * TS + 8); }
++    else { key_x = 2 * TS + 8; key_y = 14 * TS + 8; for (int q = 0; q < 2; q++) add_enemy(E_CREEP, CR2[q][0] * TS + 8, CR2[q][1] * TS + 8);
++        for (int q = 0; q < 3; q++) add_enemy(E_WISP, WI2[q][0] * TS + 8, WI2[q][1] * TS + 8);
++        for (int q = 0; q < 2; q++) add_enemy(E_TURRET, TU2[q][0] * TS + 8, TU2[q][1] * TS + 8);
++        }
++}
++static void reset_game(void) { rs = 7; state = 1; score = 0; kills = 0; hp = hp_carry = 3; tc_reset(); frame_t = 0; msg_t = 0; snd_n = 0; load_room(0); }
++
++static int swing_hit(int reach, int dot100, int dmg) {
++    int n = 0, hx = H.x >> 8, hy = H.y >> 8, ux = COS(H.aim), uy = SIN(H.aim);
++    for (int i = 0; i < NE; i++) { enemy *e = &E[i]; if (!e->on) continue; int ex = e->x >> 8, ey = e->y >> 8, dx = ex - hx, dy = ey - hy, d = dist(ex, ey, hx, hy); if (!d) d = 1; if (d > reach) continue;
++        if (dot100 && ((dx * ux + dy * uy) >> 8) * 100 < d * dot100) continue;
++        e->hp -= dmg; e->hit = 6; n++;
++        if (e->hp <= 0) { e->on = 0; burst(ex, ey, e->k == E_CREEP ? 2 : e->k == E_WISP ? 3 : 4, 16); score += 100; kills++; snd(700, 3, -50, 2); }
++        else { if (e->k == E_CREEP && e->stun < 18) e->stun = 18; snd(420, 2, -20, 1); } }
++    return n;
++}
++static void hurt(void) {
++    if (H.inv > 0) return;
++    hp--;
++    hp_carry = hp;
++    H.inv = 90;
++    H.hit = 8;
++    burst(H.x >> 8, H.y >> 8, 7, 26);
++    snd(260, 12, -12, 5);
++    if (hp <= 0) { state = 2; over_t = 0; snd(200, 40, -4, 9); }
++}
++static void release(void) {
++    if (charge < 2048) return;
++    int c = charge / 100;
++    charge = 0;
++    H.flash = 40;
++    H.swing = 0;
++    snd(600, 20, -22, 6);
++    for (int i = 0; i < NRG; i++) if (!RG[i].on) { RG[i].on = 1; RG[i].x = H.x >> 8; RG[i].y = H.y >> 8; RG[i].r = 2; RG[i].R = 40 + (110 * c >> 8); RG[i].l = 34; break; }
++    burst(H.x >> 8, H.y >> 8, 0, 24);
++}
++static void do_tap(int b) {
++    if (state != 1) { if (state == 0 || over_t > 45) reset_game(); return; }
++    int t = tc_press(b); if (t < 0 || t == 1) return;
++    if (charge >= 2048) { release(); return; }
++    int s = tc_speed(); H.swing = 8; H.sw_cd = 16 - (10 * s >> 8); swing_hit(28, 64, 1);
++}
++
++/* lights: x, y, radius, power */
++static int LX[26], LY[26], LRAD[26], LPW[26], nl;
++static void light(int x, int y, int r, int p) { if (nl < 26) { LX[nl] = x; LY[nl] = y; LRAD[nl] = r; LPW[nl] = p; nl++; } }
++static int light_at(int x, int y) {
++    int v = 0; for (int i = 0; i < nl; i++) { int dx = x - LX[i], dy = y - LY[i], d2 = dx * dx + dy * dy, r2 = LRAD[i] * LRAD[i]; if (d2 < r2) { int q = LPW[i] * (r2 - d2) / r2; if (q > v) v = q; } }
++    return v;
++}
++
++static void step_play(unsigned pad) {
++    frame_t++; tc_frame();
++    int mx = ((pad & BTN_RIGHT) ? 1 : 0) - ((pad & BTN_LEFT) ? 1 : 0), my = ((pad & BTN_DOWN) ? 1 : 0) - ((pad & BTN_UP) ? 1 : 0);
++    int tx = mx * 420, ty = my * 420; if (mx && my) { tx = tx * 181 >> 8; ty = ty * 181 >> 8; }
++    H.vx += (tx - H.vx) >> 2; H.vy += (ty - H.vy) >> 2; mv(&H.x, &H.y, H.vx, H.vy, 4);
++    if (mx || my) { static const unsigned char A8[9] = { 224, 192, 160, 0, 0, 128, 32, 64, 96 }; H.aim = A8[(my + 1) * 3 + (mx + 1)]; }
++    int s = tc_speed(); tap_speed = s; int chg = tc_charging(), hold = (pad & (BTN_A | BTN_B)) != 0;
++    int target = (chg || charge > 1536) ? 34 + (charge * 282 >> 16) : (hold || s > 13) ? 46 + (92 * s >> 8) : 30;
++    H.lrq += ((target << 8) - H.lrq) * 31 >> 8; lr = H.lrq >> 8;
++    if (H.flash > 0) { H.flash--; if (lr < 150) lr = 150; }
++    if (H.sw_cd > 0) H.sw_cd--;
++    if (H.swing > 0) H.swing--;
++    if (hold && !chg && H.sw_cd <= 0 && s < 13) { H.sw_cd = 16; H.swing = 8; swing_hit(28, 64, 1); }
++    if (H.inv > 0) H.inv--;
++    if (H.hit > 0) H.hit--;
++    int hx = H.x >> 8, hy = H.y >> 8;
++    hero_x = hx; hero_y = hy;
++    nl = 0; light(hx, hy, lr, 255); if (!haskey) light(key_x, key_y, 24, 200); if (door_open) light(MW * TS - 8, 8 * TS + 8, 40, 220);
++    for (int i = 0; i < NE; i++) if (E[i].on) { if (E[i].k == E_WISP) light(E[i].x >> 8, E[i].y >> 8, 30, 150); if (E[i].stun > 0) light(E[i].x >> 8, E[i].y >> 8, 22, 200); }
++    for (int i = 0; i < NBL; i++) if (BO[i].on) light(BO[i].x >> 8, BO[i].y >> 8, 14, 230);
++    int ne = 0;
++    for (int i = 0; i < NE; i++) {
++        enemy *e = &E[i]; if (!e->on) continue; ne++; if (e->hit > 0) e->hit--; if (e->stun > 0) e->stun--;
++        int ex = e->x >> 8, ey = e->y >> 8, d = dist(ex, ey, hx, hy); if (!d) d = 1; int lit = d < lr, ux = (hx - ex) * 256 / d, uy = (hy - ey) * 256 / d;
++        if (e->k == E_CREEP) {
++            e->ph += 14;
++            if (!e->stun) {
++                int sp = lit ? (170 - (s * 140 >> 8) > 30 ? 170 - (s * 140 >> 8) : 30) : 330, wob = SIN(e->ph) >> 3;
++                int vx = (ux * sp >> 8) + (-uy * wob >> 8), vy = (uy * sp >> 8) + (ux * wob >> 8);
++                e->vx += (vx - e->vx) >> 3; e->vy += (vy - e->vy) >> 3;
++                if (!mv(&e->x, &e->y, e->vx, e->vy, 4)) { e->vx = -e->vx; e->vy = -e->vy; }
++            }
++            int px = e->x, py = e->y;
++            for (int q = 1; q < 7; q++) { int dx = e->sx[q] - px, dy = e->sy[q] - py, dd = (int)(isqrt((unsigned)((dx >> 4) * (dx >> 4) + (dy >> 4) * (dy >> 4))) << 4); if (!dd) dd = 1;
++                e->sx[q] = px + dx * (7 << 8) / dd; e->sy[q] = py + dy * (7 << 8) / dd; px = e->sx[q]; py = e->sy[q]; }
++            if (d < 8 && !e->stun) hurt();
++        } else if (e->k == E_WISP) {
++            e->ph += 9; int vx, vy; if (d * 10 < lr * 11) { vx = -ux * 300 >> 8; vy = -uy * 300 >> 8; } else { vx = ux * 90 >> 8; vy = uy * 90 >> 8; }
++            vx += SIN(e->ph) >> 3; vy += COS(e->ph) >> 3; if (!e->stun) mv(&e->x, &e->y, vx, vy, 4); if (d < 8) hurt();
++        } else {
++            if (e->cd > 0) e->cd--;
++            int armed = d < 170 && lr > 62;
++            if (armed) { if (e->ar < 40) e->ar++; if (e->ar >= 40 && e->cd <= 0 && !e->stun) { e->cd = 100; e->ar = 0;
++                for (int k = 0; k < NBL; k++) if (!BO[k].on) { BO[k].on = 1; BO[k].x = e->x; BO[k].y = e->y; BO[k].vx = ux * 560 >> 8; BO[k].vy = uy * 560 >> 8; BO[k].l = 120; break; }
++                snd(1100, 4, -80, 3);
++                } }
++            else e->ar = e->ar - 2 > 0 ? e->ar - 2 : 0;
++        }
++        if (state != 1) return;
++    }
++    n_enemies = ne;
++    for (int i = 0; i < NBL; i++) if (BO[i].on) { bolt *b = &BO[i]; b->x += b->vx; b->y += b->vy; b->l--; if (solid(b->x, b->y)) b->l = 0; if (dist(b->x >> 8, b->y >> 8, hx, hy) < 6) { b->l = 0; hurt(); } if (b->l <= 0) b->on = 0; }
++    for (int i = 0; i < NRG; i++) if (RG[i].on) { ring *r = &RG[i]; r->r += ((r->R - r->r) * 46 >> 8) + 2; r->l--;
++        for (int q = 0; q < NE; q++) { enemy *e = &E[q]; if (!e->on || e->sw) continue; if (dist(e->x >> 8, e->y >> 8, r->x, r->y) < r->r + 6) { e->sw = 1; e->hp -= 2; e->stun = 100; e->hit = 8;
++            if (e->hp <= 0) { e->on = 0; burst(e->x >> 8, e->y >> 8, 4, 16); score += 100; kills++; } } }
++        if (r->l <= 0) { r->on = 0; for (int q = 0; q < NE; q++) E[q].sw = 0; } }
++    for (int k = 0; k < NPA; k++) if (PA[k].on) { PA[k].x += PA[k].vx; PA[k].y += PA[k].vy; PA[k].vx -= PA[k].vx >> 5; PA[k].vy -= PA[k].vy >> 5; if (--PA[k].l <= 0) PA[k].on = 0; }
++    if (!haskey && dist(hx, hy, key_x, key_y) < 9) {
++        haskey = 1; door_open = 1; msg_s = "ALARM  RUN"; msg_t = 100; snd(1000, 10, 30, 4);
++        for (int q = 0; q < 2 + room; q++) add_enemy(E_CREEP, 24 + rnd(30), 24 + rnd(220));
++        burst(hx, hy, 5, 20);
++    }
++    if (door_open && hx > MW * TS - 10) { if (room + 1 < 2) { hp_carry = hp; load_room(room + 1); } else { state = 3; over_t = 0; snd(500, 30, 12, 8); } }
++    if (msg_t > 0) msg_t--;
++}
++
++/* ======================= build the display list ======================= */
++static void build_dl(unsigned pad) {
++    (void)pad; dl_n = 0; tx_n = 0; int s = tap_speed, hx = H.x >> 8, hy = H.y >> 8;
++    for (int i = 0; i < nwall; i++) { const wall_t *w = &WL[i]; int v = 34 + light_at((w->x0 + w->x1) >> 1, (w->y0 + w->y1) >> 1); if (v > 255) v = 255; seg(w->x0, w->y0, w->x1, w->y1, 1, v, v > 110 ? 2 : 1); }
++    for (int y = 8; y <= 9; y++) { if (!door_open) seg(MW * TS - 1, y * TS, MW * TS - 1, y * TS + TS, 6, 70 + ((frame_t >> 1) & 31), 2); else seg(MW * TS - 1, y * TS, MW * TS - 1, y * TS + TS, 6, 200, 3); }
++    if (!haskey) { int bob = SIN(frame_t * 5) >> 6; poly(key_x, key_y + bob, 4, 4, frame_t * 3, 5, 230, 2); seg(key_x, key_y + bob + 4, key_x, key_y + bob + 10, 5, 230, 2); }
++    for (int i = 0; i < NE; i++) { const enemy *e = &E[i]; if (!e->on) continue; int ex = e->x >> 8, ey = e->y >> 8;
++        int L = light_at(ex, ey) + (e->stun > 0 ? 150 : 0) + (e->hit > 0 ? 120 : 0); if (L > 255) L = 255;
++        if (e->k == E_CREEP) {
++            int ppx = ex, ppy = ey;
++            for (int q = 1; q < 7; q++) { int nx = e->sx[q] >> 8, ny = e->sy[q] >> 8, v = (L + (q == 1 ? 55 : 14)); if (v > 255) v = 255; seg(ppx, ppy, nx, ny, 2, v * (10 - (q - 1)) / 10, q < 3 ? 3 : 2); ppx = nx; ppy = ny; }
++            poly(ex, ey, 4, 4, e->ph >> 1, 2, L + 70, 2);
++        } else if (e->k == E_WISP) { int r = 5 + (SIN(e->ph * 3) >> 7); poly(ex, ey, r, 10, e->ph, 3, 150 + L, 2); poly(ex, ey, r + 3, 10, -e->ph, 3, 70, 1); }
++        else { int a40 = e->ar * 255 / 40, v = L + a40 * 200 / 255; poly(ex, ey, 7, 3, 64, 4, v, 2); poly(ex, ey, 2 + (e->ar * 3 / 40), 6, 0, 4, 40 + a40, 2); }
++    }
++    for (int i = 0; i < NBL; i++) if (BO[i].on) seg(BO[i].x >> 8, BO[i].y >> 8, (BO[i].x - BO[i].vx * 3) >> 8, (BO[i].y - BO[i].vy * 3) >> 8, 9, 255, 2);
++    for (int k = 0; k < NPA; k++) if (PA[k].on) seg(PA[k].x >> 8, PA[k].y >> 8, (PA[k].x - PA[k].vx * 2) >> 8, (PA[k].y - PA[k].vy * 2) >> 8, PA[k].c, PA[k].l * 14, 1);
++    for (int i = 0; i < NRG; i++) if (RG[i].on) { poly(RG[i].x, RG[i].y, RG[i].r, 16, 0, 0, RG[i].l * 10, 3); poly(RG[i].x, RG[i].y, RG[i].r * 7 / 8, 16, 0, 7, RG[i].l * 7, 1); }
++    if (state != 2 && !(H.inv > 0 && ((frame_t >> 2) & 1))) {
++        int a = H.aim, hot = s > 153 ? 7 : 0, I = H.hit > 0 ? 255 : 235;
++        int fx = hx + (COS(a) * 8 >> 8), fy = hy + (SIN(a) * 8 >> 8), lx = hx + (COS(a + 106) * 6 >> 8), ly = hy + (SIN(a + 106) * 6 >> 8), rx = hx + (COS(a - 106) * 6 >> 8), ry = hy + (SIN(a - 106) * 6 >> 8);
++        seg(fx, fy, lx, ly, hot, I, 2); seg(lx, ly, rx, ry, hot, I, 2); seg(rx, ry, fx, fy, hot, I, 2);
++        if (H.swing > 0) for (int i = -3; i < 3; i++) { int a0 = a + i * 10, a1 = a + (i + 1) * 10; seg(hx + (COS(a0) * 22 >> 8), hy + (SIN(a0) * 22 >> 8), hx + (COS(a1) * 22 >> 8), hy + (SIN(a1) * 22 >> 8), 7, H.swing * 28, 3); }
++        if (charge > 1536) poly(hx, hy, 12 + charge / 3072, 16, frame_t * 4, 0, 120 + charge / 256, 2);
++    }
++    for (int i = 0; i < hp; i++) poly(10 + i * 10, 10, 3, 4, 32, 6, 230, 2);
++    if (haskey) poly(46, 10, 3, 4, 32, 5, 230, 2);
++    seg(30, SCRH - 23, 90, SCRH - 23, 1, 60, 1); seg(30, SCRH - 23, 30 + 60 * s / 256, SCRH - 23, 5, 255, 2);
++    seg(30, SCRH - 11, 90, SCRH - 11, 1, 60, 1); seg(30, SCRH - 11, 30 + 60 * charge / 25600, SCRH - 11, 4, 255, 2);
++    text_at(4, SCRH - 28, "TAP", 8, 170); text_at(4, SCRH - 16, "PWR", 8, 170);
++    char b[22]; b[0] = 'S'; b[1] = 'C'; b[2] = 'O'; b[3] = 'R'; b[4] = 'E'; b[5] = ' '; itoa_pad(b + 6, score, 5); text_at(SCRW - 96, 4, b, 8, 220);
++    b[0] = 'R'; b[1] = 'O'; b[2] = 'O'; b[3] = 'M'; b[4] = ' '; b[5] = (char)('1' + room); b[6] = 0; text_at(SCRW - 96, 14, b, 8, 150);
++    if (msg_t > 0 && state == 1) text_at((SCRW - slen(msg_s) * 8) / 2, 36, msg_s, 6, msg_t * 8);
++    if (state == 0) { text_at((SCRW - 5 * 8) / 2, 96, "LUMEN", 7, 255); text_at((SCRW - 26 * 8) / 2, 118, "TAP FAST TO LIGHT THE DARK", 3, 230); text_at((SCRW - 16 * 8) / 2, 138, "TAP A TO START", 8, 200); }
++    if (state == 2) { text_at((SCRW - 5 * 8) / 2, 108, "FADED", 9, 255); text_at((SCRW - 14 * 8) / 2, 128, "TAP A TO RETRY", 8, 220); }
++    if (state == 3) { text_at((SCRW - 14 * 8) / 2, 108, "LIGHT RESTORED", 6, 255); itoa_pad(b + 6, score, 5); b[0] = 'S'; b[1] = 'C'; b[2] = 'O'; b[3] = 'R'; b[4] = 'E'; b[5] = ' '; text_at((SCRW - 11 * 8) / 2, 128, b, 8, 220); text_at((SCRW - 14 * 8) / 2, 148, "TAP A TO AGAIN", 8, 200); }
++}
++
++int main(void) {
++    state = 0; tc_reset(); reset_game(); state = 0; nl = 0; light(H.x >> 8, H.y >> 8, 34, 255);
++    for (;;) {
++        unsigned pad = arcade1_pad(), edge = pad & ~prev_pad; prev_pad = pad;
++        now_ms = (arcade1_timer_count() * 50u) / 3u;
++        if (state == 1) {
++            if (edge & BTN_A) do_tap(0);
++            if (edge & BTN_B) do_tap(1);
++            if ((edge & BTN_START) && state == 1) release();
++            if (state == 1) step_play(pad);
++        } else {
++            frame_t++; tap_speed = 0; if (state >= 2) over_t++;
++            if (edge & (BTN_A | BTN_B | BTN_START)) { if (state == 0 || over_t > 45) reset_game(); }
++        }
++        build_dl(pad);
++        arcade1_cam(0, 0); arcade1_clear(RGB(5, 5, 12));
++        vec_submit(); snd_frame(); arcade1_present();
++    }
++}
+diff --git a/programs/lumen_sin.inc b/programs/lumen_sin.inc
+new file mode 100644
+index 0000000..566311b
+--- /dev/null
++++ b/programs/lumen_sin.inc
+@@ -0,0 +1,16 @@
++    0,6,13,19,25,31,38,44,50,56,62,68,74,80,86,92,
++    98,104,109,115,121,126,132,137,142,147,152,157,162,167,172,177,
++    181,185,190,194,198,202,206,209,213,216,220,223,226,229,231,234,
++    237,239,241,243,245,247,248,250,251,252,253,254,255,255,256,256,
++    256,256,256,255,255,254,253,252,251,250,248,247,245,243,241,239,
++    237,234,231,229,226,223,220,216,213,209,206,202,198,194,190,185,
++    181,177,172,167,162,157,152,147,142,137,132,126,121,115,109,104,
++    98,92,86,80,74,68,62,56,50,44,38,31,25,19,13,6,
++    0,-6,-13,-19,-25,-31,-38,-44,-50,-56,-62,-68,-74,-80,-86,-92,
++    -98,-104,-109,-115,-121,-126,-132,-137,-142,-147,-152,-157,-162,-167,-172,-177,
++    -181,-185,-190,-194,-198,-202,-206,-209,-213,-216,-220,-223,-226,-229,-231,-234,
++    -237,-239,-241,-243,-245,-247,-248,-250,-251,-252,-253,-254,-255,-255,-256,-256,
++    -256,-256,-256,-255,-255,-254,-253,-252,-251,-250,-248,-247,-245,-243,-241,-239,
++    -237,-234,-231,-229,-226,-223,-220,-216,-213,-209,-206,-202,-198,-194,-190,-185,
++    -181,-177,-172,-167,-162,-157,-152,-147,-142,-137,-132,-126,-121,-115,-109,-104,
++    -98,-92,-86,-80,-74,-68,-62,-56,-50,-44,-38,-31,-25,-19,-13,-6,
+diff --git a/tests/golden/lumen.txt b/tests/golden/lumen.txt
+new file mode 100644
+index 0000000..4200edc
+--- /dev/null
++++ b/tests/golden/lumen.txt
+@@ -0,0 +1,880 @@
++frame    0 hash=0xAB3997925A5C4483 fb=0xD100BCB9EBEBC283
++frame    1 hash=0x2BD59EEB41C0C32E fb=0xD100BCB9EBEBC283
++frame    2 hash=0x08407826967010DF fb=0x5BC02B0AF92142D3
++frame    3 hash=0xA85AF6AAFA5A64DD fb=0x1C951C9FD0FEE887
++frame    4 hash=0x8B5759E21BE4B499 fb=0x25493AF6E66ED8FF
++frame    5 hash=0x59A54F0646BDB73B fb=0x25493AF6E66ED8FF
++frame    6 hash=0x8E937A35F436BEFD fb=0x313AEE9022F30993
++frame    7 hash=0xA83BAED9498D385D fb=0x0451C05C05350BAB
++frame    8 hash=0xA57E022C9C51313C fb=0x0451C05C05350BAB
++frame    9 hash=0xCF858CAEE4BE0CAC fb=0xCC2A9533F9A68A78
++frame   10 hash=0xC431EA4BEBAB077E fb=0xCC2A9533F9A68A78
++frame   11 hash=0x8DCBD5EF793E8D3E fb=0x845B9D092BFDD85F
++frame   12 hash=0xE22B7766F745F3A4 fb=0x8291155F2739187B
++frame   13 hash=0xAAF8AE9D3A73717A fb=0x845B9D092BFDD85F
++frame   14 hash=0x84F32A42B41A9247 fb=0xE6339E14C5046F00
++frame   15 hash=0xC5030763B25A2D4A fb=0x8F90562EB4FFC988
++frame   16 hash=0x08FFC009DD9A1827 fb=0x8F90562EB4FFC988
++frame   17 hash=0x8A972678540357A8 fb=0x7A2389F8758A620B
++frame   18 hash=0xA190E2A909D22509 fb=0xFE0980EC58CE6797
++frame   19 hash=0xAFC9407B8EA02DFB fb=0x48BD76C64A65DEA9
++frame   20 hash=0xE5D60B68C71E5436 fb=0x659ECEC154D42979
++frame   21 hash=0x30CBE30CC2CCAFAF fb=0x81F6D763F27CFE46
++frame   22 hash=0x8F5CE891D33E800D fb=0x40AA7025F81B34CD
++frame   23 hash=0xD855588D0623A58A fb=0x0D493A00523EFA59
++frame   24 hash=0xC2289A1177863FBF fb=0x7E792E8DA4A3F7A5
++frame   25 hash=0x860520EFDEC0B8ED fb=0x33A128EA7467DA05
++frame   26 hash=0x7AE0DA7F2741EE2E fb=0x33A128EA7467DA05
++frame   27 hash=0xE06EB692C5E0AD6C fb=0xABE138EBF3639E55
++frame   28 hash=0xE35F50EB8A4A77A3 fb=0xAD6EBD360070FD1D
++frame   29 hash=0x15EF569A92ABABEA fb=0xAF90C575636E8A99
++frame   30 hash=0x537C12B50EE7FB5C fb=0xA497867F99D48940
++frame   31 hash=0xEB71E9A0D6AC75D9 fb=0x7FA26795E20C3AB4
++frame   32 hash=0x69320A988642697C fb=0x91011D403A8CA1C8
++frame   33 hash=0x08C0D9002D27D1E9 fb=0x360D3C9334714388
++frame   34 hash=0xAE089A93DBD5AB76 fb=0x2005E5A521456705
++frame   35 hash=0xF0225376AA6D90C0 fb=0xA39B1008A76EA689
++frame   36 hash=0x89A043B66883A77B fb=0xBDE8408B74B03FE8
++frame   37 hash=0xAD8086739E0AF6E3 fb=0xA33795D47D5FF5A4
++frame   38 hash=0x3A558B7758C38628 fb=0x0E79D4996F7B3F2C
++frame   39 hash=0xFCD1EB3AE967FA47 fb=0x054BD244CD47BF59
++frame   40 hash=0x532F9B334F7146B5 fb=0xC9BD40227B60977F
++frame   41 hash=0x914CF786EE9FB905 fb=0x23493FA164CA509A
++frame   42 hash=0xA4EC7C6C2AE447F6 fb=0x91DB5F82BDA96D3C
++frame   43 hash=0xA4A0BE2EC54A41F3 fb=0x9D858AF405EB8F6D
++frame   44 hash=0xD34F380038542A14 fb=0x2010B1F8A171D8A4
++frame   45 hash=0x81B318F6B6A30B2D fb=0x046FB971F9E407E2
++frame   46 hash=0x7859C95A9A98C8B5 fb=0x5FC5FD1C5E30E547
++frame   47 hash=0xD31D517F13275FB3 fb=0xB26BC5B19B8D4B83
++frame   48 hash=0xAEC4FBDF6B8E8761 fb=0x9F1A8331B5A5EFAC
++frame   49 hash=0x900200C88E46E845 fb=0x720941334CC670D9
++frame   50 hash=0x3AC9885AE0209709 fb=0xC0B6E972BFE5B96E
++frame   51 hash=0xDC4609A1135DC803 fb=0x31BB902386E645D6
++frame   52 hash=0x7CCBE7F0BDD5EE1C fb=0x31A11905690C530C
++frame   53 hash=0x406FB5E63403F8F0 fb=0x73FB84D8CE47E02E
++frame   54 hash=0x8A55F2339688FA54 fb=0xD74128B67F55BAF1
++frame   55 hash=0x56BEB7BA88088AE0 fb=0x0E7B433DB42E210D
++frame   56 hash=0xEE0193F37ABD1455 fb=0x848B9BD381455F38
++frame   57 hash=0x212F2D68658A92AC fb=0x6EB52FBD5CAC2EB9
++frame   58 hash=0x012C5003BED97028 fb=0x696EEC561239AA2C
++frame   59 hash=0x6879A8C061EE36BC fb=0x83596A04AF7E7875
++frame   60 hash=0xC3139D6CCA725621 fb=0x5DC2A11C2300D6A5
++frame   61 hash=0x80EEC934EFF5E4CF fb=0x2BD4419D2FA40B13
++frame   62 hash=0x655FC3BE7B1D24CF fb=0x3175296648E96248
++frame   63 hash=0xECADB091F189C769 fb=0x8A1807884F66C68F
++frame   64 hash=0xC0E118E19BADC948 fb=0x1BC609FEBB6F444A
++frame   65 hash=0x9B0C7A15F0F1DC0B fb=0x4B8779F01BE7AD3C
++frame   66 hash=0xEE08951888CDB5EA fb=0x726306609FC57FA3
++frame   67 hash=0xB5A86BA6170F508C fb=0x60BE49AC7565661A
++frame   68 hash=0xA4B39C0ADBB25C72 fb=0x3F0066683BB2BC0B
++frame   69 hash=0xCB8E227C95511B2F fb=0x9B280D718534E712
++frame   70 hash=0xB4FAE68C2BA429A9 fb=0xA4541951A2B42218
++frame   71 hash=0xFAAD4FF6C61F4152 fb=0x0FBD6F0F4C62B3C9
++frame   72 hash=0x38B115D52321EFA1 fb=0x79E59AF02825B64D
++frame   73 hash=0x70D9CA9D46C7D0C5 fb=0x52282CA1330896F3
++frame   74 hash=0xEAA2D750127FFBB3 fb=0xEB2137BF9FBB0EBC
++frame   75 hash=0xDFF6060F03E6A84E fb=0x06E931C41BAB7654
++frame   76 hash=0x1CB8BAF2F53D2CC5 fb=0xD4383AED5CF8CB63
++frame   77 hash=0x7E4BAD65EF7DB638 fb=0x8211BE2711127DD4
++frame   78 hash=0x21B2F742DAD53258 fb=0xB716ED9E973FFCF5
++frame   79 hash=0x0A6026662B0EEE8F fb=0x57CBFDCEFD225C1C
++frame   80 hash=0x3EFF78A91F9A32E8 fb=0x0A4A4A66FF8F45B7
++frame   81 hash=0x593999148FD63DC8 fb=0x1DB21F0D5BE81BF2
++frame   82 hash=0xBCF642564CB2409D fb=0x1B3E502A7396DA22
++frame   83 hash=0x17C147296701B8C5 fb=0x9EEFBBCEEE754D18
++frame   84 hash=0x3418E75E23A8D706 fb=0xE0D38A3E8C36CB63
++frame   85 hash=0x6C10853255940EBF fb=0xE2F43BB61F694F5D
++frame   86 hash=0x3827A3332A3AC89E fb=0xEE544E1DB2066C44
++frame   87 hash=0x6B1BAB30D0FE7112 fb=0x327776379D8179C0
++frame   88 hash=0xB014190468C07962 fb=0x3847333BD580E005
++frame   89 hash=0xC9BCB1A1306B7808 fb=0x0131E0A2802025B4
++frame   90 hash=0xFDB2278EB5E5F35C fb=0x4993A6E7300E990B
++frame   91 hash=0x534857B30740442B fb=0xFE299126B20AD777
++frame   92 hash=0x0B41B6E48AE01781 fb=0x998DD1D2EE86C07F
++frame   93 hash=0xAA17136B603B58BA fb=0x33F6F9199EF858AD
++frame   94 hash=0xB9941A77B5E00F47 fb=0xA6BE9F529C5B9926
++frame   95 hash=0xA2384199501C9291 fb=0xC67CE12C8AF9BB2A
++frame   96 hash=0xB4C12C9DFFD2562B fb=0x388B2A8DA7733EAE
++frame   97 hash=0x2900388E7467BF45 fb=0x3D7837EE216354D8
++frame   98 hash=0xA57FF1D9A1DE84DE fb=0x8C74A8020953A026
++frame   99 hash=0x3F107C2B81699156 fb=0xF754B082AAC3346E
++frame  100 hash=0xA8E845BF0D6769C7 fb=0x375327723ACB0F00
++frame  101 hash=0xFA56FC0359CF1099 fb=0xEB945A4A42A86B73
++frame  102 hash=0x06FFE5E12A452244 fb=0x59E3AB90F0CFE1F4
++frame  103 hash=0x01C2B8411E01C47E fb=0xB8E4839802E7EA8B
++frame  104 hash=0xC063D91DB926672F fb=0x6F8283C6378D0534
++frame  105 hash=0x39EB6098E621F9BC fb=0x497F85FD0ABFDF4B
++frame  106 hash=0xC72602C28653BF8A fb=0x633F59052205F168
++frame  107 hash=0x74BE220D38EAD1F0 fb=0x3722877DB11C7C2A
++frame  108 hash=0x49C8B05F31D8CD13 fb=0xBA16180EFD3A33F7
++frame  109 hash=0x83B91BEAE3E4CA09 fb=0x12C34C3BF8B80B6C
++frame  110 hash=0xE123A40027EEA535 fb=0x9733D93F445DA6A1
++frame  111 hash=0xBF81BCB09A7225E1 fb=0xA26710F6E59FF44C
++frame  112 hash=0xBA7D7D30E0A9F861 fb=0x0D6CBB1564FDFDE3
++frame  113 hash=0x702B1C8E56410A22 fb=0x1FC83424EFBA20EF
++frame  114 hash=0x27445B36CF8D1206 fb=0x9C4FB6209D67CAC5
++frame  115 hash=0xBEFF5603BD15B39D fb=0x613672E56E67EC24
++frame  116 hash=0xF913C7B9514B2F59 fb=0x14FC003A88B874E6
++frame  117 hash=0x9F30E8306DD9AAD7 fb=0x4ED3BCD2D1FC6B09
++frame  118 hash=0xBC0DB522E1786967 fb=0x0D2B41E3B357DAD8
++frame  119 hash=0x553B294227106708 fb=0x13E668641B3745EB
++frame  120 hash=0x1359D0EF15BDA529 fb=0x4907190899F17294
++frame  121 hash=0x12DC8B166E67A7EF fb=0x95F7BE3CE5DE0DAE
++frame  122 hash=0x4BE2B9FECBF6F3CE fb=0x29909073505A5ADE
++frame  123 hash=0x4CF182862A02A3F0 fb=0x997BF6246092506C
++frame  124 hash=0xBFACBA22091A20BF fb=0xA3C078D1267B26CB
++frame  125 hash=0xD546F4A0972673CD fb=0x0FE16ECC026BB7D1
++frame  126 hash=0x978757FD6D2502F7 fb=0x3B7790781530CD5F
++frame  127 hash=0xE6308EC05B88667D fb=0x29BD245A5AE3C3A8
++frame  128 hash=0x107501F8DDD58F39 fb=0x9181854C7BF40301
++frame  129 hash=0x1D841D9DB505B5E3 fb=0xA71962C10A5BD854
++frame  130 hash=0xA6AF3CE4F77466F1 fb=0xA57371677DC4BF72
++frame  131 hash=0x09E8D4E451C2CFC9 fb=0x51E13A8C2CE81B2F
++frame  132 hash=0x93C0E468772D9A34 fb=0xF9ECFB559ECE07B6
++frame  133 hash=0xA020CAFB73899971 fb=0x38CDD312A4F1B1E8
++frame  134 hash=0x11D28606E8AEBA46 fb=0xD15EDE508309E426
++frame  135 hash=0x01C89E19E6B80DD5 fb=0xDD0C154A2B278B21
++frame  136 hash=0x4861FC186073CBD4 fb=0xCA626E2227EC7641
++frame  137 hash=0xA7D9269630D9A9C6 fb=0x3295352610F68673
++frame  138 hash=0xD1ED4A3D2582C75D fb=0x3C8361BC7AEEFF13
++frame  139 hash=0x5BF27838B64A70FF fb=0x3E2FA6318EDC6DE1
++frame  140 hash=0x11672972922CF9CF fb=0xB7EC9D6C01F577A9
++frame  141 hash=0x4BE31EFD44BD69EC fb=0x15F0882885974836
++frame  142 hash=0xF1C1F0F26B27394C fb=0x5C83543CCD4E859D
++frame  143 hash=0x7205AA2CBC529BA4 fb=0x937C6357346E0AB0
++frame  144 hash=0x9A7D777DEA6F953A fb=0x1F17D0E787D634CC
++frame  145 hash=0xA59F7F9E4DC39592 fb=0xE434AC7558ECD39A
++frame  146 hash=0x1AE9C350CFB649C1 fb=0xD7D3134BDE17A656
++frame  147 hash=0xAF6F73DD2F6A9330 fb=0xB53F2279A470831E
++frame  148 hash=0xDFE54802CFC39AD2 fb=0x19A9267D9ECF7D34
++frame  149 hash=0x895B7EA9F4324E72 fb=0x5D85DDB9D13C7031
++frame  150 hash=0x81D6A8C8111C31D9 fb=0x28551421377769B3
++frame  151 hash=0x4D1155255441F6CA fb=0xDB6AB36A5E04DD76
++frame  152 hash=0x00DB5E477ACA1F77 fb=0x3E2F6775537CCE65
++frame  153 hash=0xAA6B5BFE2CA161EB fb=0x00985EFD6FB5E1A1
++frame  154 hash=0xEC9871669AEDCD2C fb=0xDA7310E7D7B5C7CC
++frame  155 hash=0x4E49CFE926BBAFE1 fb=0x3EC5A6397E122157
++frame  156 hash=0x46470DBF28DF1517 fb=0x3927CFB2BCEE3787
++frame  157 hash=0x04542A8EFB0C0E94 fb=0x58884C3F62B88B51
++frame  158 hash=0x9C3AE4980D5C05BD fb=0xECFAE794919984AB
++frame  159 hash=0x8C0BB44CCF87D6F4 fb=0xE8800C59FF5C7DB9
++frame  160 hash=0xC18C9271C4B5D303 fb=0x26886510EA8C9A77
++frame  161 hash=0x023FC4825B81F887 fb=0xB9ACD8B97A33BEE7
++frame  162 hash=0xAE0F135A7A789BA9 fb=0xDD5D0543424DB6D7
++frame  163 hash=0xDD3B72DB2EEEEFBB fb=0xABDB71FA9D96952F
++frame  164 hash=0xF3C5FA0FFD16040A fb=0xDB0E2E15E8BB3323
++frame  165 hash=0x68827C445DFC9821 fb=0x7FCA6B436BCB5B74
++frame  166 hash=0xFDE7B4D2E1061615 fb=0xE1D62721824AE48E
++frame  167 hash=0xF7CF11DD284A0348 fb=0xF90DE49C1FFF277D
++frame  168 hash=0xEAD49DADD83C6F2E fb=0xBDC5DBEFA276FAFC
++frame  169 hash=0x128D2E3A7B2D5158 fb=0x37345C832FD89966
++frame  170 hash=0xF31DDE8494829ACB fb=0x642A4B2246EF01F1
++frame  171 hash=0x8460D987DE315D01 fb=0x1EBDE641FFC051AF
++frame  172 hash=0x66CBD6C7E0DA0D7F fb=0x8B4CD573DA868AA7
++frame  173 hash=0xF74FFCA9D62A223D fb=0x6087E513391412E2
++frame  174 hash=0x46D6B32FB1F28114 fb=0x86D83EF62673F2C9
++frame  175 hash=0xDFBC5D128AFA621B fb=0x910C9CA91F66574D
++frame  176 hash=0xAA7C8F23CD81E4F2 fb=0xB2BDD2FE8CC5E0E7
++frame  177 hash=0x399F314477148DE1 fb=0xB979C8101D9398E3
++frame  178 hash=0xF5FA282887170625 fb=0x8FC57544DCA166F4
++frame  179 hash=0x20FDFD1901ACF241 fb=0x32A13250F2F16D74
++frame  180 hash=0x75639E41748BE8F9 fb=0xDD01CC7AE4B704FF
++frame  181 hash=0xFAECD16372042CCD fb=0x07B98492D35BFD3C
++frame  182 hash=0x94BB4597A2749D94 fb=0x7B31246E16F4711E
++frame  183 hash=0xD397B4DE7535961E fb=0xBA620484C8FC5B2E
++frame  184 hash=0xD8CB1FFB1565F8F4 fb=0xC58A4C1E1E101D97
++frame  185 hash=0x67F09BDC263D284C fb=0x24221BDFC59672D5
++frame  186 hash=0xD470313B69EAF213 fb=0x3AB1B95A635B410B
++frame  187 hash=0x14F65FB228FAFEEE fb=0xCC36F9039959178F
++frame  188 hash=0x92D6900A7267BBA2 fb=0xBA55E9C5A644E5E6
++frame  189 hash=0x597C217A6F89840F fb=0x45FA3A9534FBBF22
++frame  190 hash=0x18D21D788C5E6974 fb=0x280DEBF9BBF5569D
++frame  191 hash=0xEAF392D832A67BFD fb=0x0ED63E66149E8A0F
++frame  192 hash=0x3C975F6F537622D7 fb=0x3815933D826C37AA
++frame  193 hash=0xC2FA6D22BD6C5DFD fb=0x559036028979E8A2
++frame  194 hash=0x6B82DA34F2074D5E fb=0xAF88AE36194DE6BC
++frame  195 hash=0x63D87897A927E5BD fb=0xFFFEB882E1E1E97B
++frame  196 hash=0x2224E8F6DB72D7E4 fb=0xC480A6172877E383
++frame  197 hash=0xCFD47860536615A6 fb=0xF4E0F56701361581
++frame  198 hash=0x4486B0360298C4C7 fb=0xF7A6B0ED5827937E
++frame  199 hash=0xC248DC913D5D08DF fb=0xE62650C82B45E5C6
++frame  200 hash=0xF3D84B9FB9CF0790 fb=0xB254F9449E6C27AB
++frame  201 hash=0xB041FADB9ABDE842 fb=0x698C72F88464D10D
++frame  202 hash=0x1E1682D28810DD37 fb=0x7431CFCE4097D736
++frame  203 hash=0xDDC0CE2704C30557 fb=0x87274B2DEBE8D498
++frame  204 hash=0xD123DB3FC8E5C84D fb=0x468FF5ACC86BD626
++frame  205 hash=0x2A0761B666916561 fb=0x429DD8CDD649EAE1
++frame  206 hash=0xA3D79E275313851E fb=0x8F8E18520AC1ED8D
++frame  207 hash=0x3F6DA99B3DFC8CD3 fb=0xAE26D36225C0B05B
++frame  208 hash=0xF0E934FBC85CCD16 fb=0xB410C4B3E16BC5B7
++frame  209 hash=0x00579D11CDD9E05D fb=0xC988FD3A79DA48DA
++frame  210 hash=0x1931CBECDD1BE8E7 fb=0xE4209DBCB5C43165
++frame  211 hash=0x8932E5EB352C03F4 fb=0xAFA503FAEB97A9AA
++frame  212 hash=0x6FA789224858201E fb=0x2F473CEB8BBAE8D9
++frame  213 hash=0x1952F32C09C8F695 fb=0xF2C3CF3E56999B54
++frame  214 hash=0x393DB5C4811FD777 fb=0xE75E0A764EFC3534
++frame  215 hash=0x57645B8599D5D24D fb=0x99BA8BEC9011BAB6
++frame  216 hash=0xBBA48513D78F31C8 fb=0x0E41A5912A031185
++frame  217 hash=0xABBFF706A014B7F0 fb=0xFD7A9A388A66A4F8
++frame  218 hash=0x79A7782C2E64A2C6 fb=0x8DA012180EFCC5F4
++frame  219 hash=0x310D7C5C07358BAC fb=0xDBB264D87210609F
++frame  220 hash=0x57B6C6BFAF3549F9 fb=0x31D56F0E0142C006
++frame  221 hash=0x03AE83F22AD70FA6 fb=0x00A6795AEFF5F099
++frame  222 hash=0x503263B1398C39BE fb=0x878361E959788D93
++frame  223 hash=0x4CDA40952C49B350 fb=0x97708301267F3C26
++frame  224 hash=0xD6CA403E64830C44 fb=0xA6D4AADE7DA52E6E
++frame  225 hash=0x804CB2DE97BC64A6 fb=0xF9AA5637D175A822
++frame  226 hash=0xA76A8CB088D8CC1B fb=0x0B850A33728FFF9F
++frame  227 hash=0xB3A5971CB91FF65A fb=0x4FBD06A37863F214
++frame  228 hash=0xCAF52B989D182A09 fb=0x758F681FDD54A2E8
++frame  229 hash=0xC10ADDBDE1356CF9 fb=0x5CEEA3218087E454
++frame  230 hash=0xA5E3EE50B501EE48 fb=0xD675001D3D5E5FEF
++frame  231 hash=0x9F42506F940C8230 fb=0x6122A688C957298F
++frame  232 hash=0x72609F1DE5FB0F79 fb=0x552C4430B4170C65
++frame  233 hash=0x0D297147CEDE037D fb=0xEE47BE93DEA871AA
++frame  234 hash=0x1A2CB16BA6C88F4C fb=0x5621EE28FDB18EDA
++frame  235 hash=0x238211D86E1F5374 fb=0xD1DB4B05581FA648
++frame  236 hash=0xBD910A9B57039F51 fb=0x3BF61283442135AC
++frame  237 hash=0x4FDACDE1A1D6C668 fb=0xD3BE137568CF43CB
++frame  238 hash=0x8EC5AE40D27CCB5D fb=0xDE997EFF8E78D849
++frame  239 hash=0x2E4401112433DFD5 fb=0xAEC5CF72B453E674
++frame  240 hash=0xD75B60F217FE504D fb=0xF2014A38455873E1
++frame  241 hash=0xFD9665F81A667DC6 fb=0xACC7C555B71C143C
++frame  242 hash=0x0DB6C674DA7CE5F3 fb=0xD624F45F0CBF875D
++frame  243 hash=0xE54F8761EF59866B fb=0x921F431CE7109C88
++frame  244 hash=0x1C711D6610F02BA7 fb=0x4ED2A94C5D6FF479
++frame  245 hash=0x1CE58CB4105F4C17 fb=0xDC41C80D12245ABB
++frame  246 hash=0x7E8143DD4F9979F0 fb=0xECC8E5B1D42E1112
++frame  247 hash=0x741D879BEFBB0018 fb=0x3BAD46CDF2E3D0C7
++frame  248 hash=0x673C1470F22935BC fb=0xC1D6355A1DF7B832
++frame  249 hash=0x52771DAC35DB0B67 fb=0xEB229479224CFA84
++frame  250 hash=0xAEEF2DB8B1A14375 fb=0xF812921B602380D8
++frame  251 hash=0xCDA9538A5BFA13B9 fb=0x1D680580D586A012
++frame  252 hash=0x416B1208D434A98F fb=0x125F0306B951A774
++frame  253 hash=0x194F9D3DC7CCF4BC fb=0x206F88AF81A7BD10
++frame  254 hash=0x8ED588586421503F fb=0x68EA75DE546CD631
++frame  255 hash=0x2B6D561EFC16D414 fb=0x798051F2858C871D
++frame  256 hash=0xDA1BAE6974974619 fb=0x3EC6DEF5348FCF73
++frame  257 hash=0xC5A5F3343350985B fb=0xAC33174275EF3736
++frame  258 hash=0xA514D92BD61E6D3F fb=0xB38B92E042FBB019
++frame  259 hash=0x386F2F308CCF86A0 fb=0x538B38F43EABE867
++frame  260 hash=0x28D08B2BD6459C63 fb=0x30D15FF3097B09E8
++frame  261 hash=0xCCBF8B90671ED907 fb=0xFA67A353DFAE50D3
++frame  262 hash=0xF36C76BD752F3DDF fb=0x0A3EF975230F2AD6
++frame  263 hash=0x5758C43356716B50 fb=0xEC71352BBC024906
++frame  264 hash=0xE9B0C6E5A6693F14 fb=0x014FFC8214D29886
++frame  265 hash=0x333BB236649B1A07 fb=0xC6E06DFC65B2D267
++frame  266 hash=0x7D78AAEEB2BB1DF7 fb=0x1F38C604469A633D
++frame  267 hash=0x9FEF211D1F3ABFB4 fb=0x8F1D4A1EB74E9520
++frame  268 hash=0x2091BB038D8F9A3F fb=0x9AD987BD450C56E7
++frame  269 hash=0x8F3C78D76BEB882F fb=0xAA82997DB0FC09E0
++frame  270 hash=0xD1FE4FB82E49C366 fb=0xE7BB56EBBCD6CD5E
++frame  271 hash=0x0382C7ABE6D77AD7 fb=0xA0EC3951DCFAB55B
++frame  272 hash=0x477798E501923B14 fb=0x15162791959DAC5D
++frame  273 hash=0x52C1C6E0248B74E0 fb=0xF075339F9A7559BF
++frame  274 hash=0x6D6330A167F6332E fb=0x292BF26C63735B3A
++frame  275 hash=0x8B7483B810770454 fb=0xDFBB9E6C4583BF4B
++frame  276 hash=0xA483479423D29609 fb=0xBA45F07E95F3BC1D
++frame  277 hash=0xD5B23F4926B9DA31 fb=0x4BDD129B09F6C41F
++frame  278 hash=0xD79EA20DEE96AD8E fb=0xEBE7F966EE6B11C0
++frame  279 hash=0x22A81EEE574E7ADA fb=0x19F3B37F7A5C265F
++frame  280 hash=0xA16AC5C06E362246 fb=0x0EEEC0B10F29FB7A
++frame  281 hash=0x581AA26FC8C86716 fb=0xBD59A8C0FAB55309
++frame  282 hash=0x16BD43517825E889 fb=0x790AD84142DBB63A
++frame  283 hash=0xA8AF93C53EABD44C fb=0x5D01732BF6F55391
++frame  284 hash=0xD56C6377A0DF5460 fb=0x780CC794CE2DDA8C
++frame  285 hash=0x1523056BEFDE1F9E fb=0x2334EEE9A31B966D
++frame  286 hash=0x04F2954AF19095D9 fb=0x3BA3C82FC3500E2A
++frame  287 hash=0xD868DB90AD6793F7 fb=0x42068A681ECE921C
++frame  288 hash=0xB74C447440B53467 fb=0xE44584A4B14B5779
++frame  289 hash=0x4DAF9700ED5EFE0A fb=0x403D104AC9C0FB80
++frame  290 hash=0x8903BD2A09B8FBD4 fb=0xFE8A2B7BF6D0BB46
++frame  291 hash=0x4865E72E57681146 fb=0xC061F1C4E69972D2
++frame  292 hash=0xBCC2C475F15E9699 fb=0x3A945A35F3D48648
++frame  293 hash=0x61237A200A5CD0E5 fb=0xAB1CA5696571DA04
++frame  294 hash=0xD11A0E3AEAFFE8EF fb=0xF1D3BD447E55E154
++frame  295 hash=0xC7E660183DE946C2 fb=0x499825DEC8DF3244
++frame  296 hash=0xEA1D812B6DE0F4D7 fb=0xFDEC5427C510209E
++frame  297 hash=0x425D2D8C73CECF71 fb=0x3D60059E772F60B2
++frame  298 hash=0x7D8BCE6F9BBF4DF7 fb=0xFAC8B6B109B65D11
++frame  299 hash=0x625D0F09C6B71392 fb=0xAF6CC7D7B32CB356
++frame  300 hash=0x5D927127B68A7FC8 fb=0x4AB22EA494E12553
++frame  301 hash=0xDF745AC119C39985 fb=0x7DBE38AC84BDFBB8
++frame  302 hash=0x5E35AFAAC029E524 fb=0xC40A5AF23E83B849
++frame  303 hash=0xEF485DFC42D6825D fb=0xDB728EF10D2FF9A9
++frame  304 hash=0x41650BB78031D6DB fb=0xF6021C152494B53D
++frame  305 hash=0xAA52E8031B3909E1 fb=0x4A10B72BC1188F2E
++frame  306 hash=0xDD391B15B85CE05A fb=0x7AA2C9D7F5292C6E
++frame  307 hash=0xD7C28A3256A89F71 fb=0x83F58565286AE4C6
++frame  308 hash=0xE0914CC9AD714BB7 fb=0x9586F4AFFAC3BA78
++frame  309 hash=0x43F4352D45E462CA fb=0xA72106CAAEA03D44
++frame  310 hash=0x2B45CB4374509AB3 fb=0x01195EC087C74790
++frame  311 hash=0x7F19398AE2C42E48 fb=0xEFC78D442B5199D7
++frame  312 hash=0xE4CC086B81603D9C fb=0xE45038D6D7AEE2C4
++frame  313 hash=0x0EC0CA14226602C3 fb=0x84B814B8059DAFA2
++frame  314 hash=0x15EE0725FD3791F5 fb=0x2BAB679D6732FD01
++frame  315 hash=0x2C667E154D7DB35F fb=0xE80FD9256DF16E6C
++frame  316 hash=0x032DBF1531E9B7F6 fb=0xD990B0D754289176
++frame  317 hash=0x0F026C0BD32054D7 fb=0xF5CAFC259482D1FA
++frame  318 hash=0x72D48E09D53F2A5E fb=0x9637BEFE5F31B510
++frame  319 hash=0x89D1623C054DDED9 fb=0xBEB175250D2A9DA3
++frame  320 hash=0x37BC3D9DE34DB9A8 fb=0x3E1FEDC4DEF42B1F
++frame  321 hash=0x180F3E57041C6991 fb=0x4FF8F45930136BB9
++frame  322 hash=0x3A3B4A4A30342ECB fb=0x7918DCBF82417370
++frame  323 hash=0x44A946030A93B5A4 fb=0xC69106D89CAC92A5
++frame  324 hash=0x9F25D15E9112378F fb=0xC3B4BCB0843BDD81
++frame  325 hash=0xC50B31C7A0C672D4 fb=0x58D24937F916A753
++frame  326 hash=0x77733C9BA4CC0CEE fb=0x0F94E4E34B3DDB64
++frame  327 hash=0xFEA1D019FC4A2033 fb=0xF855CF5664AD2868
++frame  328 hash=0x84D3CF2E4E1370C2 fb=0x5EC0F9BD9023F1B5
++frame  329 hash=0xA8671DCBB06FE4C6 fb=0x370A1FBE2AF03DE7
++frame  330 hash=0xD41EF5AF40FA639A fb=0x5408F8E3295106B4
++frame  331 hash=0x1EE0ED08044B7A29 fb=0x86ABB682FBF403CD
++frame  332 hash=0x895B93F7435E3192 fb=0x3D26A40E2930478D
++frame  333 hash=0xA04A860EE7B954D2 fb=0x5607D0AFF6115FC6
++frame  334 hash=0x3D09748358836E70 fb=0x866138FC416BC072
++frame  335 hash=0xE2CF906A69DF87F9 fb=0xE38EF42AFBACADB3
++frame  336 hash=0x8B9B1E0EB578B956 fb=0xFF6FF11F2CE3B95F
++frame  337 hash=0x26CB41DC04C50731 fb=0xEF0592B63112A3A9
++frame  338 hash=0xA4CA00D07EDB7E09 fb=0x105CF332D274C279
++frame  339 hash=0x3C98358CF78FB1F5 fb=0x69F08FA596EEB9CA
++frame  340 hash=0x99F89F538E49B18B fb=0xB8642EF6992584A3
++frame  341 hash=0x71B0C57A97666EDC fb=0x52ECC6753553226C
++frame  342 hash=0x778F1BBE356E71C3 fb=0xA1F3E770EA64A965
++frame  343 hash=0x7390A74311A81A46 fb=0x30A8E72AC3E6E3FE
++frame  344 hash=0x36D53E3BC250DD6D fb=0x1798440DCA484A02
++frame  345 hash=0x60473092649A1802 fb=0xD65F23377939697A
++frame  346 hash=0x87A18810C5EB2264 fb=0xBFB72690726A144E
++frame  347 hash=0xE91A9E55D37AA6B8 fb=0xCDC1904156DC85D7
++frame  348 hash=0xC1C200E36D841A21 fb=0x77A03E9AEBA664B3
++frame  349 hash=0x109DF197DFDE2A46 fb=0x573EA702032B32CB
++frame  350 hash=0x4D76F9B837973428 fb=0x10832C7C8451CD51
++frame  351 hash=0xABA5A9C93738A924 fb=0x93C1C21A01E19047
++frame  352 hash=0x5DC614B06C31F80E fb=0x845CF1222172EE3A
++frame  353 hash=0xB945766584C99C92 fb=0xD81D6F33F0934367
++frame  354 hash=0x99427492C6907D39 fb=0x170F589D59E3A277
++frame  355 hash=0x635528A284A3B8D9 fb=0xA2F059965F495916
++frame  356 hash=0xE19F55033A4F49FB fb=0xCD9687CF5F6C567A
++frame  357 hash=0x4E84DD523073F895 fb=0x70A939973BB98CDC
++frame  358 hash=0x3EF44F4D3BC63E34 fb=0x016AED5844F30298
++frame  359 hash=0x8B67C207996371E2 fb=0x7AA736FEBBB0CF15
++frame  360 hash=0x1B225AF8A1A3B7D0 fb=0x26C0D9219D5544D4
++frame  361 hash=0x22B85BC86B5AE370 fb=0x9DDAD5099CE2283D
++frame  362 hash=0x31317929B248AF17 fb=0x62F03BA0F67CAE6F
++frame  363 hash=0x6EA66997EF18A792 fb=0x568EAABB24298D58
++frame  364 hash=0x2D3887A647A2ED96 fb=0x7457C0C8DEC85929
++frame  365 hash=0xAC4C720852B7DCE3 fb=0x91EC832E7ACB5971
++frame  366 hash=0x8C9C26CAEEC74898 fb=0xE1607A666C9F2EBF
++frame  367 hash=0x43DF92D3C06FCA1F fb=0xE2C9236603B85F70
++frame  368 hash=0x16373D8C880F7743 fb=0x1CC38E99C24137CA
++frame  369 hash=0xF7CED2565FFBEF8F fb=0x7A2630093DB488F4
++frame  370 hash=0xA2BEB908D3963C83 fb=0x377A1B6C99BEC404
++frame  371 hash=0xA1A638D3010DA089 fb=0xBBF3894F4381E6F4
++frame  372 hash=0xBA989D105348A111 fb=0x3BA1A4E257F6634A
++frame  373 hash=0xC1A633E0DB5858FD fb=0xC7A01FF749F57662
++frame  374 hash=0x0BE6953E160C005A fb=0xE043762F597A7257
++frame  375 hash=0x73B7A9D6D04C3E51 fb=0xB2A942E506ECDD1A
++frame  376 hash=0x6398B1EB7387C32C fb=0x0B0DC80FCC50994B
++frame  377 hash=0x1FFCC74A7E55D808 fb=0x214F817DF2392DFD
++frame  378 hash=0xB61F9A6DCDFE4C72 fb=0xA04A68668D5788A4
++frame  379 hash=0x249E2CCE34B98A1D fb=0xA69A53822BD8BD6A
++frame  380 hash=0xEDCBAD8C4B7A8474 fb=0x11D5FB2F97FD5C0F
++frame  381 hash=0xC22E23C5F908C328 fb=0x0F9FFB8BB0FAAB67
++frame  382 hash=0xC0EBBE893D973887 fb=0xB6F046940520C194
++frame  383 hash=0x146DA44362C7ACCA fb=0x6AE814C16437E32A
++frame  384 hash=0xD6B99136BE493550 fb=0xF4F9AE6AF19D3D2B
++frame  385 hash=0xEC89C4C9223EFA03 fb=0x1D6B1C26E647DE92
++frame  386 hash=0x9BF0421630E51F39 fb=0x3BCD23E02C23CD69
++frame  387 hash=0x39A7094CA1AC2A6F fb=0x0852F39334893246
++frame  388 hash=0x4D93775E915D9406 fb=0x6299A86A693FA5A7
++frame  389 hash=0xC6CDD766574ACE6A fb=0x080488E439DE2353
++frame  390 hash=0x2820C4DA25628E62 fb=0xE792CB12505CF015
++frame  391 hash=0x31D3C6F1A33AF3E3 fb=0xD8254482D7AB6382
++frame  392 hash=0xFA7B3CB78E59AA79 fb=0xA3D5D2BCC945F453
++frame  393 hash=0xD610DA91DBBD4B9C fb=0x61ECA1B5860A1457
++frame  394 hash=0xBD2B250983876CBD fb=0x8AB48309CEDAA097
++frame  395 hash=0xCF86692C14196828 fb=0xC610FE26BEF69EAE
++frame  396 hash=0x76802707B1FEB6FF fb=0x14EE8191D54A5B59
++frame  397 hash=0x48B8491DAB0DBCAE fb=0x1DE6211ABDB4D128
++frame  398 hash=0xD23F71DF29C81611 fb=0xC51C434930199977
++frame  399 hash=0x48C360459D402101 fb=0xF6274262F95D9062
++frame  400 hash=0x0B8D12422C5A76D2 fb=0xDF56A620AE2A6CE8
++frame  401 hash=0x3930595F7896E8AE fb=0x285424FF99038763
++frame  402 hash=0x6354E7451925F75A fb=0xADD9087B9A579F81
++frame  403 hash=0xF5F20E28039B1A37 fb=0xB69C868C4DA7E314
++frame  404 hash=0x5D24DD005C4A2C4C fb=0x3BB74B3D5D523284
++frame  405 hash=0xEA9DA57F5DF93F3B fb=0x1D6AD9B540B3E36B
++frame  406 hash=0xDCCBE0CB26FC4B12 fb=0xFFC0EB1FDF2A9C22
++frame  407 hash=0xA4F62311C35B7DB7 fb=0x5091DC074F6AD854
++frame  408 hash=0x24308FCA007D7E44 fb=0x61B78C3AE5C036B4
++frame  409 hash=0x5A4A3080A3A9E918 fb=0x41DD7AAE4A21C1C9
++frame  410 hash=0xAD983FB4F71B3351 fb=0x390E828DB928E9C1
++frame  411 hash=0x46A2369DD3E1E8A0 fb=0x2E62737FA9BC8120
++frame  412 hash=0x6FBE51A079CA150F fb=0x4837F15F00729660
++frame  413 hash=0x0C733C82B8993477 fb=0x25E018ECBD372293
++frame  414 hash=0x44A7C88423809173 fb=0xB60F7A94457D3669
++frame  415 hash=0xE644928A130BF9EB fb=0x55C84EB4CD5BAAF7
++frame  416 hash=0xC2B30124FDC80C45 fb=0x2E2607E00A7A3BC2
++frame  417 hash=0xB34A4DB07BD206C8 fb=0x6C6FFC369DD02D38
++frame  418 hash=0x4A65D3828192DCC6 fb=0x708F8947D92A626E
++frame  419 hash=0x846FDF1C22B1196C fb=0x41292AA0E187E12E
++frame  420 hash=0xFF53A7B55D77BB1E fb=0xA62A30FD95B2A04E
++frame  421 hash=0xF85F564E82D43C0B fb=0x50E74B5EFDB9D9BA
++frame  422 hash=0xD0B87D2335CB0FAC fb=0xDE2544A3956B91AE
++frame  423 hash=0x3E1B4993CC6819B6 fb=0xFB09F1D70CB5D802
++frame  424 hash=0x6E6FE4650AB4F31F fb=0x40CDB9ECA2EACCD1
++frame  425 hash=0x4D99AFE0F1FFFC9F fb=0x92296834005964EC
++frame  426 hash=0x83A0B5FB2C3D1A5A fb=0x0B7D9ACBA3B93B93
++frame  427 hash=0x0479B902ACFD68FE fb=0x87750B20D3D2C9D9
++frame  428 hash=0xF72B5575ADAB2876 fb=0x83A67FF21CEB4B56
++frame  429 hash=0xB284B88A4FB5B3FA fb=0xE64A7ACE4A325C42
++frame  430 hash=0x708C1C4145579B93 fb=0xD7DC29104C01EE24
++frame  431 hash=0x639F8AAA6D056368 fb=0xB74DBC81851C1E47
++frame  432 hash=0x8D72170FA6351614 fb=0x90A16446FDED3B8A
++frame  433 hash=0xB16F9BEB7E03357F fb=0x97CF559EF1791D91
++frame  434 hash=0xAD6C44F2B8D0DC7C fb=0x68A07E60DA319800
++frame  435 hash=0x126CEED854AD28D6 fb=0x135A5C23A47679CA
++frame  436 hash=0xAA03B3F331F70621 fb=0x0FCC47776EBF82CA
++frame  437 hash=0xC80A2180A0A45911 fb=0x91AB0ED930D25FCB
++frame  438 hash=0xB8FB709941990DDF fb=0xF8862758436C5F96
++frame  439 hash=0xD33169F26CD70C37 fb=0x7459AED9E7A515D1
++frame  440 hash=0xECB3181B74B32340 fb=0x2EEEB379115A7C88
++frame  441 hash=0xF7DCEAADFE3AEF28 fb=0x5DB4C8D2380F880C
++frame  442 hash=0xBBB70E7E2FE5BA38 fb=0xBA03309BAE398043
++frame  443 hash=0x9E5EDB8A4E52A509 fb=0xA06CAFC3F04FE181
++frame  444 hash=0xD83290A9CB628491 fb=0x39A5C8E3E7501E20
++frame  445 hash=0xBCFBB739B728C943 fb=0x49CEBE67F2FA0C91
++frame  446 hash=0x1CFA3E0D2D4BCF0F fb=0x2E739BF9D39F0DF9
++frame  447 hash=0xE9199B6FA00F7242 fb=0x92674B807EEAC1EF
++frame  448 hash=0x566F08F0C5E21D8D fb=0x409D0FEB33EFC355
++frame  449 hash=0x037B8E777FC75D8F fb=0x0E2EA8B1147255F5
++frame  450 hash=0x57FF07A3033F0E67 fb=0xCDEF75124E595506
++frame  451 hash=0x613940DC7BDE5681 fb=0xC84D4759F4836D61
++frame  452 hash=0xD24986BADA6DD0EA fb=0x1C0897A00FC9CBA6
++frame  453 hash=0x731E2166AB43A4A6 fb=0xE7C3FC7281F154FE
++frame  454 hash=0xF4497722B1700B15 fb=0x594E62CA74B8DD97
++frame  455 hash=0x0BD624E0946705EE fb=0x60D04FB9B64EB720
++frame  456 hash=0x60717D0B16F91B3B fb=0x103D4008C3DDE080
++frame  457 hash=0x5CC92B3AE0164585 fb=0xEC51A92EF7D79C2B
++frame  458 hash=0x677C094BCC5685A1 fb=0x8EED43931A52003A
++frame  459 hash=0x50329AADE66120B7 fb=0xE7E3A07929B1A195
++frame  460 hash=0xF71468EBD4A127E1 fb=0xB24E83146F465F90
++frame  461 hash=0x8ADFEC9F6B7EE04B fb=0xF12F427241310DA4
++frame  462 hash=0x5707D7EE910EA8D9 fb=0xAA11BB2A00CD3B95
++frame  463 hash=0x312FE4DADB3B09D8 fb=0x2CE180DCBB3008DE
++frame  464 hash=0xFA63B6F7832EAE8C fb=0xF36B9A5C5F3DC1CF
++frame  465 hash=0x1C72210DE7E3FA36 fb=0x3C2ED605C005D49D
++frame  466 hash=0x5ADA74C09D32CF1B fb=0x3C04D95A6324D328
++frame  467 hash=0xA50D19EA950F7CD2 fb=0x7ECD3E9AE71FF485
++frame  468 hash=0x0E596D618CF209ED fb=0x340DAD83B92AA937
++frame  469 hash=0x300AAD13BB749F05 fb=0x5BA22DC913900CCF
++frame  470 hash=0xB3684028CE7B0FE9 fb=0x45F2C4D7F76D574C
++frame  471 hash=0xF8AF624DA2FFE005 fb=0x3451102E4F97423F
++frame  472 hash=0x35838ECBC4E948C4 fb=0xE6D89A69D4B56A45
++frame  473 hash=0xB7FA320005861FB2 fb=0x84070B605CB58475
++frame  474 hash=0xFDF2E83B9866A245 fb=0x2605202D2DE81703
++frame  475 hash=0x55A8DD49C879FDDD fb=0xDD336A2AB63DC3B3
++frame  476 hash=0x0F77B4E761834E0C fb=0xEE4D8A09D47B8A39
++frame  477 hash=0x433CE8F79EB1B734 fb=0x90CF3B412DB3442C
++frame  478 hash=0x3A62E72CF0A32A42 fb=0xAFA9CE8F305D21CA
++frame  479 hash=0x033450FE67B30782 fb=0x18E99B30E4A45605
++frame  480 hash=0x26A5D4087B4EBC25 fb=0xE93818525A42EE5B
++frame  481 hash=0xA76A016092CF1CB5 fb=0x4DD91A7BE7E2CBB5
++frame  482 hash=0xF11C9CE0E635CB9F fb=0xD3F3EAAEE27450D8
++frame  483 hash=0x39485C0098E03D1A fb=0x7563586042D99B04
++frame  484 hash=0x0A33F7A03EC701A2 fb=0xCE6CEAE37AD6E896
++frame  485 hash=0x5F57A8A237D9F25B fb=0x544440438F5F0106
++frame  486 hash=0x4BD4282BFD07CEDE fb=0x6C14EEE5147847A9
++frame  487 hash=0x30B6D9075CE57201 fb=0x8CD0733B06B41C3C
++frame  488 hash=0xB2B1D3F412B5A640 fb=0x1123CE1AA63371A0
++frame  489 hash=0xA2FF1331E9196859 fb=0xDA6C3AB0F518A798
++frame  490 hash=0xC1E3A9DE063304D1 fb=0x85C500500EFBF031
++frame  491 hash=0xC1024F0EED6C7A9B fb=0xE5EEDF563FA13684
++frame  492 hash=0x16DFB5F02F1EC800 fb=0xD90DFB773E1B510D
++frame  493 hash=0x48FCEF9061BDF53D fb=0xCA97B81E6297CD0C
++frame  494 hash=0xDDEB90B06B02EEBF fb=0x97BBD3419AD78D94
++frame  495 hash=0xA515C26C2F246B21 fb=0x8AE74C571A1BBCC9
++frame  496 hash=0xBDEA2BBBE3333990 fb=0xF8EFC2633D231502
++frame  497 hash=0x2D1E67E135446F24 fb=0x5E06FD144EDDCEC6
++frame  498 hash=0x27E06B5C195EB3B5 fb=0x440A7618407F4CDF
++frame  499 hash=0x15C211A2E6322CF2 fb=0xDF5FC04E722EB88B
++frame  500 hash=0x92A1407F011DA893 fb=0xAC121E82F5A78D8C
++frame  501 hash=0xE518FFD74491606B fb=0x6DCBF3A93EEE6BEA
++frame  502 hash=0x5DDBFF3D692A9122 fb=0x6A1C0B44CD1F38BF
++frame  503 hash=0xC112C0703FD1B402 fb=0xEA3078C8F41E3FF3
++frame  504 hash=0x57E46659FCF4E47B fb=0xD918641C30C0D49E
++frame  505 hash=0x9B6D082DC43EC16E fb=0x8FCAABEF28DEC3A5
++frame  506 hash=0xE0B557AF3E74872C fb=0xAB6C589ECE638CD3
++frame  507 hash=0x2733F799FB5558C2 fb=0x4D765051E2FEBE3F
++frame  508 hash=0x0AC6DC8A90315D08 fb=0x170F4BFC63E4AE14
++frame  509 hash=0xFE0CA6B552C4EA0F fb=0xDF0D3F57F4BC17AE
++frame  510 hash=0xE75F7E917146FE81 fb=0x7A147F4EDCB37D2B
++frame  511 hash=0xF3E6EFA66F81AA3A fb=0xBC8EF6C255FBC791
++frame  512 hash=0x1AE29C797F93074C fb=0x3AFCFEC87EC61C5D
++frame  513 hash=0xD7D2D9CF14BB4ECF fb=0xE03B5ACB9CA4EED7
++frame  514 hash=0x8E04304B9D6BABC4 fb=0xABBE51A5DC22AADC
++frame  515 hash=0x8073E0DB5FA2BF27 fb=0xE12B49BC23A3DBE8
++frame  516 hash=0x5D01E206AA2BCBD3 fb=0x34D7335DD06DA0EF
++frame  517 hash=0xB5104D4EACC86CDB fb=0xE999A039DEB7DE05
++frame  518 hash=0x7B07FED782F75F46 fb=0x13405433DED13E37
++frame  519 hash=0xF2C66818E2E4E7AE fb=0x7DAFE5C0174FB6AC
++frame  520 hash=0x924D3526AC378D34 fb=0x4E3594241836E279
++frame  521 hash=0xAB571BFCD2900805 fb=0xD911FCE981DFF8BF
++frame  522 hash=0x85188C76A76BA973 fb=0x08AC352BF645BE96
++frame  523 hash=0x41100628842D4CA6 fb=0x2741D446DE0C0BE0
++frame  524 hash=0x2742ABBD1B5E5824 fb=0x3E514FE10857CD8F
++frame  525 hash=0x1D7D02AB9F3A4C1A fb=0x24BF4DAFE4FBB35F
++frame  526 hash=0xE6081A126FE0DE03 fb=0xAF6FE950545CF32B
++frame  527 hash=0x81BA56F14BC4E756 fb=0x0952810561B404F0
++frame  528 hash=0xF4C1860B1CB0075C fb=0x5A86D9501188BA13
++frame  529 hash=0xD4503FD6D53DAEC6 fb=0xFD39AFEF1CB1C29B
++frame  530 hash=0x7630D8D236B24F54 fb=0x617F75D785BB269C
++frame  531 hash=0x1DB59480DD57DDD0 fb=0xDE8E88A48FF167DE
++frame  532 hash=0xAC4D7F97E117E79B fb=0x20A0CA536B7B82D4
++frame  533 hash=0x3BF7F26DD062D10E fb=0xE05E624DD2895CEB
++frame  534 hash=0xA4B5CFA6EFD10F34 fb=0x2A0C0CFD4A93678C
++frame  535 hash=0x2FB542C61507B02C fb=0xDD76E85DD73D56B4
++frame  536 hash=0x8DAB05B82F58E157 fb=0x1DACB38007E05699
++frame  537 hash=0xFB5FB9015FBA4695 fb=0x89FEB73869DA9ED8
++frame  538 hash=0x848671BB2CB6DADF fb=0xA8C387FC0F12B7A5
++frame  539 hash=0x4C83DFDA11E7F4C1 fb=0xAE656ADED0798171
++frame  540 hash=0x1637144AD1D5EDEC fb=0x5431C63AFDDAC20F
++frame  541 hash=0xA330C87F4959E83E fb=0x434CAC86606F2DC2
++frame  542 hash=0xE198F8A59F385F95 fb=0x07D3F771E5FEC8B5
++frame  543 hash=0x7D7BB414377A0FCB fb=0x9937AA9B29F3F8E2
++frame  544 hash=0x6726BF31B04B5A71 fb=0x501C267CF305DEB1
++frame  545 hash=0xAFB0219A6974E206 fb=0x7E8ED4ABAD5F5F09
++frame  546 hash=0xFD40740C22B5BBF1 fb=0x40BA51E70B1C25AC
++frame  547 hash=0x30B10631C33A99D6 fb=0x5B1F078274FD1A34
++frame  548 hash=0xCD2422F8CF65F1AE fb=0x1FCA384754BB6A80
++frame  549 hash=0x51BBCB0787AB7CAE fb=0x3FCD63060C1DDC5E
++frame  550 hash=0x11003ED0657BF402 fb=0xFAFC524AB9CCE836
++frame  551 hash=0x00C9572D160CA203 fb=0xFE8F02F41D6D6B42
++frame  552 hash=0xB1D72C4B41A840BD fb=0x8A5AFFCE8E206859
++frame  553 hash=0xBC81F2F51BB7F4D5 fb=0xFD540AB47B9CA8FA
++frame  554 hash=0x89EDFC7B55F7E3DF fb=0xB5BD96253DD0547E
++frame  555 hash=0x6004C67DAABC3B1A fb=0x98A1E7221DE01A70
++frame  556 hash=0xF2DA23EAB1312961 fb=0xFE722782C9BEB324
++frame  557 hash=0xD1B6A22ECD8AD886 fb=0x0DEA4C32301CD46D
++frame  558 hash=0x328E9F87C544E2FD fb=0xFF747B43DA6325B9
++frame  559 hash=0x2CD0388571391420 fb=0x73AD59AC4F67A16C
++frame  560 hash=0x0F3ECCC035C087FA fb=0x5064C4DAE35493B0
++frame  561 hash=0x4334160BAB9C5D1D fb=0xE052A26254AB78D9
++frame  562 hash=0xE90BE32724369F75 fb=0xEDD7DF37248B6D7F
++frame  563 hash=0xED2DD64CE92C68C9 fb=0xA75F95BBBFC6F9A3
++frame  564 hash=0x37B83174D5DBE9D3 fb=0x90C44ABBF2B30810
++frame  565 hash=0x1CB16C239005A0B8 fb=0x93260352AC8B2038
++frame  566 hash=0xB41FB710F692E3A4 fb=0x047A3934EE3C85E4
++frame  567 hash=0x13A5B5E91847BABA fb=0x7060D180B4AC68E6
++frame  568 hash=0xED7CD27EED1BCA72 fb=0xEF4435F2090EC9DC
++frame  569 hash=0x0865A20A8B469722 fb=0x246EBE9545474A27
++frame  570 hash=0xF18290EF0E814A17 fb=0x54C01FFA10F387B1
++frame  571 hash=0x47A7748EA67688EB fb=0x868A41FB600B929E
++frame  572 hash=0x896B5D1525331143 fb=0x0A607479CAF6AD7F
++frame  573 hash=0x5ADCC8960CA5F6C8 fb=0x6D83C04EAF05234F
++frame  574 hash=0x14658FA1FEAA47CC fb=0x018B2FB418D53C01
++frame  575 hash=0x167D8A9DCDD583BC fb=0x4E3C4D040A640DBB
++frame  576 hash=0xBF51A7DB421531BF fb=0x126B8B41A99D8281
++frame  577 hash=0x1083D8102618A81F fb=0xD1C112206BF783E8
++frame  578 hash=0xD56A0D62FC7A31D3 fb=0xBA9F80525A33277A
++frame  579 hash=0x7B93FBD005ECB972 fb=0x07367EDA4A861A05
++frame  580 hash=0xBC7BB38E16F4088E fb=0x3AD7641B1CE65E0F
++frame  581 hash=0xD2B98E8897970D4F fb=0x7540F0A1B65F9D4A
++frame  582 hash=0x2CD582AF26870C5E fb=0xEA49E61FE543083A
++frame  583 hash=0x4756A821735F53D1 fb=0xC6221E7F0264DFDD
++frame  584 hash=0x2C0D63E749AE2BD3 fb=0x3D781B8BA1E8AF8F
++frame  585 hash=0x9F8D63EE0AB80442 fb=0x5422F25FCC67BB4F
++frame  586 hash=0x2900E538560EF6D5 fb=0x3ECB2A325A55AE0F
++frame  587 hash=0xBC76A433A35B89AD fb=0x151E0B5B55BBCC38
++frame  588 hash=0xC1463890AD1E431B fb=0x5976E9ECA9DE6239
++frame  589 hash=0x3D3A7367BDD35C2B fb=0xE45FD13915B66416
++frame  590 hash=0x38D0039A4D829F6C fb=0x3E8BE44D04D0333F
++frame  591 hash=0x4A67206537162548 fb=0xD9E7F39778EC3714
++frame  592 hash=0x5A3350C3390AE438 fb=0x422E50974B414057
++frame  593 hash=0x7031EFE61D1EC71F fb=0xC4DED1CA140F4397
++frame  594 hash=0x95068C0880720CC3 fb=0xF935B7D034BFC727
++frame  595 hash=0xDC14C0F6DA538993 fb=0x37A3E9A4DA833697
++frame  596 hash=0xF70942490B483B5A fb=0xE6F9A67C7B2C1DC3
++frame  597 hash=0x126D7BDAFF64DE36 fb=0xE8D58858FA8E0D52
++frame  598 hash=0x444431937BDC5F81 fb=0x2FD2E17FD8B35901
++frame  599 hash=0xDA5E656BB530CEC2 fb=0x4D33E3F4E3EC850F
++frame  600 hash=0x5363171BFE1FE6CC fb=0x2E64FE0B1232C8BF
++frame  601 hash=0x482A451024EDDA44 fb=0xC112A798F0BA94F1
++frame  602 hash=0x666C17F0AD9328F7 fb=0xD931F629B4894462
++frame  603 hash=0xA63023FD2850E40A fb=0xA6A01C558B706B4A
++frame  604 hash=0x8D73A87D19DB7627 fb=0xE5CF1F61C01F8B76
++frame  605 hash=0x9E7431185DE09002 fb=0xA708D369B739B009
++frame  606 hash=0x3D4C26BF917CB8C1 fb=0x4434F4EFD79855ED
++frame  607 hash=0x7DF8F3DFCD9E2E3D fb=0x5B9571C6A9C1C600
++frame  608 hash=0x38CB8DBE05E3652B fb=0x0EB110D9AB1F4ED9
++frame  609 hash=0x991F7B30C5688E4B fb=0x088A0A7B25253157
++frame  610 hash=0x8A77DFFD3B2602DC fb=0xFC26A558810E82B7
++frame  611 hash=0x02C77286189C244C fb=0xF9824AE3547D87D7
++frame  612 hash=0x899152873F20452D fb=0xEC09650186AC3739
++frame  613 hash=0x7B766EA83425CBE8 fb=0x5965705809BFAC72
++frame  614 hash=0x8305039B226E7775 fb=0x65043E557C661242
++frame  615 hash=0xE3A39827DBE87539 fb=0x58ED85F09FC4D48F
++frame  616 hash=0x9A0436FC5FCA5DC9 fb=0x8B28157B58343F6A
++frame  617 hash=0x87AFA1065114734B fb=0x09A1714DC8E6E53F
++frame  618 hash=0xA8BC336281919F4D fb=0x7FE42100E93A8FA6
++frame  619 hash=0x5AAF9835B32230F7 fb=0xE3B4845A0B678302
++frame  620 hash=0x424E71EA40D8B942 fb=0x84BA9F1AF3B5E3F6
++frame  621 hash=0xC3F9C49281C2B0AB fb=0x35013B17A8B4395E
++frame  622 hash=0x8D6451975AD0FF9B fb=0x029A5E49C05252CF
++frame  623 hash=0x7CA4E91A510D86A1 fb=0x21FC83E8ABB57038
++frame  624 hash=0xF946A430628B5113 fb=0x9E2BA7D1DC49CE59
++frame  625 hash=0x117DDD64131FC0F6 fb=0x143F1AF860B6E5BC
++frame  626 hash=0x980D9B9ECB35F982 fb=0xFBBFD23BCD8091B4
++frame  627 hash=0xA36BC5B72342B242 fb=0xC98887CB4836EDED
++frame  628 hash=0x8F1693F73DA6660F fb=0x82027BC795296C57
++frame  629 hash=0x9D2CDD9E02CD0757 fb=0x99488E3FE0FD088F
++frame  630 hash=0x7B5AC2943D0CE704 fb=0xAD900CC1D3E0811A
++frame  631 hash=0x49FF386DE51BC2EA fb=0xED2892728AAAFB6A
++frame  632 hash=0x731054D5587770CA fb=0xD980F1E86ECEA8FB
++frame  633 hash=0x493692ABE155282B fb=0x9837632627FCE632
++frame  634 hash=0x13C992EA3B82D73B fb=0xE8B2ADA574A9F163
++frame  635 hash=0x5B4D2A4167216F76 fb=0xDB0F8D061B8B18D1
++frame  636 hash=0x39AEEF8B67FBB95A fb=0xCF5D61D7671526A1
++frame  637 hash=0xA43468B70A15E244 fb=0x7867220679AC9139
++frame  638 hash=0x42EC7C9B1A1AE474 fb=0xBF4C755F6FDEBBD5
++frame  639 hash=0x25375F27F3E65C7C fb=0x1E874B23DC7B586A
++frame  640 hash=0x0BD2A6E790F1A9BC fb=0x52543A928FC36456
++frame  641 hash=0xCBBC43AA8442D8A7 fb=0xDC9F7E0324C7D1A2
++frame  642 hash=0x547A378F6FD2F8BF fb=0xC1D88BE91F0A1C32
++frame  643 hash=0x45632D7E9EAAD76E fb=0x7AA948567577D14D
++frame  644 hash=0x8EE8D963263FF2FB fb=0x011BA2808BBB1FFC
++frame  645 hash=0xE0BD5B72BF8A7539 fb=0xC5954C6AE9B25F04
++frame  646 hash=0x54C874AD2685AD01 fb=0x01BE17442AE1E938
++frame  647 hash=0x8337900575203E08 fb=0x221939E930721862
++frame  648 hash=0x14148BC0B07E4B2B fb=0x2F93B1D2AD91067A
++frame  649 hash=0x6340ECF5FB293E0D fb=0xDAF08C9FF96695EF
++frame  650 hash=0x9CFA4CAA06718B87 fb=0x158A6BBD24553086
++frame  651 hash=0x13158351561F5C5B fb=0x7DE2D88B27C0C075
++frame  652 hash=0x0C3B0832BFC245E6 fb=0x549C5B9103EE48D6
++frame  653 hash=0xB76F78F625EB0815 fb=0x52349CB88664E9EB
++frame  654 hash=0x2A8712ACFD1B5619 fb=0xCB88B84D26BA7670
++frame  655 hash=0x90BD919C27939161 fb=0xF7A37293B78EC79F
++frame  656 hash=0xCEC20DA6E3CA7067 fb=0x0F4231B3DBFC4BF3
++frame  657 hash=0xF27DB456860577C4 fb=0xF7139F466F03BE6E
++frame  658 hash=0x87DE6C37966BA814 fb=0x8F58773251B717F3
++frame  659 hash=0xB3B9380BB79815F8 fb=0x56FB99EC298D3EC1
++frame  660 hash=0x7F8E5F537B8FE653 fb=0x9AD631851D194229
++frame  661 hash=0xC3EB904C3F7BE1E2 fb=0x420AF73104C4208C
++frame  662 hash=0xD563F61D5D8912AC fb=0x480158314752205C
++frame  663 hash=0x6D1B08B786FCDBD5 fb=0xB4B371434D44EDFC
++frame  664 hash=0x3D5D89AD902AB53D fb=0xC1EA33F3F4AE9A49
++frame  665 hash=0x6861FB9AC7A04A05 fb=0x11720077E2BC63D0
++frame  666 hash=0x8A3B0C7F05163DF2 fb=0x77A78D23192375B1
++frame  667 hash=0xF017DE7B12143975 fb=0xAD56CFB8AF975615
++frame  668 hash=0x84541E446B51F529 fb=0x822019B945EFA32D
++frame  669 hash=0x87CB2B703B932E30 fb=0x43770ABA89F8066E
++frame  670 hash=0x028D2DECB654B6F8 fb=0xFFCFC8E38F5E7F82
++frame  671 hash=0x2C7B9FED8E5F5AB6 fb=0x82C6BF1CCE87D494
++frame  672 hash=0x20D9D39227DC304D fb=0x82B4493CF6368582
++frame  673 hash=0x100EA66731B49F17 fb=0x2C8D47F3F0C19E7E
++frame  674 hash=0x25E47DD5BB94BC71 fb=0xABEF430029286F7E
++frame  675 hash=0x66B426A6C3789BBC fb=0x183B23A99F9BCB4B
++frame  676 hash=0xC637E985E8803ECB fb=0xC95D1ECCB7B3D1DE
++frame  677 hash=0x8194F98871680D09 fb=0xD356884C6AFA369E
++frame  678 hash=0xF04D35F740CED0A3 fb=0xFDAE7BA3497CE9B8
++frame  679 hash=0x425553097B6AA353 fb=0xAAAE39F2C9B27B87
++frame  680 hash=0x5884B1FA6BBAD0F9 fb=0x78E0FF05E861EA82
++frame  681 hash=0x74BC85F1C9A319B6 fb=0x49B6139F64FBE254
++frame  682 hash=0x54909BA981FE1888 fb=0xA554583085089D2D
++frame  683 hash=0xA213A5E5206D159F fb=0x5326EF2EB713F399
++frame  684 hash=0x8BA83B62639D4EE5 fb=0xA7CCCB098183B192
++frame  685 hash=0xDCD4CE5F3CC0B63B fb=0x493F04C6AB753BED
++frame  686 hash=0xCB50903F5790A8D8 fb=0x0BAB780EC762DB45
++frame  687 hash=0x442E4053F778A3A8 fb=0x2AB0D1E881BD8BEF
++frame  688 hash=0xD5955A1D9253F161 fb=0xF3AE5C5C09D7C628
++frame  689 hash=0xB128E4512AED17DB fb=0x6AF3756424A57E60
++frame  690 hash=0x1E8720A12FFFCD73 fb=0x7323E44840FCCA56
++frame  691 hash=0xD6EC6EFA0E0F5C5D fb=0x98D03D59A6E07F34
++frame  692 hash=0x6A1E1DD4E5436E7D fb=0x95C4E142522F7250
++frame  693 hash=0xCCEC6E11313D56D5 fb=0x62FA2F6817D24DD7
++frame  694 hash=0xD03289AE9CF26287 fb=0xB88B5DBE9D004D7F
++frame  695 hash=0x09F5B5B4834DB5AF fb=0x62985B0A1AF9CF2B
++frame  696 hash=0xEB0F81CCB743159F fb=0x15F9C1B9730ACA94
++frame  697 hash=0x94E90E90618C1A43 fb=0xA72402FAD310B4EC
++frame  698 hash=0x452FE1B5E33DFC4E fb=0xFB5DC532A1092768
++frame  699 hash=0x35154D1B7C8EDD7F fb=0x81DE21B557D20CC0
++frame  700 hash=0x19DA61496204849A fb=0xC62AA081BECEAA7C
++frame  701 hash=0x2090C99C73E75F24 fb=0x3AEBDDEB3EAD7F35
++frame  702 hash=0x3114F39CAB9903CD fb=0x7A0AD9D961859375
++frame  703 hash=0x8FA41AA145E0C2C4 fb=0x9924BAA64C6D7C0C
++frame  704 hash=0x74223791253970D0 fb=0x9B4CF0B8DFB4834A
++frame  705 hash=0x7941ED03560A52FD fb=0xBF69A7C831E69ABC
++frame  706 hash=0x724AB3C76A07E154 fb=0x03513711F8AFFA0B
++frame  707 hash=0xCD1D6D09C122FA66 fb=0xC2DC98A67B99A925
++frame  708 hash=0xCFF4943F9FFAF12E fb=0x3A425CFDEFE13A9B
++frame  709 hash=0xD100BEB2EB804B10 fb=0xCA54466EEAD8B871
++frame  710 hash=0x5C3EE93266D0DCED fb=0x2C7E7DD921649210
++frame  711 hash=0x880DB6431E53F4D0 fb=0xD3AB5ECDE005F7C5
++frame  712 hash=0xAD877FCEACA2D8F1 fb=0x616F615D3C50F397
++frame  713 hash=0xDB1E378338EA5C0C fb=0xA77D78BA99DA58AE
++frame  714 hash=0x6BFEEF64569B4D0D fb=0x69E88FE1DA50648F
++frame  715 hash=0xDD686A2FB31B12E8 fb=0xB318F6464DCB401B
++frame  716 hash=0x56CD79E8D46B3FE5 fb=0xCA73D3D041704A55
++frame  717 hash=0x02B21DE7E890AB05 fb=0xF00ACFA87F1998F5
++frame  718 hash=0x6559818407680513 fb=0xF9A023B1EE0CEABA
++frame  719 hash=0x45E47892B8C5CCC8 fb=0x0CF30062CFB1428D
++frame  720 hash=0x95F752E43E73CDFC fb=0x2D44AD5E7B3A78C2
++frame  721 hash=0x148A49037822B372 fb=0xED5D2F4055F321C2
++frame  722 hash=0x52E3DBEB57D1A51E fb=0xAC3B5755390DB23D
++frame  723 hash=0x19B3C52B0CBAEB23 fb=0x1128DAA7B867DED2
++frame  724 hash=0xDD0F0E70D6D45896 fb=0x3AE068E5B759539C
++frame  725 hash=0xA8636CC8B4669800 fb=0x4820C6CC89928809
++frame  726 hash=0x632A7DFA773ACDBA fb=0xD7D3A320183143B2
++frame  727 hash=0x35766A38C4FDAFD8 fb=0xD2212603CB32F217
++frame  728 hash=0xB7DBE1F813A4C98B fb=0xDBD61DFCF7B7206B
++frame  729 hash=0xC185E7C5394A1BF4 fb=0x1DBE31A444162DA1
++frame  730 hash=0xEB3213A3AFDA03CC fb=0x8D9301956D6F6D49
++frame  731 hash=0xC8B1F387BB528AC0 fb=0x55A7F2BBD6594ACB
++frame  732 hash=0x4C0BB5CCEB6EA1FF fb=0x906BBFA0D227E338
++frame  733 hash=0x4CF874F71AE27695 fb=0x0312337B2FF2A948
++frame  734 hash=0xC3DF8AEBEABE1B95 fb=0x6EF4D15C70A48F93
++frame  735 hash=0x3ABC502CE26EC854 fb=0x77E755467370BFAC
++frame  736 hash=0x4D297A774843C880 fb=0xC5B567CB70E177D6
++frame  737 hash=0x3EED8F851977F4FF fb=0x775B4115809D3AD5
++frame  738 hash=0x9BAE068F2BBDF132 fb=0x58A90AD3A890E746
++frame  739 hash=0x48E3C25638B5639D fb=0x5FED68416308F519
++frame  740 hash=0xB9612232B96CD1F6 fb=0x7A6C44B088184ADB
++frame  741 hash=0xCEF7D1F2C203B17C fb=0x3432DA28ACEF5050
++frame  742 hash=0xAD2B6519AA41213F fb=0xC73BA0C99FA79AAC
++frame  743 hash=0x6523AEC9D7EE4C53 fb=0x4AFD24CF9BF75093
++frame  744 hash=0x1385A655669381F6 fb=0x1205790739077DA1
++frame  745 hash=0xAC20EAAF03361427 fb=0xD083A13ADC94A793
++frame  746 hash=0x5F15F7B1225D0290 fb=0x8D5E8606B5E65BC9
++frame  747 hash=0xE3901A59DE09C3D1 fb=0xC0193D10B38590C2
++frame  748 hash=0xF480849347A8078D fb=0x12003F53AF650CD5
++frame  749 hash=0xC5F9519847D13251 fb=0xD849DCD41D65457E
++frame  750 hash=0x794FF78394EF6667 fb=0x2725E3B73FD7D960
++frame  751 hash=0x6652F1C4622BB7F7 fb=0x813312B43EC40D4A
++frame  752 hash=0x1351EE32E332D463 fb=0xB9115329C0F3F933
++frame  753 hash=0x640EAF73D3566265 fb=0x03D4A8FCD9AE7264
++frame  754 hash=0xE0EE8412CC841E78 fb=0xD23ED8D538FAE6E7
++frame  755 hash=0x47E0BBAE6C984E21 fb=0xB0BB7DE2693FC606
++frame  756 hash=0x66C6DE752DDAAF9A fb=0xD982BCE378ACBB14
++frame  757 hash=0xADA90C88E05CC978 fb=0xFEAD00385BC5F9ED
++frame  758 hash=0x5BC4913032119393 fb=0x5EF1E2552446F08E
++frame  759 hash=0xD4C8C0B0DC6AC44E fb=0x9A810053ACABF6D6
++frame  760 hash=0xEE1A16D7E4D39775 fb=0xED04ACD1C949DB4A
++frame  761 hash=0xE248B4D19D02DC08 fb=0xCAEED5882419F9E5
++frame  762 hash=0xD2242A2074F56464 fb=0x0232C2008A38B7C7
++frame  763 hash=0x56A050F1691F6B6D fb=0x5FEFDF86687207BF
++frame  764 hash=0x14528F49ADCBE629 fb=0x586FDD09116F3027
++frame  765 hash=0x2EBF2386DD165C38 fb=0x496B24A1C7187B9B
++frame  766 hash=0xE4F878EE9C57329B fb=0xE9A350277E5DFDA4
++frame  767 hash=0xF56AFEE0EC59E9F7 fb=0x4A55E0CDDF4675A5
++frame  768 hash=0x44A5F6D8A1DD3C90 fb=0x3BC597AB824556AF
++frame  769 hash=0x8CCAE7BA4F992680 fb=0x8ECB0375F7ED97EB
++frame  770 hash=0xC30E48E69836E929 fb=0x92D427CA4B2DC39F
++frame  771 hash=0x5EF74AEBB0716A35 fb=0xB9CC606BBA4DEA43
++frame  772 hash=0xF8C099E3D86C3198 fb=0xA3B0BF7F3CA377C5
++frame  773 hash=0xA078412162AAEB59 fb=0x52294137312655D5
++frame  774 hash=0x6EEFA10F4EE6C98A fb=0x448F418289579AC4
++frame  775 hash=0x5932911EE971194B fb=0xBC15C865377D0D0A
++frame  776 hash=0xA295211F579B6977 fb=0x9C4B396C303DEAB3
++frame  777 hash=0x701BEF5E00C33033 fb=0x9C9E238C415CB09F
++frame  778 hash=0x832A3E2BACA3682C fb=0x5BF09E2DB46DCB6C
++frame  779 hash=0x8A00649BE80ABF26 fb=0xDF9F9B09D777C4A7
++frame  780 hash=0xAE5068CDBA46280C fb=0x542B79C39C75E22D
++frame  781 hash=0x9BA0052273717A1D fb=0xD93CA6879C219FEC
++frame  782 hash=0x2D3313216B734189 fb=0x9D7F9A619B02782A
++frame  783 hash=0x0B47D5D980B73C4C fb=0xB881A65D2CEF7274
++frame  784 hash=0xA441BC7B2846D73A fb=0xB69DE03677579387
++frame  785 hash=0xEC05569BE8BE1763 fb=0xBE63BAB4BBC08213
++frame  786 hash=0x6D0DE96F0524DCAD fb=0x3D4390B58266356A
++frame  787 hash=0xA196B3E05A4EBC17 fb=0x8B7DCD5A3A6E30EB
++frame  788 hash=0x62F57B4534A875A9 fb=0xB0B1DCC94ABAC7A4
++frame  789 hash=0x32B96F483C183D35 fb=0x6151EE3BBE3E154F
++frame  790 hash=0x885217B70B724AEA fb=0xFB1456AA96B89BE0
++frame  791 hash=0xD74BFCB354D09655 fb=0xBE087C9ABE60BC6C
++frame  792 hash=0x9D46A3757467C03D fb=0xE4454A07EF21CC74
++frame  793 hash=0x3FFFF5435B29FC59 fb=0x8A04ECCEEFE7E5D8
++frame  794 hash=0x20AC181E04CEB4BF fb=0xB9E0D243DD358C37
++frame  795 hash=0xFDB735A8C16EE1F4 fb=0xFFF723A55BB45D67
++frame  796 hash=0xC5202B65FF14F381 fb=0xBD4B8AA6D7EE9CDA
++frame  797 hash=0x2A31D81B9458100A fb=0xD3C278E05840C47E
++frame  798 hash=0xBC3C47F831B55BB9 fb=0x561CF145DFF8CB0A
++frame  799 hash=0xD5F72D93E121E0D5 fb=0xECCDE00B463E6175
++frame  800 hash=0x1063843760030840 fb=0x4B4FD9B4DF317AC4
++frame  801 hash=0x54099091FE1D19C7 fb=0x7DA376D00090BAC7
++frame  802 hash=0x92A5374E474FEC46 fb=0x2691F417AC1C14DC
++frame  803 hash=0xD6FA23BCBD3AFAFD fb=0xF9A2416C6ED713F8
++frame  804 hash=0xCEE5048BC6AD64A9 fb=0xFA194C29CBC87B1A
++frame  805 hash=0xF62F4115848FC986 fb=0xE234636D465F4112
++frame  806 hash=0x846E7A0E3E0E22CE fb=0xE234EE53ECC54046
++frame  807 hash=0x15347C61D42DAFBA fb=0x849686C1661FD409
++frame  808 hash=0x169807FBDE8D8C07 fb=0x1AEEFE607E09FCF0
++frame  809 hash=0xAC234C465DE763CA fb=0x6B9EF79DA6592107
++frame  810 hash=0x345B3B1AE5BCA2E6 fb=0xF038AF2923A60F6A
++frame  811 hash=0xC0ABE27D053D6F9B fb=0x0F48646BFEECEE93
++frame  812 hash=0x5D44F158CA527DBD fb=0x96567D34DE08D12E
++frame  813 hash=0xB13CC24ECE446057 fb=0x9F28F8683F5C8510
++frame  814 hash=0x2F5378D0C31DEFF9 fb=0x52A801E150CC0F88
++frame  815 hash=0x4AF313A7806C7F03 fb=0x44009CD9856BA34D
++frame  816 hash=0x51DAD40E0DC82FC5 fb=0xB339B0C054CAB398
++frame  817 hash=0x719DF81DFFDFBE46 fb=0x05F58615958B63B5
++frame  818 hash=0x76191C522A871930 fb=0x46326F02AAD78B28
++frame  819 hash=0xA644069107D15FD3 fb=0xA933E0AAA97BF5E0
++frame  820 hash=0xC804D0E46CC7D2F5 fb=0xE5BA32E9B03666C2
++frame  821 hash=0x68850395DB941B88 fb=0x81201469A3DAFAF0
++frame  822 hash=0xD5CA61F8695FEE4D fb=0x27B8137B6B1E198D
++frame  823 hash=0xC2023B8CB597E916 fb=0xA4DDA9799B14189A
++frame  824 hash=0x9E60FEB262049C84 fb=0xAC7567E93E792FE0
++frame  825 hash=0xC091F0BC3D9AC528 fb=0x5E669D63679BAF2F
++frame  826 hash=0x0D1260A62A8FAF98 fb=0xA79379AFDD59697E
++frame  827 hash=0x13603E1D421FC9BB fb=0xEF1C3AA9CB15D698
++frame  828 hash=0x682767B897327F0E fb=0x75115347966F5BDA
++frame  829 hash=0xA1BD3EA7B4FA499B fb=0xDA09903FD35D02FD
++frame  830 hash=0x584A6D037497BE82 fb=0x726E7C6F8CC12DEF
++frame  831 hash=0x4F3115B3C0D44755 fb=0xB322E41A9E398A48
++frame  832 hash=0x0E8CF6858739DE15 fb=0xDECA5C40ABFE0AAE
++frame  833 hash=0x5F87E4B98BD9BB5F fb=0xA28ADE6480E73E3F
++frame  834 hash=0x27A0D091B595C4E1 fb=0x2EB4F51A089AD490
++frame  835 hash=0x969B44CB9042775D fb=0x631A546481E81322
++frame  836 hash=0xCADDEDBA245AF751 fb=0x3C81EAC70F490AA7
++frame  837 hash=0x559022C12E6727ED fb=0xAD3C94FC4E7C82F3
++frame  838 hash=0xD092BAD8EF85165F fb=0x87DCE8CFFEACDD22
++frame  839 hash=0x92E9D8690D249D61 fb=0xD6DAF5C91A6D6445
++frame  840 hash=0xC158097F11067200 fb=0x084CE9D29D3C356E
++frame  841 hash=0x3128BFC41C4DE0B4 fb=0x3F1AFF426E050D85
++frame  842 hash=0xB631579B7ADC4D01 fb=0xBE04E4967F9C5FB2
++frame  843 hash=0xCAADDF753E5A73D7 fb=0xD1CF5D8952E048B4
++frame  844 hash=0x86439F079DA170A7 fb=0x25EC75381ACAC0AD
++frame  845 hash=0x9AD555D39B38C936 fb=0xB8504A5B3ADC33DD
++frame  846 hash=0x28E3E864EF42EE23 fb=0x9D441490D48911E0
++frame  847 hash=0x313E8FEC987106DE fb=0x029FC08099D09877
++frame  848 hash=0xE65F97E581A64AB0 fb=0x0E7B722DE57DCC2F
++frame  849 hash=0x228D71FDE7E66F40 fb=0xDD638964C9B44C64
++frame  850 hash=0xFB2741503FD41D65 fb=0xF4F3F78F33BA4A6A
++frame  851 hash=0x0B02B1434AEF3F7E fb=0x6E7DFAB864654E88
++frame  852 hash=0x392F8089DD87EE8E fb=0xFDFD39E929788C61
++frame  853 hash=0x4124180F4749B8F0 fb=0x7BD28225D01DB688
++frame  854 hash=0x40BB249974EB8018 fb=0xC0A640663FE27640
++frame  855 hash=0xC0FBF8DF59E68D1D fb=0x13E6771B0B0D96E4
++frame  856 hash=0x9B0D3832210C5399 fb=0x361E4C61C34F8AA3
++frame  857 hash=0xA93A1046D19D031E fb=0x6C955C25D677B37C
++frame  858 hash=0x58FFDE71823E7395 fb=0xC1B27AFD0D215F13
++frame  859 hash=0xB7C3DFB092BF3780 fb=0x6EFC5E9E2F98E5D9
++frame  860 hash=0x1C65E22B346B7B76 fb=0xECD85842BF92A5DE
++frame  861 hash=0x2C678A7679631710 fb=0x43FF300F857A489C
++frame  862 hash=0x62C96BE8DC052E09 fb=0x0D4B4DC6EEBF1A65
++frame  863 hash=0x61794CB0D90C87D5 fb=0x860B6DA0F7CB180E
++frame  864 hash=0xDEC441B44D23D2A1 fb=0x33EB16CFB4A6A077
++frame  865 hash=0xBB4A977A86A9A49C fb=0xFC34E7ABA62975F5
++frame  866 hash=0x2750F612DFF6349E fb=0x6D89FE46922D366A
++frame  867 hash=0xBD6D1C89B76597DF fb=0xA2AF1D8EEA970F17
++frame  868 hash=0xCDE68264761AB47C fb=0x785B90E12888F77F
++frame  869 hash=0x1AE4072CCBF60344 fb=0x4B049AE7126249C2
++frame  870 hash=0x6E16A9ACA80A121D fb=0xE318C949C7EFD741
++frame  871 hash=0xC20EE9253833F12E fb=0xB0DE37740BD18C5B
++frame  872 hash=0xC7FD16BF9941E53B fb=0xC98AD332C397579C
++frame  873 hash=0x4462B9B20BE42DD4 fb=0x6309FCD4940896E6
++frame  874 hash=0x86AD43D1ED763C5B fb=0xDBE6310DBA41B7C0
++frame  875 hash=0xEEEA6EBFC3DDB32A fb=0x7C5E3E26F04238F7
++frame  876 hash=0xAD218637C832995D fb=0x98D37F8B7DEC56F2
++frame  877 hash=0x02DF2C93DBF8DAFE fb=0x7300A71438A9D3B1
++frame  878 hash=0x6CCC75CE6EA60783 fb=0xB7E53E97AB0D4B34
++frame  879 hash=0x3D552433B059E08A fb=0x658DA6EF2E0C2F5A
+diff --git a/tests/inputs/lumen.txt b/tests/inputs/lumen.txt
+new file mode 100644
+index 0000000..ecb7034
+--- /dev/null
++++ b/tests/inputs/lumen.txt
+@@ -0,0 +1,875 @@
++# LUMEN scripted session (tests/test_lumen.sh + golden game lumen).
++# Title 30 frames; A starts; the hero charges light with A/B alternation (frames 40-90),
++# releases with START (100), then crosses the room tapping A every 4 frames, takes the key,
++# and runs for the door. Generated by closed-loop search against the ROM; deterministic.
++0 29 none
++30 30 a
++31 31 none
++32 32 none
++33 33 none
++34 34 none
++35 35 none
++36 36 none
++37 37 none
++38 38 none
++39 39 none
++40 40 a
++41 41 none
++42 42 none
++43 43 none
++44 44 none
++45 45 b
++46 46 none
++47 47 none
++48 48 none
++49 49 none
++50 50 a
++51 51 none
++52 52 none
++53 53 none
++54 54 none
++55 55 b
++56 56 none
++57 57 none
++58 58 none
++59 59 none
++60 60 a
++61 61 none
++62 62 none
++63 63 none
++64 64 none
++65 65 b
++66 66 none
++67 67 none
++68 68 none
++69 69 none
++70 70 a
++71 71 none
++72 72 none
++73 73 none
++74 74 none
++75 75 b
++76 76 none
++77 77 none
++78 78 none
++79 79 none
++80 80 a
++81 81 none
++82 82 none
++83 83 none
++84 84 none
++85 85 b
++86 86 none
++87 87 none
++88 88 none
++89 89 none
++90 90 none
++91 91 none
++92 92 none
++93 93 none
++94 94 none
++95 95 none
++96 96 none
++97 97 none
++98 98 none
++99 99 none
++100 100 left start
++101 101 left
++102 102 left
++103 103 left
++104 104 left
++105 105 left
++106 106 left
++107 107 left
++108 108 left
++109 109 left
++110 110 left
++111 111 left
++112 112 a left
++113 113 left
++114 114 left
++115 115 left
++116 116 a left
++117 117 left
++118 118 left
++119 119 left
++120 120 a left
++121 121 left
++122 122 left
++123 123 left
++124 124 a left
++125 125 left
++126 126 left
++127 127 left
++128 128 a left
++129 129 left
++130 130 left
++131 131 left
++132 132 a left
++133 133 left
++134 134 left
++135 135 left
++136 136 a left
++137 137 left
++138 138 left
++139 139 left
++140 140 a left
++141 141 left
++142 142 left
++143 143 left
++144 144 a left
++145 145 left
++146 146 left
++147 147 left
++148 148 a left
++149 149 left
++150 150 left
++151 151 left
++152 152 a left
++153 153 left
++154 154 left
++155 155 left
++156 156 a left
++157 157 left
++158 158 left
++159 159 left
++160 160 a left
++161 161 left
++162 162 left
++163 163 left
++164 164 a left
++165 165 left
++166 166 left
++167 167 left
++168 168 a left
++169 169 left
++170 170 left
++171 171 left
++172 172 a left
++173 173 left
++174 174 left
++175 175 left
++176 176 a left
++177 177 left
++178 178 left
++179 179 left
++180 180 a left
++181 181 left
++182 182 left
++183 183 left
++184 184 a left
++185 185 left
++186 186 left
++187 187 left
++188 188 a left
++189 189 left
++190 190 left
++191 191 left
++192 192 a left
++193 193 left
++194 194 left
++195 195 left
++196 196 a left
++197 197 left
++198 198 left
++199 199 left
++200 200 a left
++201 201 left
++202 202 left
++203 203 left
++204 204 a left
++205 205 left
++206 206 left
++207 207 left
++208 208 a left
++209 209 left
++210 210 left
++211 211 left
++212 212 a left
++213 213 left
++214 214 left
++215 215 left
++216 216 a left
++217 217 left
++218 218 left
++219 219 left
++220 220 a left
++221 221 left
++222 222 left
++223 223 left
++224 224 a left
++225 225 left
++226 226 left
++227 227 left
++228 228 a left
++229 229 left
++230 230 left
++231 231 left
++232 232 a left
++233 233 left
++234 234 left
++235 235 left
++236 236 a left
++237 237 left
++238 238 left
++239 239 left
++240 240 a left
++241 241 left
++242 242 left
++243 243 left
++244 244 a left
++245 245 left
++246 246 left
++247 247 left
++248 248 a left
++249 249 left
++250 250 left
++251 251 left
++252 252 a left
++253 253 left
++254 254 left
++255 255 left
++256 256 a left
++257 257 left
++258 258 left
++259 259 left
++260 260 a left
++261 261 left
++262 262 left
++263 263 left
++264 264 a left
++265 265 left
++266 266 left
++267 267 left
++268 268 a left
++269 269 left
++270 270 left
++271 271 left
++272 272 a left
++273 273 left
++274 274 left
++275 275 left
++276 276 a left
++277 277 left
++278 278 left
++279 279 left
++280 280 a left
++281 281 left
++282 282 left
++283 283 left
++284 284 a left
++285 285 left
++286 286 left
++287 287 left
++288 288 a left
++289 289 left
++290 290 left
++291 291 left
++292 292 a left
++293 293 left
++294 294 left
++295 295 left
++296 296 a left
++297 297 left
++298 298 left
++299 299 left
++300 300 a left
++301 301 left
++302 302 left
++303 303 left
++304 304 a left
++305 305 left
++306 306 left
++307 307 left
++308 308 a left
++309 309 left
++310 310 left
++311 311 left
++312 312 a left
++313 313 left
++314 314 left
++315 315 left
++316 316 a left
++317 317 left
++318 318 left
++319 319 left
++320 320 a left
++321 321 left
++322 322 left
++323 323 left
++324 324 a left
++325 325 left
++326 326 left
++327 327 left
++328 328 a left
++329 329 left
++330 330 left
++331 331 left
++332 332 a left
++333 333 left
++334 334 left
++335 335 up
++336 336 a up
++337 337 up
++338 338 up
++339 339 up
++340 340 a up
++341 341 up
++342 342 up
++343 343 up
++344 344 a up
++345 345 up
++346 346 up
++347 347 up
++348 348 a up
++349 349 up
++350 350 up
++351 351 up
++352 352 a up
++353 353 up
++354 354 up
++355 355 up
++356 356 a up
++357 357 up
++358 358 up
++359 359 up
++360 360 a up
++361 361 up
++362 362 up
++363 363 up
++364 364 a up
++365 365 up
++366 366 up
++367 367 up
++368 368 a up
++369 369 up
++370 370 up
++371 371 up
++372 372 a up
++373 373 up
++374 374 up
++375 375 up
++376 376 a up
++377 377 up
++378 378 up
++379 379 up
++380 380 a up
++381 381 up
++382 382 up
++383 383 up
++384 384 a up
++385 385 down
++386 386 down
++387 387 down
++388 388 a down
++389 389 down
++390 390 down
++391 391 down
++392 392 a down
++393 393 down
++394 394 down
++395 395 down
++396 396 a down
++397 397 down
++398 398 down
++399 399 down
++400 400 a down
++401 401 down
++402 402 down
++403 403 down
++404 404 a down
++405 405 down
++406 406 down
++407 407 down
++408 408 a down
++409 409 down
++410 410 down
++411 411 down
++412 412 a down
++413 413 down
++414 414 down
++415 415 down
++416 416 a down
++417 417 down
++418 418 down
++419 419 down
++420 420 a down
++421 421 down
++422 422 down
++423 423 down
++424 424 a down
++425 425 down
++426 426 down
++427 427 down
++428 428 a down
++429 429 down
++430 430 down
++431 431 down
++432 432 a down
++433 433 down
++434 434 down
++435 435 right
++436 436 a right
++437 437 right
++438 438 right
++439 439 right
++440 440 a right
++441 441 right
++442 442 right
++443 443 right
++444 444 a right
++445 445 right
++446 446 right
++447 447 right
++448 448 a right
++449 449 right
++450 450 right
++451 451 right
++452 452 a right
++453 453 right
++454 454 right
++455 455 right
++456 456 a right
++457 457 right
++458 458 right
++459 459 right
++460 460 a right
++461 461 right
++462 462 right
++463 463 right
++464 464 a right
++465 465 right
++466 466 right
++467 467 right
++468 468 a right
++469 469 right
++470 470 right
++471 471 right
++472 472 a right
++473 473 right
++474 474 right
++475 475 right
++476 476 a right
++477 477 right
++478 478 right
++479 479 right
++480 480 a right
++481 481 right
++482 482 right
++483 483 right
++484 484 a right
++485 485 right
++486 486 right
++487 487 right
++488 488 a right
++489 489 right
++490 490 right
++491 491 right
++492 492 a right
++493 493 right
++494 494 right
++495 495 right
++496 496 a right
++497 497 right
++498 498 right
++499 499 right
++500 500 a right
++501 501 right
++502 502 right
++503 503 right
++504 504 a right
++505 505 right
++506 506 right
++507 507 right
++508 508 a right
++509 509 right
++510 510 right
++511 511 right
++512 512 a right
++513 513 right
++514 514 right
++515 515 right
++516 516 a right
++517 517 right
++518 518 right
++519 519 right
++520 520 a right
++521 521 right
++522 522 right
++523 523 right
++524 524 a right
++525 525 right
++526 526 right
++527 527 right
++528 528 a right
++529 529 right
++530 530 right
++531 531 right
++532 532 a right
++533 533 right
++534 534 right
++535 535 right
++536 536 a right
++537 537 right
++538 538 right
++539 539 right
++540 540 a right
++541 541 right
++542 542 right
++543 543 right
++544 544 a right
++545 545 right
++546 546 right
++547 547 right
++548 548 a right
++549 549 right
++550 550 right
++551 551 right
++552 552 a right
++553 553 right
++554 554 right
++555 555 right
++556 556 a right
++557 557 right
++558 558 right
++559 559 right
++560 560 a right
++561 561 right
++562 562 right
++563 563 right
++564 564 a right
++565 565 right
++566 566 right
++567 567 right
++568 568 a right
++569 569 right
++570 570 right
++571 571 right
++572 572 a right
++573 573 right
++574 574 right
++575 575 right
++576 576 a right
++577 577 right
++578 578 right
++579 579 right
++580 580 a right
++581 581 right
++582 582 right
++583 583 right
++584 584 a right
++585 585 right
++586 586 right
++587 587 right
++588 588 a right
++589 589 right
++590 590 right
++591 591 right
++592 592 a right
++593 593 right
++594 594 right
++595 595 right
++596 596 a right
++597 597 right
++598 598 right
++599 599 right
++600 600 a right
++601 601 right
++602 602 right
++603 603 right
++604 604 a right
++605 605 right
++606 606 right
++607 607 right
++608 608 a right
++609 609 right
++610 610 right
++611 611 right
++612 612 a right
++613 613 right
++614 614 right
++615 615 right
++616 616 a right
++617 617 right
++618 618 right
++619 619 right
++620 620 a right
++621 621 right
++622 622 right
++623 623 right
++624 624 a right
++625 625 right
++626 626 right
++627 627 right
++628 628 a right
++629 629 right
++630 630 right
++631 631 right
++632 632 a right
++633 633 right
++634 634 right
++635 635 right
++636 636 a right
++637 637 right
++638 638 right
++639 639 right
++640 640 a right
++641 641 right
++642 642 right
++643 643 right
++644 644 a right
++645 645 right
++646 646 right
++647 647 right
++648 648 a right
++649 649 right
++650 650 right
++651 651 right
++652 652 a right
++653 653 right
++654 654 right
++655 655 right
++656 656 a right
++657 657 right
++658 658 right
++659 659 right
++660 660 a right
++661 661 right
++662 662 right
++663 663 right
++664 664 a right
++665 665 right
++666 666 right
++667 667 right
++668 668 a right
++669 669 right
++670 670 right
++671 671 right
++672 672 a right
++673 673 right
++674 674 right
++675 675 right
++676 676 a right
++677 677 right
++678 678 right
++679 679 right
++680 680 a right
++681 681 right
++682 682 right
++683 683 right
++684 684 a right
++685 685 right
++686 686 right
++687 687 right
++688 688 a right
++689 689 right
++690 690 right
++691 691 right
++692 692 a right
++693 693 right
++694 694 right
++695 695 right
++696 696 a right
++697 697 right
++698 698 right
++699 699 right
++700 700 a right
++701 701 right
++702 702 right
++703 703 right
++704 704 a right
++705 705 right
++706 706 right
++707 707 right
++708 708 a right
++709 709 right
++710 710 right
++711 711 right
++712 712 a right
++713 713 right
++714 714 right
++715 715 right
++716 716 a right
++717 717 right
++718 718 right
++719 719 right
++720 720 a right
++721 721 right
++722 722 right
++723 723 right
++724 724 a right
++725 725 right
++726 726 right
++727 727 right
++728 728 a right
++729 729 right
++730 730 right
++731 731 right
++732 732 a right
++733 733 right
++734 734 right
++735 735 right
++736 736 a right
++737 737 right
++738 738 right
++739 739 right
++740 740 a right
++741 741 right
++742 742 right
++743 743 right
++744 744 a right
++745 745 right
++746 746 right
++747 747 right
++748 748 a right
++749 749 right
++750 750 right
++751 751 right
++752 752 a right
++753 753 right
++754 754 right
++755 755 right
++756 756 a right
++757 757 right
++758 758 right
++759 759 right
++760 760 a right
++761 761 right
++762 762 right
++763 763 right
++764 764 a right
++765 765 right
++766 766 right
++767 767 right
++768 768 a right
++769 769 right
++770 770 right
++771 771 right
++772 772 a right
++773 773 right
++774 774 right
++775 775 right
++776 776 a right
++777 777 right
++778 778 right
++779 779 right
++780 780 a right
++781 781 right
++782 782 right
++783 783 right
++784 784 a right
++785 785 right
++786 786 right
++787 787 right
++788 788 a right
++789 789 right
++790 790 right
++791 791 right
++792 792 a right
++793 793 right
++794 794 right
++795 795 right
++796 796 a right
++797 797 right
++798 798 right
++799 799 right
++800 800 a right
++801 801 right
++802 802 right
++803 803 right
++804 804 a right
++805 805 right
++806 806 right
++807 807 right
++808 808 a right
++809 809 right
++810 810 right
++811 811 right
++812 812 a right
++813 813 right
++814 814 right
++815 815 right
++816 816 a right
++817 817 right
++818 818 right
++819 819 right
++820 820 a right
++821 821 right
++822 822 right
++823 823 right
++824 824 a right
++825 825 right
++826 826 right
++827 827 right
++828 828 a right
++829 829 right
++830 830 right
++831 831 right
++832 832 a right
++833 833 right
++834 834 right
++835 835 right
++836 836 a right
++837 837 right
++838 838 right
++839 839 right
++840 840 a right
++841 841 right
++842 842 right
++843 843 right
++844 844 a right
++845 845 right
++846 846 right
++847 847 right
++848 848 a right
++849 849 right
++850 850 right
++851 851 right
++852 852 a right
++853 853 right
++854 854 right
++855 855 right
++856 856 a right
++857 857 right
++858 858 right
++859 859 right
++860 860 a right
++861 861 right
++862 862 right
++863 863 right
++864 864 a right
++865 865 right
++866 866 right
++867 867 right
++868 868 a right
++869 869 right
++870 870 right
++871 871 right
++872 872 a right
++873 873 right
++874 874 right
++875 875 right
++876 876 a right
++877 877 right
++878 878 right
++879 879 right
++880 880 a right
++881 881 right
++882 882 right
++883 883 right
++884 884 a right
++885 885 right
++886 886 right
++887 887 right
++888 888 a right
++889 889 right
++890 890 right
++891 891 right
++892 892 a right
++893 893 right
++894 894 right
++895 895 right
++896 896 a right
++897 897 right
++898 898 right
++899 899 right
+diff --git a/tests/roms/lumen.arc1 b/tests/roms/lumen.arc1
+new file mode 100644
+index 0000000000000000000000000000000000000000..877cc89708bedc11aa2518a2b401cec609fea176
+GIT binary patch
+literal 13476
+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
+I7pVvNpS|3^5&!@I
+
+literal 0
+HcmV?d00001
+
+diff --git a/tests/roms/lumen.syms b/tests/roms/lumen.syms
+new file mode 100644
+index 0000000..1e4bae4
+--- /dev/null
++++ b/tests/roms/lumen.syms
+@@ -0,0 +1,92 @@
++000031e4 t A8.0
++20000c84 b BO
++2000203c b DL
++200017fc b E
++20000a64 b H
++20000c08 b LPW
++20000ba0 b LRAD
++20000ad0 b LX
++20000b38 b LY
++20000210 b MAP
++000031bc t P1
++000031c8 t P2
++20000414 b PA
++00003198 t PAL
++20000a90 b RG
++00002f98 t SINT
++20000034 b TX
++000031dc t WI2
++20000dac b WL
++20004a6c B _ebss
++20000004 D _edata
++20000004 B _sbss
++20000000 D _sdata
++00003490 A _sidata
++20010000 B _stack_top
++00000000 T _start
++00000a24 t add_enemy.isra.0
++000031f0 t arcade1_text_font
++00000488 t burst
++20000024 B charge
++2000002c B dl_n
++000011bc t do_tap
++20000410 b door_open
++20000d88 b frame_t
++20000d74 B haskey
++20000d9c B hero_x
++20000da0 B hero_y
++20000c70 B hp
++0000083c t hurt
++00000060 t isqrt
++20000d78 b key_x
++20000d7c b key_y
++20000d84 B kills
++00000724 t light
++0000075c t light_at
++00001370 t line
++00000b54 t load_room
++20000d98 B lr
++00001554 T main
++000033f0 T memcpy
++0000343c T memmove
++00003418 T memset
++20000da8 b msg_s
++20000d8c b msg_t
++000008e8 t mv.constprop.0
++20000da4 B n_enemies
++20000acc b nl
++20000028 b now_ms
++20000c80 b nwall
++20000c78 b over_t
++000001b0 t poly
++20000d90 b prev_pad
++00000600 t release
++00000f64 t reset_game
++0000009c t rnd
++20000c7c B room
++20000000 d rs
++20000d80 B score
++00000128 t seg
++000003bc t shade565
++000005d0 t snd
++20000a5c b snd_f
++20000a54 b snd_n
++20000a58 b snd_pri
++20000a60 b snd_sw
++00000424 t solid
++20000c74 B state
++00000fc0 t swing_hit.constprop.0.isra.0
++20000d94 B tap_speed
++20000018 b tc_btn
++00000104 t tc_charging
++20000008 b tc_chg_t
++20000020 b tc_ema
++20000014 b tc_has
++20000010 b tc_has_chg
++2000000c b tc_last
++000000d4 t tc_reset
++2000001c b tc_spd
++000007ec t tc_speed.part.0
++20000004 b tc_tick
++00000324 t text_at
++20000030 b tx_n
+diff --git a/tests/test_lumen.sh b/tests/test_lumen.sh
+new file mode 100755
+index 0000000..ddb95ac
+--- /dev/null
++++ b/tests/test_lumen.sh
+@@ -0,0 +1,98 @@
++#!/bin/sh
++# ARCADE-1 - lumen test (the dark-room adventure whose light is your tap speed).
++# A scripted session (tests/inputs/lumen.txt, generated closed-loop against this ROM)
++# plays the title, starts, charges light with A/B alternation, releases it, crosses
++# room 1 tapping fast, takes the key and runs through the door into room 2.
++#
++# The assertions are made through the game's named variables:
++#   1. determinism   - two identical sessions, identical output
++#   2. the story     - title, play, charge fills and is released, tap meter fills,
++#                      the key is taken, room 2 is reached, something is killed,
++#                      and the display list stays inside its budget
++#   3. record->replay - the recorded session replays bit-identically
++#   4. budget        - the heaviest sampled frame stays under half the instruction cap
++#
++# usage: test_lumen.sh <arcade1-cli> <rom-dir> <golden-dir>
++
++set -eu
++
++CLI=${1:?usage: test_lumen.sh <arcade1-cli> <rom-dir> <golden-dir>}
++ROM=${2:?}
++
++OUT=$(mktemp -d)
++trap 'rm -rf "$OUT"' EXIT
++
++fail() { echo "test-lumen: FAILED - $1" >&2; exit 1; }
++note() { echo "  $1"; }
++
++GAME=$ROM/lumen.arc1
++[ -x "$CLI" ]  || fail "CLI not built at $CLI"
++[ -f "$GAME" ] || fail "missing $GAME"
++SCRIPT=$(dirname "$0")/inputs/lumen.txt
++[ -f "$SCRIPT" ] || fail "missing $SCRIPT"
++
++FRAMES=880
++SYMS=$ROM/lumen.syms
++if [ ! -f "$SYMS" ] && [ -f "$ROM/lumen.elf" ] &&
++   command -v riscv64-unknown-elf-nm >/dev/null 2>&1; then
++    riscv64-unknown-elf-nm "$ROM/lumen.elf" > "$OUT/lumen.syms"
++    SYMS="$OUT/lumen.syms"
++fi
++
++has() { grep -qE "^vars +[0-9]+( .*)? $1=$2( |$)" "$OUT/trace.txt"; }
++
++if [ -f "$SYMS" ]; then
++    # --- 1) determinism ----------------------------------------------------
++    "$CLI" run "$GAME" --frames 600 --input "$SCRIPT" --syms "$SYMS" \
++        --vars score,state,hero_x --quiet > "$OUT/r1.txt" 2>/dev/null
++    "$CLI" run "$GAME" --frames 600 --input "$SCRIPT" --syms "$SYMS" \
++        --vars score,state,hero_x --quiet > "$OUT/r2.txt" 2>/dev/null
++    if ! cmp -s "$OUT/r1.txt" "$OUT/r2.txt"; then
++        diff "$OUT/r1.txt" "$OUT/r2.txt" | head -5 >&2
++        fail "two identical sessions produced different output"
++    fi
++    note "determinism ok - two 600-frame sessions identical"
++
++    # --- 2) the story ------------------------------------------------------
++    "$CLI" run "$GAME" --frames $FRAMES --input "$SCRIPT" --syms "$SYMS" \
++        --vars state,room,hp,haskey,kills,tap_speed,charge,dl_n --var-every 10 \
++        > "$OUT/main.txt" 2>/dev/null
++    cat "$OUT/main.txt"
++    grep '^vars' "$OUT/main.txt" > "$OUT/trace.txt"
++
++    has state 0 || fail "the session should open on the title screen"
++    has state 1 || fail "the session should start playing after A"
++    has tap_speed 256 || fail "tapping every 4 frames should fill the tap-speed meter"
++    awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^charge=/) { v = substr($i, 8) + 0; if (prev >= 20000 && v == 0) ok = 1; prev = v } }
++         END { exit ok ? 0 : 1 }' "$OUT/trace.txt" ||
++        fail "alternating A/B should fill the charge meter and START should spend it"
++    has haskey 1 || fail "the key should be taken"
++    has room 1   || fail "the run should reach room 2 through the door"
++    grep -qE '^vars +[0-9]+ .*kills=[1-9]' "$OUT/trace.txt" || fail "the sword should kill something"
++    MAXDL=$(grep -oE 'dl_n=[0-9]+' "$OUT/trace.txt" | cut -d= -f2 | sort -n | tail -1)
++    [ "$MAXDL" -le 900 ] || fail "the display list overflowed its 900-segment capacity ($MAXDL)"
++    note "story ok - title, play, charge+release, key, room 2, kills; display list peak $MAXDL segments"
++
++    # --- 3) record -> replay ----------------------------------------------
++    "$CLI" run "$GAME" --frames 700 --input "$SCRIPT" --record "$OUT/rec.txt" --quiet > /dev/null 2>&1
++    "$CLI" run "$GAME" --frames 700 --input "$OUT/rec.txt" --syms "$SYMS" --vars score,state > "$OUT/re.txt" 2>/dev/null
++    "$CLI" run "$GAME" --frames 700 --input "$SCRIPT" --syms "$SYMS" --vars score,state > "$OUT/main.f0" 2>/dev/null
++    grep '^frame ' "$OUT/main.f0" > "$OUT/main.f"
++    grep '^frame ' "$OUT/re.txt"  > "$OUT/re.f"
++    cmp -s "$OUT/main.f" "$OUT/re.f" || fail "the recorded session does not replay bit-identically"
++    note "record->replay ok"
++else
++    note "named variables skipped - no lumen.syms and no riscv nm to make one"
++fi
++
++# --- 4) instruction budget: heaviest sampled frame under half the cap ------
++MAX=0
++for f in 60 200 400 600 800 870; do
++    N=$("$CLI" inspect "$GAME" --frames $f --input "$SCRIPT" 2>/dev/null | awk '$1=="INSTRET_FRAME"{print $2}')
++    [ -n "$N" ] || fail "inspect gave no INSTRET_FRAME at frame $f"
++    [ "$N" -gt "$MAX" ] && MAX=$N
++done
++[ "$MAX" -lt 500000 ] || fail "a frame retired $MAX instructions (budget 500000 of the 1000000 cap)"
++note "budget ok - heaviest sampled frame $MAX instructions"
++
++echo "test-lumen: lumen ok (determinism, story, record-replay, budget)"
