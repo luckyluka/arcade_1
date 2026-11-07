@@ -254,8 +254,9 @@ Everything ends in the same place: strip PNGs plus an `assets.json` consumed by 
 
 Wave 7a is **done** (cards 4.1-4.9) and Wave 7 (the AI art pipeline) is
 **done** (cards 7.1-7.8: the owner's go came on 2026-10-21, §8 step 3).
-Wave 8 has started — card 8.1 is done. The table is the record: card, the
-commit that carried it, and the day it landed.
+Wave 8 is **done** (cards 8.1-8.3; 8.3 ends at the owner's Audio-v2
+decision, §5). The table is the record: card, the commit that carried it,
+and the day it landed.
 
 | card | what | commit | date |
 |---|---|---|---|
@@ -278,7 +279,7 @@ commit that carried it, and the day it landed.
 | 7.8 | the clean-room art round — RUN twice: round 6 (7 gaps) and round 7 (9 gaps), both compliant | `a6f6764`, this commit | 2026-10-20/21 |
 | 8.1 | `arcade1 run --audio` — the deterministic WAV dump | (this commit) | 2026-11-06 |
 | 8.2 | audio in the play window (`--live` via SDL3) | (this commit) | 2026-11-07 |
-| 8.3 | the Audio-v2 decision brief | — | not started |
+| 8.3 | the Audio-v2 decision brief (stops for the owner) | (this commit) | 2026-11-07 |
 | 9 | the freeze-readiness dossier | — | not started |
 
 **Findings along the way** (all in `docs/experiments/`):
