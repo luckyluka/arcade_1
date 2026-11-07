@@ -17,6 +17,11 @@
 #                   AND its final x — the recorded session replays with
 #                   identical per-frame hashes, exactly as the card says
 #   5. R and ESC  — end an unbounded session leaving a complete script
+#   6. audio      — the window queues the frame's samples through SDL3
+#                   (card 8.2): a dummy device reports a plausible queue
+#                   count and the hashes are unmoved; no device degrades
+#                   to a warning + video-only session, exit 0 (only "no
+#                   play window" may exit 3)
 #
 # usage: test_playwindow.sh <arcade1-cli> <arcade1-nosdl> <build-dir>
 #
@@ -205,5 +210,38 @@ else
     ok
     note "keys ok — ESC quit cleanly, recording complete"
 fi
+
+# --- 6) audio: the window plays the frame's samples (card 8.2) -------------
+# SDL_AUDIODRIVER=dummy makes this headless-safe: the dummy device opens
+# without hardware and drains at the sample rate. Acceptance: the session
+# ends with a summary line and a plausible queue count, and its per-frame
+# hashes still equal the scripted run's — audio is presentation; it moves
+# nothing. A named-bad driver must degrade to a warning and a VIDEO-ONLY
+# session with exit 0: only "no play window" may exit 3.
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy "$CLI" run "$GAME" --live \
+    --frames 60 > "$OUT/aud.txt" 2> "$OUT/aud.err" ||
+    fail "dummy-driver --live run with audio failed"
+grep -q '^ran 60 frames' "$OUT/aud.txt" ||
+    fail "the audio run should report 'ran 60 frames': $(tail -2 "$OUT/aud.txt")"
+AUDIO_N=$(sed -n 's/^arcade1 run --live: audio: \([0-9]*\) frames queued.*/\1/p' \
+    "$OUT/aud.err")
+[ -n "$AUDIO_N" ] && [ "$AUDIO_N" -ge 1 ] && [ "$AUDIO_N" -le 60 ] ||
+    fail "audio summary missing or implausible: '$AUDIO_N' ($(cat "$OUT/aud.err"))"
+grep '^frame ' "$OUT/aud.txt" > "$OUT/aud.f"
+cmp -s "$OUT/aud.f" "$OUT/idle.f" ||
+    fail "playing audio changed the live run's per-frame hashes"
+ok
+note "audio ok — 60-frame session queued $AUDIO_N frame(s) of sound; hashes unmoved"
+
+rc=0; SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=nosuchdriver "$CLI" run "$GAME" \
+    --live --frames 10 > "$OUT/noaud.txt" 2> "$OUT/noaud.err" || rc=$?
+[ "$rc" -eq 0 ] ||
+    fail "no audio device should NOT exit $rc (video-only means exit 0)"
+grep -q 'playing video only' "$OUT/noaud.err" ||
+    fail "no-audio message should say 'playing video only': $(cat "$OUT/noaud.err")"
+grep -q '^ran 10 frames' "$OUT/noaud.txt" ||
+    fail "the video-only session did not run: $(tail -2 "$OUT/noaud.txt")"
+ok
+note "audio ok — no device degrades to a warning + video-only, exit 0"
 
 echo "test-playwindow: ok ($CHECKS checks, Wave 6 card: play window --live)"

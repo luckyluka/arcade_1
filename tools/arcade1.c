@@ -429,6 +429,13 @@ static void wav_close(void)
  * `make check`; tests/test_playwindow.sh (by hand) drives it, including a
  * real XTEST key session when a display is available.
  *
+ * Sound (card 8.2): the window plays each frame's samples through an SDL3
+ * audio stream — the same bytes `--audio` dumps — when the machine has an
+ * audio device. No subsystem, no device, or a device that will not start
+ * degrades to a warning on stderr and a video-only session: audio is never
+ * a reason to lose the window, and never an exit 3 (that stays reserved
+ * for "no play window").
+ *
  * Keys (the §10 mapping): arrows or WASD -> d-pad, Z -> A, X -> B,
  * Enter -> START; R -> end the session (writing --record's script), ESC or
  * window close -> quit — an open recording is finished on either exit, so a
@@ -459,6 +466,15 @@ static SDL_Texture  *g_texture;
 static int           g_sdl_up;      /* SDL_Init succeeded (SDL_Quit owed)    */
 static int           g_live_end;    /* 1 = R / ESC / close asked to stop     */
 static uint64_t      g_frame_ns;    /* 60 Hz pacing deadline (SDL_GetTicksNS)*/
+static SDL_AudioStream *g_audio;    /* card 8.2: live playback stream        */
+static int           g_audio_up;    /* the stream opened (a summary is owed) */
+static unsigned long long g_audio_frames;   /* frames queued successfully    */
+static unsigned long long g_audio_dropped;  /* frames dropped at the cap     */
+
+/* 0.25 s of 16-bit stereo at the machine's rate: a device that stops
+ * draining hits this cap and drops the newest frame, so latency and memory
+ * stay bounded (a live listener wants the recent past, never a backlog). */
+#define LIVE_AUDIO_CAP_BYTES (ARCADE1_SAMPLE_RATE_INT / 4 * 2 * 2)
 
 /* Held key state: events set it, each frame reads it (level-triggered, so a
  * key held across frames stays held; R and ESC are edge-triggered above). */
@@ -516,6 +532,39 @@ static int live_setup(const char *rom_path, unsigned scale)
     }
     g_live_end = 0;
     g_frame_ns = SDL_GetTicksNS() + 1000000000ull / 60;
+
+    /* Card 8.2: play the frame's samples — the very bytes `--audio` dumps —
+     * through SDL3. The audio subsystem initializes separately from the
+     * window's, and the stream opens last: a machine with a display but no
+     * audio device keeps its window (warning + video-only), because only
+     * "no play window" may exit 3. SDL_OpenAudioDeviceStream opens the
+     * device paused, so playback needs the explicit resume. */
+    g_audio = NULL;
+    g_audio_up = 0;
+    g_audio_frames = 0;
+    g_audio_dropped = 0;
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        fprintf(stderr, "arcade1 run --live: no audio subsystem (%s); "
+                "playing video only\n", SDL_GetError());
+    } else {
+        const SDL_AudioSpec spec = {
+            SDL_AUDIO_S16LE, 2, ARCADE1_SAMPLE_RATE_INT
+        };
+
+        g_audio = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+                                            &spec, NULL, NULL);
+        if (!g_audio) {
+            fprintf(stderr, "arcade1 run --live: no audio device (%s); "
+                    "playing video only\n", SDL_GetError());
+        } else if (!SDL_ResumeAudioStreamDevice(g_audio)) {
+            fprintf(stderr, "arcade1 run --live: audio will not start (%s); "
+                    "playing video only\n", SDL_GetError());
+            SDL_DestroyAudioStream(g_audio);
+            g_audio = NULL;
+        } else {
+            g_audio_up = 1;
+        }
+    }
     return 0;
 }
 
@@ -575,6 +624,24 @@ static void live_present(const arcade1_machine_t *m)
     const uint64_t period = 1000000000ull / 60;
     uint64_t       now;
 
+    /* Card 8.2: queue this frame's samples first, so the device consumes
+     * them during the pacing delay below. The cap drops the NEWEST frame
+     * when the queue is full: sound may stall, latency may not grow. */
+    if (g_audio) {
+        const int bytes = (int)(ARCADE1_AUDIO_FRAMES * 2u * 2u);
+
+        if (SDL_GetAudioStreamQueued(g_audio) > LIVE_AUDIO_CAP_BYTES) {
+            g_audio_dropped++;
+        } else if (!SDL_PutAudioStreamData(g_audio, arcade1_audio(m), bytes)) {
+            fprintf(stderr, "arcade1 run --live: audio queue failed (%s); "
+                    "playing video only\n", SDL_GetError());
+            SDL_DestroyAudioStream(g_audio);   /* video carries on, once */
+            g_audio = NULL;
+        } else {
+            g_audio_frames++;
+        }
+    }
+
     if (!SDL_UpdateTexture(g_texture, NULL, arcade1_framebuffer(m),
                            (int)arcade1_framebuffer_pitch(m))) {
         fprintf(stderr, "arcade1 run --live: texture upload failed: %s\n",
@@ -597,6 +664,17 @@ static void live_present(const arcade1_machine_t *m)
 /* Tear the window down; NULL/id-safe, so partial setups unwind too. */
 static void live_shutdown(void)
 {
+    if (g_audio) {
+        SDL_DestroyAudioStream(g_audio);   /* the capped tail is lost */
+        g_audio = NULL;
+    }
+    if (g_audio_up) {                      /* one line, stderr: diagnostics
+                                            * never disturb the stdout hashes */
+        fprintf(stderr, "arcade1 run --live: audio: %llu frames queued, "
+                "%llu dropped (0.25 s queue cap)\n",
+                g_audio_frames, g_audio_dropped);
+        g_audio_up = 0;
+    }
     if (g_texture)  { SDL_DestroyTexture(g_texture);   g_texture  = NULL; }
     if (g_renderer) { SDL_DestroyRenderer(g_renderer); g_renderer = NULL; }
     if (g_window)   { SDL_DestroyWindow(g_window);     g_window   = NULL; }

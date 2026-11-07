@@ -84,7 +84,10 @@ Inside the window, R ends the session and, with `--record FILE`, writes the
 keys you pressed as a normal input script — every live session replays
 bit-identically; ESC quits (finishing an open recording the same way), and
 closing the window quits too. `--scale N` sets the window size (N x
-480x270).
+480x270). The window also plays the game's audio through SDL3 when the
+machine has an audio device — the same samples `--audio FILE` dumps;
+without one it warns on stderr and plays video only (never exit 3: that
+stays reserved for "no play window").
 
 Build it with `make build/arcade1` (or as a prerequisite of `make test-run`).
 

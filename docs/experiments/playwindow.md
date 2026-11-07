@@ -1,9 +1,13 @@
 # Play window — `arcade1 run --live` (findings)
 
 Status: built and passing (ROADMAP_V3 §4.5 as amended by the owner: SDL3,
-exit 3 when absent, not in `make check`). Run its test by hand:
-`make test-playwindow` → `test-playwindow: ok (15 checks, Wave 6 card:
-play window --live)`. The card's design decisions and their basis are in
+exit 3 when absent, not in `make check`), with sound since ROADMAP_V4 card
+8.2 (2026-11-07, addendum below). Run its test by hand:
+`make test-playwindow` → `test-playwindow: ok (17 checks, Wave 6 card:
+play window --live)` — or `env -u DISPLAY make test-playwindow` → `ok
+(11 checks, ...)`, which skips the XTEST key session (documented
+environment issue, addendum 2026-10-20) and runs everything else including
+the audio section. The card's design decisions and their basis are in
 `wave6-evidence.md`; this file records what implementing it taught.
 
 ## What was built
@@ -11,9 +15,10 @@ play window --live)`. The card's design decisions and their basis are in
 | Piece | File |
 |---|---|
 | `--live` flag, live loop, key mapping, exit 3 path | `tools/arcade1.c` |
+| live audio (card 8.2): stream open + resume, per-frame queue, 0.25 s cap, degradation to video-only | `tools/arcade1.c` |
 | SDL3 detection (`pkg-config sdl3`), `CLI_NOSDL`, `test-playwindow` | `Makefile` |
 | XTEST key injector (no xdotool on this machine) | `tests/xkey.c` |
-| 15-check acceptance test (by hand, never in `make check`) | `tests/test_playwindow.sh` |
+| 17-check acceptance test (by hand, never in `make check`) | `tests/test_playwindow.sh` |
 
 The window consumes what already exists: the framebuffer the VM renders
 every frame and the input the pad already reads. It touches only the input
@@ -157,3 +162,52 @@ the key section on a quiet desktop / spare X server, or harden `xkey` to
 re-verify focus before each key word (a WM that bounces focus mid-hold
 would then only lose the keys pressed while unfocused, not the whole
 macro).
+
+## Addendum 2026-11-07: sound in the window (ROADMAP_V4 card 8.2)
+
+`--live` now plays each frame's samples through an SDL3 audio stream — the
+same 800 stereo 48 kHz 16-bit frames per machine `arcade1 run --audio`
+dumps (card 8.1). Section 6 of the test pins it (17 checks with the key
+session, 11 headlessly). What building and running it taught:
+
+- **The device opens paused.** SDL3's docs on `SDL_OpenAudioDeviceStream`
+  (push mode: NULL callback, then `SDL_PutAudioStreamData` per frame) say
+  the device starts paused, so the code calls
+  `SDL_ResumeAudioStreamDevice` right after opening. Without it the queue
+  would fill to the cap and drop — the listener would hear nothing while
+  every API call still succeeded, the one trap here that a queue count
+  alone cannot see.
+- **The audio subsystem initializes separately, after the window is fully
+  up** (`SDL_InitSubSystem(SDL_INIT_AUDIO)`, not a combined `SDL_Init`):
+  a machine with a display but no audio device keeps its window. Measured:
+  `SDL_AUDIODRIVER=nosuchdriver` fails inside the subsystem call ("Audio
+  target 'nosuchdriver' not available") → one stderr warning, `playing
+  video only`, the session runs to exit 0 with per-frame hashes identical
+  to a scripted run's. The card's "exit 3 otherwise" is unchanged — only
+  *no play window* exits 3, and audio never does.
+- **The dummy audio driver drains in real time** (SDL3.2.16): with
+  `SDL_AUDIODRIVER=dummy` a 90-frame session queued all 90 frames with
+  **0 dropped**, and the test's 60-frame session queued 60 — the 0.25 s
+  queue cap never engaged, so a draining device holds about one frame of
+  backlog. The cap exists for the opposite case: a device that stops
+  consuming makes the drop counter climb instead of latency and memory.
+- **Audio moves nothing.** The live run's per-frame hash lines with audio
+  open are byte-identical to a scripted run's (section 6 asserts against
+  section 3's baseline): audio is presentation, on the same tier as the
+  window itself.
+- **Running the test rebuilds walkdemo's sheet and strips its provenance**
+  (pre-existing since card 7.1, found while running section 6):
+  `make test-playwindow` re-runs `tools/gen_walk_sheet.py`, whose output
+  lacks the `provenance`/`ms` blocks the committed
+  `programs/experimental/walkdemo_sheet.json` carries (3 insertions, 24
+  deletions against HEAD). The committed file must be `git checkout`-ed
+  after a test run. A future card should make the sheet pipeline
+  idempotent — merge provenance instead of dropping it, or stop
+  regenerating a committed input.
+- **Section 4 still fails on the busy desktop** (the 2026-10-20
+  addendum's signature, re-measured): with `DISPLAY=:1` two runs failed
+  identically at `recording should carry a 'right' run` carrying
+  `0 239 none`, and the same test on a *stashed* tree (HEAD, no 8.2
+  changes) failed the same way — the environment, not this card. Headless,
+  `env -u DISPLAY make test-playwindow` skips the key section with a note
+  and passes every remaining check.

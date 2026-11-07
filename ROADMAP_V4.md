@@ -277,7 +277,8 @@ commit that carried it, and the day it landed.
 | 7.7 | the art pass on Petal Blade (the rig variant) | `0f804a1` | 2026-10-21 |
 | 7.8 | the clean-room art round — RUN twice: round 6 (7 gaps) and round 7 (9 gaps), both compliant | `a6f6764`, this commit | 2026-10-20/21 |
 | 8.1 | `arcade1 run --audio` — the deterministic WAV dump | (this commit) | 2026-11-06 |
-| 8.2-8.3 | audio in the play window; the Audio-v2 decision brief | — | not started |
+| 8.2 | audio in the play window (`--live` via SDL3) | (this commit) | 2026-11-07 |
+| 8.3 | the Audio-v2 decision brief | — | not started |
 | 9 | the freeze-readiness dossier | — | not started |
 
 **Findings along the way** (all in `docs/experiments/`):
