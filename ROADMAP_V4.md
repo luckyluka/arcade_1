@@ -28,6 +28,7 @@
 - Petal Blade (`round5/`) proves 480x270 can look modern, but its art is a 678-line procedural generator, it has **no test, no golden, nothing in `make check`**, and its repo footprint is 22 MB (1080p PNG captures are 6.2 MB each because the PNG writer stores uncompressed).
 - Measured on Petal Blade: 3.3k-4.5k instructions per frame, **334k-352k pixels written per frame (2.6-2.7x the screen)**, ROM 60 KB of 256 KB. CPU is irrelevant; device pixel work dominates. `DEVICE_BUDGET.md` was measured at 320x240 and is stale.
 - Still deferred (owner decisions, not part of V4): the 1,000,000-step cap contract, the per-frame work budget, the machine freeze.
+  - The freeze became Wave 9; the cap contract and work budget are dossier rows it must resolve, because they were held "to the FPGA milestone" — which is now Wave 10 (§10, added 2026-11-09 at the owner's request).
 
 ## 2. Order of work
 
@@ -37,6 +38,7 @@
 | 2 | **7** | **AI art pipeline**: palettes, drawing library, text sprites, rig animator, raster ingest, QA, art pass, clean-room art round | 5-8 days |
 | 3 | **8** | Audio observability (WAV dump, live audio), Audio v2 decision | 1-2 days |
 | 4 | **9** | Freeze-readiness dossier (evidence for the owner's decisions) | 1 day |
+| 5 | **10** | **ARCADE-1 on FPGA**: the RTL machine passing the same goldens in simulation, then on the owner's board (§10) | 1-2 weeks, hardware-dependent |
 
 ## 3. Wave 7a — fixes and hygiene
 
@@ -281,6 +283,7 @@ and the day it landed.
 | 8.2 | audio in the play window (`--live` via SDL3) | (this commit) | 2026-11-07 |
 | 8.3 | the Audio-v2 decision brief (stops for the owner) | (this commit) | 2026-11-07 |
 | 9 | the freeze-readiness dossier | — | not started |
+| 10.1-10.3 | ARCADE-1 on FPGA (RTL + board) | — | not started |
 
 **Findings along the way** (all in `docs/experiments/`):
 
@@ -292,3 +295,72 @@ and the day it landed.
   deflate blocks per capture;
 * the roadmap's own claim that Petal Blade paints "2.6-2.7x the screen"
   per frame is **measured**: 2.59 (`docs/experiments/budget-480x270.csv`).
+
+## 10. Wave 10 — ARCADE-1 on FPGA (the hardware milestone)
+
+Added 2026-11-09 at the owner's request (a promotion of the long-standing
+"FPGA milestone" — `AssetEcosystem.md` roadmap item 7, `AI_NATIVE_DEVELOPMENT.md`,
+`BEFORE_M25.md`). **Prerequisite: Wave 9.** The RTL implements the *frozen*
+machine, so the dossier's decisions (cap contract, work budget, Audio v2) are
+inputs to this wave, not things to rediscover in HDL.
+
+Rules for every card here:
+
+- **The C VM stays the reference.** `src/arcade1/` does not change; the RTL
+  must match it, byte for byte, through the goldens.
+- **RTL lives in `fpga/` — never in `src/`, never linked into the CLI.**
+  FPGA targets are run **by hand**, never added to `make check` (a new host
+  tool there would break rule 5's stdlib-only constraint for everyone).
+- **The HDL simulator (iverilog or verilator) is a new host dependency** and
+  must be installed by the owner before card 10.1 — this box has no HDL
+  tools today. Nothing in Wave 10 can even be syntax-checked without it.
+- Sizes below come from `docs/experiments/hd-fpga-estimates.md` (all
+  estimated, never built): at 480x270 the framebuffer is **2.074 Mbit**
+  (fits a 4 Mbit BRAM, single-buffered), the worst measured frame writes
+  **336,078 px** → **20.2 Mpx/s** → **20.2 MHz at 1 px/clk** — a
+  conservative design point with the whole video path in BRAM.
+
+### Card 10.1 — simulation harness + RV32IM core (board-independent)
+
+- **Contract**: `fpga/sim/` — a testbench that loads a `.arc1` image, runs
+  it for N frames against the input script, and prints per-frame `hash=`
+  lines in the golden format. Plus the RV32IM core itself, sized from
+  measured instruction counts: shipped frames run **3.3k-5.9k instructions**
+  (petalblade 3783 avg / 5895 max, SPEC's ~14.3k worst shipped frame ≈
+  1.4 % of the 1M cap; the cap itself is 60 MIPS worst case) — so a small
+  pipelined core has headroom to spare, but the cap contract (a Wave 9
+  dossier row) decides how much the RTL must honour vs. simply not care.
+- **Acceptance**: 3 golden sessions × 60 frames run in the simulator with
+  their **state `hash=` lines matching the golden files** (memory, regs,
+  instret — video not yet involved). New by-hand target `make test-fpga`
+  (never in `make check`).
+- **Size**: ~2 days (after the owner installs a simulator).
+
+### Card 10.2 — the video engine, pixel-exact + scan-out + audio
+
+- **Contract**: the draw-op renderer (`video.c`'s sprites, tilemaps, scroll,
+  per-pixel ops) reimplemented in RTL, pixel-exact against the reference;
+  double-buffered BRAM framebuffer with 480x270@60 scan-out; the audio path
+  (cards 8.1/8.2's phase accumulator — the one part of this wave I have
+  already built twice on the host side).
+- **Acceptance**: **all 17 game goldens** match in full — both `hash=` and
+  `fb=` lines per frame — and a probe session's WAV is **byte-identical** to
+  `arcade1 run --audio`'s output. This is the wave's real gate: a different
+  implementation, the identical hashes.
+- **Size**: ~3 days (`video.c` is the big surface).
+
+### Card 10.3 — the board top (owner's hardware)
+
+- **Contract**: `fpga/board/<board>/` — pins, clocks, reset, video output,
+  and a UART that streams each frame's `fb_hash` so the board **self-verifies
+  against the goldens over serial** (no debug probe needed; a python3
+  stdlib-only listener on the host compares against `tests/golden/*.txt`).
+- **Owner prerequisites (blocking)**: exact board + FPGA part number, video
+  path (VGA / HDMI / PMOD), on-board memory (BRAM vs SDRAM), and the
+  toolchain (vendor vs yosys+nextpnr). Timing closure and pin constraints
+  are proved only on the owner's desk; the design stays conservative
+  (20.2 MHz at 1 px/clk has wide margin).
+- **Acceptance**: ≥600 frames of ≥3 goldens matched over UART on real
+  hardware, a visible 480x270@60 picture, the 440 Hz power-on beep audible,
+  and what bring-up taught written to `docs/experiments/fpga-port.md`.
+- **Size**: ~3-5 days + hardware-dependent bring-up loops.
