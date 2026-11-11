@@ -1,0 +1,15 @@
+{
+  "style_pack": "arcade_16",
+  "version": "1.0.0",
+  "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps.",
+  "max_colors": 16,
+  "outline": { "mode": "outer", "ramp": "outline", "separate_layers": ["back"] },
+  "ramps": {
+    "outline": { "base": [24, 20, 28] },
+    "steel": { "shadow": [58, 62, 74],   "base": [112, 120, 140], "light": [190, 198, 214] },
+    "red":   { "shadow": [120, 20, 32],  "base": [230, 48, 54],   "light": [255, 140, 120] },
+    "blue":  { "shadow": [24, 50, 120],  "base": [48, 110, 230],  "light": [140, 190, 255] },
+    "gold":  { "shadow": [140, 96, 20],  "base": [230, 170, 40],  "light": [255, 230, 130] },
+    "skin":  { "shadow": [150, 90, 70],  "base": [220, 160, 120], "light": [245, 200, 160] }
+  }
+}

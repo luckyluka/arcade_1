@@ -1,0 +1,17 @@
+# Asymmetric mechanical claw with two illuminated tubes. Attaches below hand_l.
+px 1
+name claw
+size 6 6
+anchor attach 2 0
+legend
+  . transparent
+  m steel.base
+  s steel.shadow
+  e red.light
+rows
+  .mmmm.
+  .msem.
+  .m..m.
+  .me.m.
+  .m..mm
+  .m...m

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/schema/recipe.schema.json",
+  "title": "ArcForge Recipe",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recipe", "version", "category", "description", "applies_to", "slot", "requires_anchors", "parameters", "geometry", "examples"],
+  "properties": {
+    "recipe": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "category": { "type": "string", "pattern": "^[a-z0-9_]+(/[a-z0-9_]+)*$" },
+    "description": { "type": "string" },
+    "applies_to": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "slot": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "stackable": { "type": "boolean" },
+    "conflicts_with": { "type": "array", "items": { "type": "string" } },
+    "requires_anchors": { "type": "array", "items": { "type": "string" } },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["type", "min", "max", "default"],
+            "properties": { "type": { "const": "int" }, "min": { "type": "integer" }, "max": { "type": "integer" }, "default": { "type": "integer" }, "unit": { "type": "string" } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "default"],
+            "properties": { "type": { "const": "bool" }, "default": { "type": "boolean" } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "values", "default"],
+            "properties": { "type": { "const": "enum" }, "values": { "type": "array", "items": { "type": "string" }, "minItems": 2 }, "default": { "type": "string" } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "default"],
+            "properties": { "type": { "const": "ramp" }, "default": { "type": "string" }, "allow": { "type": "array", "items": { "type": "string" } } } }
+        ]
+      }
+    },
+    "geometry": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["anchor", "layer", "shape", "fill"],
+        "properties": {
+          "anchor": { "type": "string" },
+          "layer": { "type": "string" },
+          "shape": { "enum": ["rect", "ellipse", "poly"] },
+          "x": { "type": ["number", "string"] }, "y": { "type": ["number", "string"] },
+          "w": { "type": ["number", "string"] }, "h": { "type": ["number", "string"] },
+          "points": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": ["number", "string"] } }, "minItems": 3 },
+          "rotate": { "type": ["number", "string"] },
+          "fill": { "type": "string" },
+          "when": { "type": "string" }
+        }
+      }
+    },
+    "hitboxes": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "anchor", "rect", "active_in"],
+        "properties": {
+          "id": { "type": "string" }, "anchor": { "type": "string" },
+          "rect": { "type": "array", "items": { "type": ["number", "string"] }, "minItems": 4, "maxItems": 4 },
+          "active_in": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "examples": { "type": "array", "items": { "type": "object" }, "minItems": 1 }
+  }
+}

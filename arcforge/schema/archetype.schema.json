@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/schema/archetype.schema.json",
+  "title": "ArcForge Archetype",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["archetype", "version", "description", "view", "canvas", "params", "layers", "parts", "anchors", "animations"],
+  "properties": {
+    "archetype": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "view": { "enum": ["front", "side", "top"] },
+    "canvas": { "type": "object", "additionalProperties": false, "required": ["default", "supported"],
+      "properties": { "default": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+                      "supported": { "type": "array", "items": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } } } },
+    "params": { "type": "object" },
+    "layers": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+    "parts": { "type": "object", "additionalProperties": { "type": "object", "required": ["shapes"], "additionalProperties": false,
+      "properties": { "shapes": { "type": "array" } } } },
+    "anchors": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["part", "at"],
+      "properties": { "part": { "type": "string" }, "at": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } } } },
+    "animations": { "type": "object", "additionalProperties": { "type": "object", "required": ["fps", "loop", "frames"],
+      "properties": { "fps": { "type": "number" }, "loop": { "type": "boolean" }, "phases": { "type": "array", "items": { "type": "string" } },
+                      "hit_frames": { "type": "array", "items": { "type": "integer" } },
+                      "frames": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["offsets"], "additionalProperties": false,
+                        "properties": { "offsets": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } } } } } } } },
+    "collision": { "type": "object" }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "recipe": "boots_heavy",
+  "version": "1.0.0",
+  "category": "humanoid/feet",
+  "description": "Wide armoured boots with a light cuff.",
+  "applies_to": ["humanoid_hero"],
+  "slot": "feet_gear",
+  "requires_anchors": ["foot_l", "foot_r"],
+  "parameters": {},
+  "geometry": [
+    { "anchor": "foot_l", "layer": "armor", "shape": "rect", "x": -2, "y": -3, "w": 6, "h": 4, "fill": "$armor_ramp.shadow" },
+    { "anchor": "foot_l", "layer": "armor", "shape": "rect", "x": -2, "y": -3, "w": 6, "h": 1, "fill": "$armor_ramp.light" },
+    { "anchor": "foot_r", "layer": "armor", "shape": "rect", "x": -3, "y": -3, "w": 6, "h": 4, "fill": "$armor_ramp.shadow" },
+    { "anchor": "foot_r", "layer": "armor", "shape": "rect", "x": -3, "y": -3, "w": 6, "h": 1, "fill": "$armor_ramp.light" }
+  ],
+  "examples": [ {} ]
+}

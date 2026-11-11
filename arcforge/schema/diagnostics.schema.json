@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/schema/diagnostics.schema.json",
+  "title": "ArcForge Diagnostics Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "asset", "stage", "diagnostics"],
+  "properties": {
+    "status": { "enum": ["PASS", "FAIL"] },
+    "asset": { "type": "string" },
+    "stage": { "enum": ["validate", "render", "test", "golden", "lint"] },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "path", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[EW]_[A-Z_]+$" },
+          "severity": { "enum": ["error", "warning"] },
+          "path": { "type": "string", "description": "RFC 6901 JSON Pointer into the asset (or a file path for registry lint)." },
+          "message": { "type": "string" },
+          "observed": {},
+          "expected": {},
+          "suggestions": { "type": "array", "items": { "type": "string" } },
+          "fix": { "type": "array", "description": "RFC 6902 JSON Patch that resolves this diagnostic.", "items": { "type": "object" } }
+        }
+      }
+    },
+    "tests": { "type": "array", "items": { "type": "object" } },
+    "stats": { "type": "object" }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "archetype": "humanoid_hero",
+  "version": "1.0.0",
+  "description": "Front-view chunky humanoid, 32x32. l/r are SCREEN-relative (hand_r appears on the viewer's right).",
+  "view": "front",
+  "canvas": { "default": [32, 32], "supported": [[32, 32]] },
+  "params": {
+    "armor_ramp": { "type": "ramp", "default": "steel", "allow": ["steel", "blue", "gold"] },
+    "skin_ramp":  { "type": "ramp", "default": "skin",  "allow": ["skin"] }
+  },
+  "layers": ["back", "body", "armor", "held", "foreground", "fx"],
+  "parts": {
+    "root": { "shapes": [] },
+    "leg_l": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 11, "y": 23, "w": 4, "h": 8, "fill": "$armor_ramp.shadow" } ] },
+    "leg_r": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 17, "y": 23, "w": 4, "h": 8, "fill": "$armor_ramp.shadow" } ] },
+    "torso": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 10, "y": 11, "w": 12, "h": 12, "fill": "$armor_ramp.base" },
+      { "shape": "rect", "layer": "body", "x": 11, "y": 12, "w": 4,  "h": 3,  "fill": "$armor_ramp.light" },
+      { "shape": "rect", "layer": "body", "x": 10, "y": 21, "w": 12, "h": 2,  "fill": "$armor_ramp.shadow" } ] },
+    "head": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 11, "y": 2, "w": 10, "h": 9, "fill": "$skin_ramp.base" },
+      { "shape": "rect", "layer": "body", "x": 13, "y": 6, "w": 2,  "h": 2, "fill": "outline" },
+      { "shape": "rect", "layer": "body", "x": 17, "y": 6, "w": 2,  "h": 2, "fill": "outline" } ] },
+    "arm_l": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 7, "y": 12, "w": 3, "h": 9, "fill": "$armor_ramp.base" },
+      { "shape": "rect", "layer": "body", "x": 7, "y": 21, "w": 3, "h": 2, "fill": "$skin_ramp.base" } ] },
+    "arm_r": { "shapes": [
+      { "shape": "rect", "layer": "body", "x": 22, "y": 12, "w": 3, "h": 9, "fill": "$armor_ramp.base" },
+      { "shape": "rect", "layer": "body", "x": 22, "y": 21, "w": 3, "h": 2, "fill": "$skin_ramp.base" } ] }
+  },
+  "anchors": {
+    "origin":     { "part": "root",  "at": [16, 30] },
+    "foot_l":     { "part": "leg_l", "at": [12, 30] },
+    "foot_r":     { "part": "leg_r", "at": [19, 30] },
+    "hip":        { "part": "torso", "at": [16, 22] },
+    "back":       { "part": "torso", "at": [16, 13] },
+    "neck":       { "part": "torso", "at": [16, 11] },
+    "shoulder_l": { "part": "torso", "at": [8, 12] },
+    "shoulder_r": { "part": "torso", "at": [23, 12] },
+    "head_center":{ "part": "head",  "at": [16, 6] },
+    "head_top":   { "part": "head",  "at": [16, 2] },
+    "hand_l":     { "part": "arm_l", "at": [8, 22] },
+    "hand_r":     { "part": "arm_r", "at": [23, 22] }
+  },
+  "animations": {
+    "idle_breathe": { "fps": 4, "loop": true, "frames": [
+      { "offsets": {} },
+      { "offsets": { "head": [0, 1], "torso": [0, 1], "arm_l": [0, 1], "arm_r": [0, 1] } } ] },
+    "walk_cycle": { "fps": 8, "loop": true, "frames": [
+      { "offsets": {} },
+      { "offsets": { "leg_l": [0, -1], "torso": [0, 1], "head": [0, 1] } },
+      { "offsets": {} },
+      { "offsets": { "leg_r": [0, -1], "torso": [0, 1], "head": [0, 1] } } ] },
+    "attack_slash": { "fps": 10, "loop": false,
+      "phases": ["anticipation", "strike", "follow_through"], "hit_frames": [1],
+      "frames": [
+        { "offsets": { "arm_r": [0, -2] } },
+        { "offsets": { "arm_r": [0, 3], "torso": [1, 0], "head": [1, 0] } },
+        { "offsets": { "arm_r": [0, 1] } } ] }
+  },
+  "collision": { "hurtbox": { "rect": [10, 2, 12, 29] } }
+}

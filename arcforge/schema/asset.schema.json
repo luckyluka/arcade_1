@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/schema/asset.schema.json",
+  "title": "ArcForge Asset (v2)",
+  "description": "Strict AI-facing asset document. Every key is executable or explicitly metadata. Unknown keys are errors, never ignored. Vocabulary values (archetype, recipe, ramp, template names) are validated against the registry by the compiler, not by this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["arcforge", "asset", "target", "style_pack", "archetype"],
+  "properties": {
+    "arcforge": { "const": "2.0" },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "version"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$" },
+        "type": { "enum": ["character", "enemy", "boss", "projectile", "pickup", "effect", "tile", "ui"] },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "description": { "type": "string", "description": "Metadata only. Never executable visual intent." }
+      }
+    },
+    "metadata": { "type": "object", "description": "Free-form notes. Ignored by the compiler.", "additionalProperties": true },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "canvas"],
+      "properties": {
+        "profile": { "enum": ["arcade1-draft"] },
+        "canvas": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 256 }, "minItems": 2, "maxItems": 2 }
+      }
+    },
+    "style_pack": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "archetype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "params": { "type": "object" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["recipe"],
+            "properties": {
+              "recipe": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "params": { "type": "object" }
+            }
+          }
+        ]
+      }
+    },
+    "custom": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "file", "anchor", "layer"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "type": { "const": "px_fragment" },
+          "file": { "type": "string" },
+          "anchor": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "layer": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+        }
+      }
+    },
+    "animations": {
+      "type": "object",
+      "propertyNames": { "enum": ["idle", "walk", "attack", "hurt", "death"] },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template"],
+        "properties": { "template": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assert"],
+        "properties": {
+          "assert": { "enum": ["dimensions", "palette_size", "feature_present", "silhouette_area", "bbox_margin", "anchor_inside_canvas", "root_stable", "frame_count"] },
+          "expected": { "type": "array", "items": { "type": "integer" } },
+          "recipe": { "type": "string" },
+          "anchor": { "type": "string" },
+          "min": { "type": "number" },
+          "max": { "type": "number" }
+        }
+      }
+    },
+    "export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "formats": { "type": "array", "items": { "enum": ["png", "spritesheet", "arcade1_asset"] }, "uniqueItems": true }
+      }
+    }
+  }
+}

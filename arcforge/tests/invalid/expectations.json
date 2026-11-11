@@ -1,0 +1,32 @@
+{
+  "unknown_recipe": [
+    "E_UNKNOWN_RECIPE"
+  ],
+  "param_range": [
+    "E_PARAM_RANGE"
+  ],
+  "param_enum": [
+    "E_PARAM_ENUM"
+  ],
+  "unknown_param": [
+    "E_UNKNOWN_PARAM"
+  ],
+  "slot_conflict": [
+    "E_SLOT_CONFLICT"
+  ],
+  "free_text_visual": [
+    "E_UNKNOWN_FIELD"
+  ],
+  "missing_anchor": [
+    "E_MISSING_ANCHOR"
+  ],
+  "unknown_ramp": [
+    "E_PARAM_ENUM"
+  ],
+  "unknown_template": [
+    "E_UNKNOWN_ANIMATION_TEMPLATE"
+  ],
+  "unsupported_canvas": [
+    "E_CANVAS_UNSUPPORTED"
+  ]
+}

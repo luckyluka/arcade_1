@@ -1,0 +1,30 @@
+{
+  "status": "FAIL",
+  "asset": "hero.iron_knight",
+  "stage": "validate",
+  "diagnostics": [
+    {
+      "code": "E_UNKNOWN_RECIPE",
+      "severity": "error",
+      "path": "/features/2/recipe",
+      "message": "NO RECIPE EXISTS named 'energy_swrd'",
+      "expected": [
+        "boots_heavy",
+        "cape_torn",
+        "energy_sword",
+        "helmet_closed",
+        "shoulder_armor_heavy"
+      ],
+      "suggestions": [
+        "energy_sword"
+      ],
+      "fix": [
+        {
+          "op": "replace",
+          "path": "/features/2/recipe",
+          "value": "energy_sword"
+        }
+      ]
+    }
+  ]
+}

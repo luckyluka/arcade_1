@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/schema/style_pack.schema.json",
+  "title": "ArcForge Style Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["style_pack", "version", "description", "max_colors", "outline", "ramps"],
+  "properties": {
+    "style_pack": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "max_colors": { "type": "integer", "minimum": 2, "maximum": 256 },
+    "outline": { "type": "object", "additionalProperties": false, "required": ["mode", "ramp"],
+      "properties": { "mode": { "enum": ["none", "outer"] }, "ramp": { "type": "string" }, "separate_layers": { "type": "array", "items": { "type": "string" } } } },
+    "ramps": { "type": "object", "additionalProperties": { "type": "object",
+      "propertyNames": { "enum": ["shadow", "base", "light"] },
+      "additionalProperties": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 3, "maxItems": 3 },
+      "required": ["base"] } }
+  }
+}
