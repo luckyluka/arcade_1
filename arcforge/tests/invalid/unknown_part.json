@@ -1,0 +1,18 @@
+{
+  "style_pack": "broken_inner",
+  "version": "1.0.0",
+  "description": "Negative fixture: outline.inner.parts names a part that no archetype defines.",
+  "max_colors": 16,
+  "outline": {
+    "mode": "outer",
+    "ramp": "ink",
+    "inner": {
+      "mode": "part",
+      "parts": ["torso", "helmut"]
+    }
+  },
+  "ramps": {
+    "ink": { "base": [0, 0, 0] },
+    "steel": { "base": [128, 128, 128] }
+  }
+}

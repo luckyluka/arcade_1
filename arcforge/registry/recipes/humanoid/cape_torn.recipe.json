@@ -43,15 +43,19 @@
           -1
         ],
         [
-          12,
+          13,
+          3
+        ],
+        [
+          13,
           "$length"
         ],
         [
-          8,
+          9,
           "$length-3"
         ],
         [
-          4,
+          5,
           "$length"
         ],
         [
@@ -59,28 +63,22 @@
           "$length-3"
         ],
         [
-          -4,
+          -5,
           "$length"
         ],
         [
-          -8,
+          -9,
           "$length-3"
         ],
         [
-          -12,
+          -13,
           "$length"
+        ],
+        [
+          -13,
+          3
         ]
       ],
-      "fill": "$color.shadow"
-    },
-    {
-      "anchor": "back",
-      "layer": "back",
-      "shape": "rect",
-      "x": -7,
-      "y": 0,
-      "w": 14,
-      "h": "$length-5",
       "fill": "$color.base"
     }
   ],

@@ -11,7 +11,7 @@ def run(*args):
     try:
         return p.returncode, json.loads(p.stdout)
     except json.JSONDecodeError:
-        return p.returncode, {"status": "FAIL", "diagnostics": [{"code": "E_TOOL", "path": "/", "message": p.stderr[-400:]}]}
+        return p.returncode, {"status": "FAIL", "diagnostics": [{"code": "E_TOOL", "severity": "error", "path": "/", "message": p.stderr[-400:]}]}
 
 def check(name, ok, detail=""):
     global fails

@@ -7,7 +7,7 @@ The AI drives ArcForge through a small tool surface (CLI now, MCP server in M5).
 |---|---|---|
 | list_vocabulary | `list [archetypes\|recipes\|styles]` | discover what exists |
 | describe | `describe recipe\|archetype\|style NAME` | parameters, ranges, anchors, slots |
-| validate | `validate ASSET` | schema + registry checks, no rendering |
+| validate | `validate ASSET` | schema + registry checks, no rendering; also accepts a style-pack document (detected by `style_pack` + `ramps` without `arcforge`) to check `outline.inner.parts` against the registry |
 | render | `render ASSET --out D` | frames, spritesheet, atlas, preview PNG for visual review |
 | test | `test ASSET` | validate + render + assertions |
 | golden | `golden ASSET [--update]` | regression hashes |
@@ -31,6 +31,7 @@ The AI drives ArcForge through a small tool surface (CLI now, MCP server in M5).
 | E_SCHEMA / E_UNKNOWN_FIELD | structure wrong / field not executable |
 | E_UNKNOWN_ARCHETYPE / STYLE_PACK / RECIPE / ANIMATION_TEMPLATE / LAYER | name not in the registry |
 | E_UNKNOWN_PARAM / E_PARAM_TYPE / E_PARAM_RANGE / E_PARAM_ENUM | parameter problems |
+| E_UNKNOWN_PART | style pack `outline.inner.parts` names a part no archetype defines |
 | E_RECIPE_NOT_APPLICABLE / E_SLOT_CONFLICT / E_MISSING_ANCHOR / E_CANVAS_UNSUPPORTED | composition problems |
 | E_PX_NOT_FOUND / E_PX_PARSE / E_PX_LEGEND | fragment problems |
 | E_RECIPE_EXPR / E_ARCHETYPE_EXPR | registry content bug (fix the registry, not the asset) |

@@ -28,5 +28,8 @@
   ],
   "unsupported_canvas": [
     "E_CANVAS_UNSUPPORTED"
+  ],
+  "unknown_part": [
+    "E_UNKNOWN_PART"
   ]
 }

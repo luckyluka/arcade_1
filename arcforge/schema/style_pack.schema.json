@@ -11,7 +11,21 @@
     "description": { "type": "string" },
     "max_colors": { "type": "integer", "minimum": 2, "maximum": 256 },
     "outline": { "type": "object", "additionalProperties": false, "required": ["mode", "ramp"],
-      "properties": { "mode": { "enum": ["none", "outer"] }, "ramp": { "type": "string" }, "separate_layers": { "type": "array", "items": { "type": "string" } } } },
+      "properties": {
+        "mode": { "enum": ["none", "outer"] },
+        "ramp": { "type": "string" },
+        "separate_layers": { "type": "array", "items": { "type": "string" } },
+        "inner": {
+          "type": "object",
+          "description": "Per-part inner outline: a 1px outline INSIDE the silhouette, on part boundaries.",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["none", "part"] },
+            "parts": { "type": "array", "items": { "type": "string" }, "minItems": 1,
+                       "description": "Restrict the line to these part names; omitted = every part." }
+          } }
+      } },
     "ramps": { "type": "object", "additionalProperties": { "type": "object",
       "propertyNames": { "enum": ["shadow", "base", "light"] },
       "additionalProperties": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 3, "maxItems": 3 },

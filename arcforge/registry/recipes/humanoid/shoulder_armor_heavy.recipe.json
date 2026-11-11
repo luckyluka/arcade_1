@@ -8,12 +8,12 @@
   "requires_anchors": ["shoulder_l", "shoulder_r"],
   "parameters": {},
   "geometry": [
-    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -4, "y": -2, "w": 7, "h": 5, "fill": "$armor_ramp.base" },
-    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -3, "y": -2, "w": 4, "h": 1, "fill": "$armor_ramp.light" },
-    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -4, "y": 2,  "w": 7, "h": 1, "fill": "$armor_ramp.shadow" },
-    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -2, "y": -2, "w": 7, "h": 5, "fill": "$armor_ramp.base" },
-    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -1, "y": -2, "w": 4, "h": 1, "fill": "$armor_ramp.light" },
-    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -2, "y": 2,  "w": 7, "h": 1, "fill": "$armor_ramp.shadow" }
+    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -5, "y": -2, "w": 8, "h": 5, "fill": "$armor_ramp.base" },
+    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -4, "y": -2, "w": 6, "h": 1, "fill": "$armor_ramp.light" },
+    { "anchor": "shoulder_l", "layer": "armor", "shape": "rect", "x": -5, "y": 2,  "w": 8, "h": 1, "fill": "$armor_ramp.shadow" },
+    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -2, "y": -2, "w": 8, "h": 5, "fill": "$armor_ramp.base" },
+    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -1, "y": -2, "w": 6, "h": 1, "fill": "$armor_ramp.light" },
+    { "anchor": "shoulder_r", "layer": "armor", "shape": "rect", "x": -2, "y": 2,  "w": 8, "h": 1, "fill": "$armor_ramp.shadow" }
   ],
   "examples": [ {} ]
 }

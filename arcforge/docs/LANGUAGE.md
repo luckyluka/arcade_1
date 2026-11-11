@@ -24,7 +24,9 @@ Only `description` and `metadata` are free-form, and neither affects output. Any
 2. Features in listed order. A string is shorthand for the recipe with default parameters.
 3. Custom `.px` fragments in listed order.
 4. Painter's algorithm: sorted by (layer index in archetype `layers`, then global sequence). Later draws over earlier within a layer.
-5. Post-pass: outline (style pack). `outer`: 1px outline around the silhouette; `separate_layers` (e.g. `back`): pixels of those layers touching non-listed layers become outline, so a cape separates from the body.
+5. Post-pass: outline (style pack), two independent passes in order:
+   - `outer`: 1px outline around the silhouette; `separate_layers` (e.g. `back`): pixels of those layers touching non-listed layers become outline, so a cape separates from the body.
+   - `inner`: per-part inner outline. `"inner": { "mode": "part", "parts": ["torso", ...] }` in the style pack's `outline`. A pixel belonging to a listed part becomes outline where it touches a 4-neighbour pixel of a *different* part that was drawn **before** it (painter's order: layer index, then sequence). Because the test only looks backwards, exactly one side of every boundary is outlined — always 1px, never a doubled line. `mode: "none"` (the default) disables the pass; omitting `parts` applies it to every part. Part names are cross-checked against the registry at validate/lint time (`E_UNKNOWN_PART`). Outer-outline pixels carry no part and never participate. Integer math only, no RNG; the pass is a pure function of the resolved grid.
 
 ## Coordinates
 - Pixel grid, origin top-left, +x right, +y down. A coordinate is the pixel's top-left corner.

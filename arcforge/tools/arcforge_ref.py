@@ -548,13 +548,15 @@ def part_offset(offsets, part):
 
 def render_frame(ir, offsets):
     W, H = ir["W"], ir["H"]
-    grid = {}
+    grid = {}   # (x, y) -> (li, seq, part, ramp, tone): seq orders pixels within
+                # a layer and part identity feeds the inner-outline pass;
+                # outer-outline pixels carry part None
     clipped = 0
 
-    def put(x, y, li, fill):
+    def put(x, y, li, seq, part, fill):
         nonlocal clipped
         if 0 <= x < W and 0 <= y < H:
-            grid[(x, y)] = (li, fill[0], fill[1])
+            grid[(x, y)] = (li, seq, part, fill[0], fill[1])
         else:
             clipped += 1
 
@@ -562,7 +564,7 @@ def render_frame(ir, offsets):
         ox, oy = part_offset(offsets, d["part"])
         if d["kind"] == "px":
             for dx, dy, fill in d["px"]:
-                put(d["at"][0] + ox + dx, d["at"][1] + oy + dy, d["li"], fill)
+                put(d["at"][0] + ox + dx, d["at"][1] + oy + dy, d["li"], d["seq"], d["part"], fill)
         elif d["kind"] == "ellipse":
             x, y, w, h = d["box"]
             x, y = x + ox, y + oy
@@ -571,7 +573,7 @@ def render_frame(ir, offsets):
                     dx = (2 * px + 1) - (2 * x + w)
                     dy = (2 * py + 1) - (2 * y + h)
                     if dx * dx * h * h + dy * dy * w * w <= w * w * h * h:
-                        put(px, py, d["li"], d["fill"])
+                        put(px, py, d["li"], d["seq"], d["part"], d["fill"])
         else:
             pts = [(fx + ox * 64, fy + oy * 64) for fx, fy in d["pts"]]
             x0 = min(p[0] for p in pts) // 64
@@ -581,27 +583,45 @@ def render_frame(ir, offsets):
             for py in range(y0, y1 + 1):
                 for px in range(x0, x1 + 1):
                     if point_in_poly(pts, px * 64 + 32, py * 64 + 32):
-                        put(px, py, d["li"], d["fill"])
+                        put(px, py, d["li"], d["seq"], d["part"], d["fill"])
 
     # outline post-pass
     style, layers = ir["style"], ir["arch"]["layers"]
     ol = style["outline"]
+    nbrs = ((1, 0), (-1, 0), (0, 1), (0, -1))
     if ol["mode"] == "outer":
         sep = {layers.index(n) for n in ol.get("separate_layers", []) if n in layers}
         out = dict(grid)
-        nbrs = ((1, 0), (-1, 0), (0, 1), (0, -1))
-        for (x, y), (li, _, _) in grid.items():
+        for (x, y), (li, seq, part, _, _) in grid.items():
             if li in sep:
                 for dx, dy in nbrs:
                     n = grid.get((x + dx, y + dy))
                     if n and n[0] not in sep:
-                        out[(x, y)] = (li, ol["ramp"], "base")
+                        out[(x, y)] = (li, seq, part, ol["ramp"], "base")
                         break
         for (x, y) in grid:
             for dx, dy in nbrs:
                 p = (x + dx, y + dy)
                 if p not in grid and 0 <= p[0] < W and 0 <= p[1] < H:
-                    out[p] = (len(layers), ol["ramp"], "base")
+                    out[p] = (len(layers), 0, None, ol["ramp"], "base")
+        grid = out
+    # Per-part inner outline (style pack outline.inner): a pixel of a listed
+    # part becomes outline where it touches a pixel of ANOTHER part drawn
+    # before it ((li, seq) is the painter's order). One side only -> always
+    # exactly 1px, landing on the part that was drawn over the other.
+    inner = ol.get("inner", {"mode": "none"})
+    if inner.get("mode") == "part":
+        want = inner.get("parts")
+        listed = None if want is None else set(want)
+        out = dict(grid)
+        for (x, y), (li, seq, part, _, _) in grid.items():
+            if part is None or (listed is not None and part not in listed):
+                continue
+            for dx, dy in nbrs:
+                n = grid.get((x + dx, y + dy))
+                if n and n[2] is not None and n[2] != part and (n[0], n[1]) < (li, seq):
+                    out[(x, y)] = (li, seq, part, ol["ramp"], "base")
+                    break
         grid = out
     return grid, clipped
 
@@ -610,8 +630,8 @@ def to_rgba(ir, grid):
     W, H = ir["W"], ir["H"]
     ramps = ir["style"]["ramps"]
     buf = bytearray(W * H * 4)
-    for (x, y), (_, ramp, tone) in grid.items():
-        r, g, b = ramps[ramp][tone]
+    for (x, y), v in grid.items():
+        r, g, b = ramps[v[3]][v[4]]
         i = (y * W + x) * 4
         buf[i:i + 4] = bytes((r, g, b, 255))
     return bytes(buf)
@@ -671,7 +691,7 @@ def run_tests(ir, renders):
         if a == "dimensions":
             res(i, t, [W, H] == t.get("expected"), [W, H], t.get("expected"))
         elif a == "palette_size":
-            cols = {ir["style"]["ramps"][r][tn] and (r, tn) for f in frames for (_, r, tn) in f["grid"].values()}
+            cols = {(v[3], v[4]) for f in frames for v in f["grid"].values()}
             res(i, t, len(cols) <= t["max"], len(cols), f"<= {t['max']}")
         elif a == "feature_present":
             res(i, t, t["recipe"] in ir["features"], ir["features"], f"contains {t['recipe']}",
@@ -703,7 +723,7 @@ def run_tests(ir, renders):
             res(i, t, n <= t["max"], n, f"<= {t['max']}")
 
     # implicit checks, always on
-    cols = {(r, tn) for f in frames for (_, r, tn) in f["grid"].values()}
+    cols = {(v[3], v[4]) for f in frames for v in f["grid"].values()}
     if len(cols) > ir["style"]["max_colors"]:
         diags.append(D("E_PALETTE_BUDGET", "/style_pack", "palette budget exceeded", observed=len(cols),
                        expected=f"<= {ir['style']['max_colors']}"))
@@ -734,11 +754,49 @@ def asset_id(asset):
     return asset.get("asset", {}).get("id", "?") if isinstance(asset, dict) else "?"
 
 
+def known_parts(reg):
+    """Every part name an archetype can attach a drawable to (parts + anchor targets)."""
+    names = set()
+    for arch in reg["archetypes"].values():
+        names |= set(arch["parts"])
+        names |= {a["part"] for a in arch.get("anchors", {}).values()}
+    return sorted(names)
+
+
+def is_style_pack_doc(doc):
+    return (isinstance(doc, dict) and "style_pack" in doc and "ramps" in doc
+            and "arcforge" not in doc)
+
+
+def check_style_pack(doc, reg, base_path=""):
+    """Schema + registry cross-checks for a style-pack document."""
+    diags = schema_diags(doc, "style_pack.schema.json", base_path)
+    if diags:
+        return diags
+    inner = doc.get("outline", {}).get("inner", {})
+    if inner.get("mode") != "part":
+        return diags
+    allp = known_parts(reg)
+    for i, p in enumerate(inner.get("parts", [])):
+        if p not in allp:
+            path = base_path + ptr("outline", "inner", "parts", i)
+            sug = close(p, allp)
+            diags.append(D("E_UNKNOWN_PART", path, f"NO PART EXISTS named '{p}' in any archetype",
+                           observed=p, expected=allp, suggestions=sug,
+                           fix=([{"op": "replace", "path": path, "value": sug[0]}] if sug else
+                                [{"op": "remove", "path": path}])))
+    return diags
+
+
 def cmd_validate(args):
     reg = load_registry()
-    asset, base = load_asset(args.asset)
-    diags, ir = compile_asset(asset, reg, base)
-    r = report("validate", asset_id(asset), diags)
+    doc, base = load_asset(args.asset)
+    if is_style_pack_doc(doc):
+        diags = check_style_pack(doc, reg)
+        r = report("validate", doc.get("style_pack", "?"), diags)
+    else:
+        diags, ir = compile_asset(doc, reg, base)
+        r = report("validate", asset_id(doc), diags)
     print(json.dumps(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
@@ -833,7 +891,12 @@ def cmd_lint(args):
                         ("recipes/**/*.recipe.json", "recipe.schema.json"),
                         ("styles/*.style.json", "style_pack.schema.json")):
         for p in sorted(REG.glob(pat)):
-            for d in schema_diags(load_json(p), schema, str(p.relative_to(ROOT))):
+            rel = str(p.relative_to(ROOT))
+            if schema == "style_pack.schema.json":
+                for d in check_style_pack(load_json(p), reg, rel + ":"):
+                    diags.append(d)
+                continue
+            for d in schema_diags(load_json(p), schema, rel):
                 diags.append(d)
     for name, rec in reg["recipes"].items():
         for ex_i, ex in enumerate(rec["examples"]):
