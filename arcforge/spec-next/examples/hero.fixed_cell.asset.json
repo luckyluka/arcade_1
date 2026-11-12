@@ -1,0 +1,9 @@
+{
+  "arcforge": "2.1",
+  "asset": { "id": "hero.knight.fixed", "type": "character", "version": "1.0.0" },
+  "target": { "profile": "arcade1-draft", "canvas": [24, 24], "clip_policy": "error" },
+  "style_pack": "platformer_24",
+  "archetype": { "name": "humanoid_side", "size": { "height": 22 } },
+  "features": [ "cap_round", "overalls", "boots_round" ],
+  "animations": { "idle": { "template": "idle_breathe" } }
+}

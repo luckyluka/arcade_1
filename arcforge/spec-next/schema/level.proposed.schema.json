@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArcForge Level (PROPOSED)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "arcforge_level",
+    "id",
+    "tile_size",
+    "sky",
+    "legend",
+    "layers"
+  ],
+  "properties": {
+    "arcforge_level": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "tile_size": {
+      "type": "integer",
+      "enum": [
+        8,
+        16,
+        32
+      ]
+    },
+    "sky": {
+      "type": "string"
+    },
+    "legend": {
+      "type": "object",
+      "propertyNames": {
+        "maxLength": 1
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "rows"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "tiles"
+              },
+              "rows": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "items"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "scenery",
+                  "entities"
+                ]
+              },
+              "parallax": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "asset",
+                    "at"
+                  ],
+                  "properties": {
+                    "asset": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "facing": {
+                      "enum": [
+                        "left",
+                        "right"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "spawn": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

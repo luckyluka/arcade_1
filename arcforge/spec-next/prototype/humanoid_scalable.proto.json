@@ -1,0 +1,87 @@
+{
+  "_status": "PROTOTYPE of the proposed size-parametric archetype. Uses only expressions the current reference tool already evaluates; metrics/percent params are resolved by size_sweep.py.",
+  "archetype": "humanoid_front_scalable",
+  "size_param": "height",
+  "layers": ["back", "body", "armor", "held", "foreground", "fx"],
+  "metrics": [
+    ["u",        "max(1, floor($height/16))"],
+    ["head_h",   "max(4, round($height*30/100))"],
+    ["leg_h",    "max(3, round($height*30/100))"],
+    ["torso_h",  "$height-$head_h-$leg_h"],
+    ["torso_w",  "2*floor(round($height*55/100)/2)+1"],
+    ["head_w",   "2*floor(round($height*45/100)/2)+1"],
+    ["leg_w",    "max(2, round($height*18/100))"],
+    ["gap",      "2*floor($u/2)+1"],
+    ["arm_w",    "max(2, round($height*14/100))"],
+    ["half_t",   "floor($torso_w/2)"],
+    ["half_h",   "floor($head_w/2)"],
+    ["cx",       "floor($W/2)"],
+    ["foot_y",   "$H-2"],
+    ["leg_top",  "$foot_y-$leg_h+1"],
+    ["torso_top","$leg_top-$torso_h"],
+    ["head_top", "$torso_top-$head_h"],
+    ["arm_h",    "max(3, $torso_h-$u)"],
+    ["hand_h",   "max(1, floor($arm_h/4))"],
+    ["leg_l_x",  "$cx-floor($gap/2)-$leg_w"],
+    ["leg_r_x",  "$cx+floor($gap/2)+1"]
+  ],
+  "anchors": {
+    "head_center": ["$cx", "$head_top+floor($head_h/2)"],
+    "hand_r":      ["$cx+$half_t+1+floor($arm_w/2)", "$torso_top+$arm_h-1"],
+    "foot_l":      ["$leg_l_x+floor($leg_w/2)", "$foot_y"],
+    "foot_r":      ["$leg_r_x+floor($leg_w/2)", "$foot_y"],
+    "origin":      ["$cx", "$foot_y"]
+  },
+  "body": [
+    {"shape": "rect", "layer": "body", "x": "$leg_l_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "steel.shadow"},
+    {"shape": "rect", "layer": "body", "x": "$leg_r_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "steel.shadow"},
+    {"shape": "rect", "layer": "body", "x": "$cx-$half_t", "y": "$torso_top", "w": "$torso_w", "h": "$torso_h", "fill": "steel.base"},
+    {"shape": "rect", "layer": "body", "x": "$cx-$half_t", "y": "$torso_top+$torso_h-$u", "w": "$torso_w", "h": "$u", "fill": "steel.shadow"},
+    {"shape": "rect", "layer": "body", "x": "$cx-$half_h", "y": "$head_top", "w": "$head_w", "h": "$head_h", "fill": "skin.base"},
+    {"shape": "rect", "layer": "body", "x": "$cx-$half_t-$arm_w", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h", "fill": "steel.base"},
+    {"shape": "rect", "layer": "body", "x": "$cx-$half_t-$arm_w", "y": "$torso_top+$arm_h-$hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "skin.base"},
+    {"shape": "rect", "layer": "body", "x": "$cx+$half_t+1", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h", "fill": "steel.base"},
+    {"shape": "rect", "layer": "body", "x": "$cx+$half_t+1", "y": "$torso_top+$arm_h-$hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "skin.base"}
+  ],
+  "recipes": {
+    "helmet_closed": {
+      "anchor": "head_center",
+      "params": {"visor": "red"},
+      "locals": [["slit_h", "max(1, floor($head_h/4))"]],
+      "geometry": [
+        {"shape": "rect", "layer": "armor", "x": "-$half_h", "y": "-floor($head_h/2)", "w": "$head_w", "h": "$head_h+1", "fill": "steel.base"},
+        {"shape": "rect", "layer": "armor", "x": "-$half_h+1", "y": "-floor($head_h/2)+1", "w": "max(2, floor($head_w/3))", "h": "$u", "fill": "steel.light"},
+        {"shape": "rect", "layer": "armor", "x": "-$half_h+1", "y": "-floor($slit_h/2)", "w": "$head_w-2", "h": "$slit_h", "fill": "outline"},
+        {"shape": "rect", "layer": "armor", "x": "-$half_h+2", "y": "-floor($slit_h/2)", "w": "max(1, $head_w-4)", "h": "max(1, $slit_h-1)", "fill": "$visor.light"}
+      ]
+    },
+    "boots_heavy": {
+      "anchor": "foot_l",
+      "also_anchor": "foot_r",
+      "params": {},
+      "locals": [["boot_h", "max(2, floor($leg_h/3)+1)"]],
+      "geometry": [
+        {"anchor": "foot_l", "shape": "rect", "layer": "armor", "x": "-floor($leg_w/2)-1", "y": "1-$boot_h", "w": "$leg_w+1", "h": "$boot_h", "fill": "steel.shadow"},
+        {"anchor": "foot_l", "shape": "rect", "layer": "armor", "x": "-floor($leg_w/2)-1", "y": "1-$boot_h", "w": "$leg_w+1", "h": 1, "fill": "steel.light"},
+        {"anchor": "foot_r", "shape": "rect", "layer": "armor", "x": "-floor($leg_w/2)", "y": "1-$boot_h", "w": "$leg_w+1", "h": "$boot_h", "fill": "steel.shadow"},
+        {"anchor": "foot_r", "shape": "rect", "layer": "armor", "x": "-floor($leg_w/2)", "y": "1-$boot_h", "w": "$leg_w+1", "h": 1, "fill": "steel.light"}
+      ]
+    },
+    "energy_sword": {
+      "anchor": "hand_r",
+      "params": {"length": {"type": "percent", "of": "height", "default": 30, "min_px": 3}, "thickness": {"type": "percent", "of": "height", "default": 8, "min_px": 1}, "color": "red"},
+      "locals": [
+        ["bt", "2*floor($thickness/2)+1"],
+        ["grip_h", "max(2, $u+1)"],
+        ["guard_h", "max(1, $u)"],
+        ["guard_w", "$bt+2*max(1,$u)"]
+      ],
+      "geometry": [
+        {"shape": "rect", "layer": "held", "x": "-floor($bt/2)", "y": "1-$grip_h-$guard_h-$length", "w": "$bt", "h": "$length", "fill": "$color.base"},
+        {"shape": "rect", "layer": "held", "x": "0", "y": "1-$grip_h-$guard_h-$length", "w": "1", "h": "$length", "fill": "$color.light", "when": "$bt >= 3"},
+        {"shape": "rect", "layer": "held", "x": "-floor($guard_w/2)", "y": "1-$grip_h-$guard_h", "w": "$guard_w", "h": "$guard_h", "fill": "gold.base"},
+        {"shape": "rect", "layer": "held", "x": "-floor(max(1,$u)/2)", "y": "1-$grip_h", "w": "max(1,$u)", "h": "$grip_h", "fill": "steel.shadow"}
+      ]
+    }
+  }
+}

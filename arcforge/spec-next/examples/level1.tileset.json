@@ -1,0 +1,6 @@
+{
+  "arcforge_tileset": "1.0", "id": "ts.level1", "padding": 1, "extrude": 1, "max_size": [512, 512],
+  "pack": "shelf_height_desc_id", "trim": true, "pow2": false,
+  "entries": [ { "asset": "tile.ground.top" }, { "asset": "tile.brick.plain" }, { "asset": "hero.knight.small" }, { "asset": "hero.knight.big" }, { "asset": "item.coin", "animations": ["spin"] } ],
+  "output": { "png": "build/atlas/ts_level1.png", "json": "build/atlas/ts_level1.json" }
+}

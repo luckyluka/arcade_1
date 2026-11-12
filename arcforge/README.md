@@ -13,6 +13,8 @@ AI ── semantic JSON ──▶ validate ──▶ compile ──▶ rasterize
 ## Status
 M0 done: spec + executable reference implementation (Python) rendering a 32×32 hero with idle/walk/attack frames, deterministic, golden-tested. See `docs/FEASIBILITY.md` for the honest assessment and `docs/ROADMAP.md` for what is next.
 
+`spec-next/` holds the **PROPOSED** v2.1 extended spec (variable size, language extensions, level-1 slice). Nothing in it is implemented by the reference tool; run `make spec-check` to check its internal consistency.
+
 ## Quickstart
 ```bash
 pip install jsonschema

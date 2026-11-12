@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArcForge Project (PROPOSED)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "arcforge_project",
+    "engine",
+    "registry_paths",
+    "style_pack",
+    "outputs"
+  ],
+  "properties": {
+    "arcforge_project": {
+      "const": "1.0"
+    },
+    "engine": {
+      "type": "string"
+    },
+    "registry_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "style_pack": {
+      "type": "string"
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "canvas": {
+          "type": "object"
+        },
+        "clip_policy": {
+          "enum": [
+            "error",
+            "warn"
+          ]
+        }
+      }
+    },
+    "backgrounds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "minItems": 3,
+        "maxItems": 3
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "tilesets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "build",
+        "golden"
+      ],
+      "properties": {
+        "build": {
+          "type": "string"
+        },
+        "golden": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arcade1.local/arcforge/spec-next/asset.2_1.proposed.schema.json",
+  "title": "ArcForge Asset (v2.1, PROPOSED)",
+  "description": "Strict AI-facing asset document. Every key is executable or explicitly metadata. Unknown keys are errors, never ignored. Vocabulary values (archetype, recipe, ramp, template names) are validated against the registry by the compiler, not by this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "arcforge",
+    "asset",
+    "target",
+    "style_pack",
+    "archetype"
+  ],
+  "properties": {
+    "arcforge": {
+      "enum": [
+        "2.0",
+        "2.1"
+      ]
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$"
+        },
+        "type": {
+          "enum": [
+            "character",
+            "enemy",
+            "boss",
+            "projectile",
+            "pickup",
+            "effect",
+            "tile",
+            "ui"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Metadata only. Never executable visual intent."
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Free-form notes. Ignored by the compiler.",
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "canvas"
+      ],
+      "properties": {
+        "profile": {
+          "enum": [
+            "arcade1-draft"
+          ]
+        },
+        "canvas": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 256
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "auto"
+                },
+                "margin": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 8
+                },
+                "multiple_of": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                },
+                "align": {
+                  "enum": [
+                    "pivot_bottom_center",
+                    "pivot_center",
+                    "top_left"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "clip_policy": {
+          "enum": [
+            "error",
+            "warn"
+          ]
+        }
+      }
+    },
+    "style_pack": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "archetype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "params": {
+          "type": "object"
+        },
+        "size": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 512
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recipe"
+            ],
+            "properties": {
+              "recipe": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$"
+              },
+              "params": {
+                "type": "object"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "custom": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "file",
+          "anchor",
+          "layer"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "type": {
+            "const": "px_fragment"
+          },
+          "file": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "layer": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        }
+      }
+    },
+    "animations": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "idle",
+          "walk",
+          "attack",
+          "hurt",
+          "death"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "template"
+        ],
+        "properties": {
+          "template": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "assert"
+        ],
+        "properties": {
+          "assert": {
+            "enum": [
+              "dimensions",
+              "palette_size",
+              "feature_present",
+              "silhouette_area",
+              "bbox_margin",
+              "anchor_inside_canvas",
+              "root_stable",
+              "frame_count",
+              "baseline_stable",
+              "pivot_stable",
+              "min_feature",
+              "cell_fill",
+              "seamless",
+              "contrast_min",
+              "silhouette_distinct",
+              "jitter_max",
+              "orphan_pixels"
+            ]
+          },
+          "expected": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "recipe": {
+            "type": "string"
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "min": {
+            "type": "number"
+          },
+          "max": {
+            "type": "number"
+          },
+          "axes": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          "against": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_iou": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "formats": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "png",
+              "spritesheet",
+              "arcade1_asset"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "extends": {
+      "type": "string"
+    },
+    "palette_swap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "variants": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$"
+              },
+              "from": {
+                "type": "string"
+              },
+              "override": {
+                "type": "object"
+              },
+              "palette_swap": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "matrix",
+            "id_format"
+          ],
+          "properties": {
+            "matrix": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": [
+                    "integer",
+                    "string"
+                  ]
+                }
+              }
+            },
+            "id_format": {
+              "type": "string"
+            },
+            "bind": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

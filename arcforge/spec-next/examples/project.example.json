@@ -1,0 +1,10 @@
+{
+  "arcforge_project": "1.0", "engine": ">=2.1.0",
+  "registry_paths": ["arcforge/registry", "art/registry"],
+  "style_pack": "platformer_24",
+  "defaults": { "canvas": { "mode": "auto", "margin": 1, "multiple_of": 1, "align": "pivot_bottom_center" }, "clip_policy": "error" },
+  "backgrounds": { "sky_blue": [92, 148, 252], "ground_dark": [60, 40, 20] },
+  "thresholds": { "min_feature_px": 2, "orphan_pixels": 2, "contrast_min": 3.0, "silhouette_iou_max": 0.8, "jitter_max": 2 },
+  "tilesets": ["art/tilesets/level1.tileset.json"], "levels": ["art/levels/level1.level.json"],
+  "outputs": { "build": "build", "golden": "art/golden" }
+}

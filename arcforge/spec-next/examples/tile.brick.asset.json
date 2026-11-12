@@ -1,0 +1,9 @@
+{
+  "arcforge": "2.1",
+  "asset": { "id": "tile.brick.plain", "type": "tile", "version": "1.0.0" },
+  "target": { "profile": "arcade1-draft", "canvas": [16, 16] },
+  "style_pack": "platformer_24",
+  "archetype": { "name": "tile", "size": { "g": 16 }, "params": { "edges": 0 } },
+  "features": [ { "recipe": "brick_courses", "params": { "mortar": "shadow" } } ],
+  "tests": [ { "assert": "seamless", "axes": ["x", "y"] } ]
+}

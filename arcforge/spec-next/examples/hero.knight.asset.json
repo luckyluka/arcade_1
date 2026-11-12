@@ -1,0 +1,25 @@
+{
+  "arcforge": "2.1",
+  "asset": { "id": "hero.knight.small", "type": "character", "version": "1.0.0", "description": "Level-1 hero. Metadata only." },
+  "target": { "profile": "arcade1-draft", "canvas": { "mode": "auto", "margin": 1, "multiple_of": 1, "align": "pivot_bottom_center" }, "clip_policy": "error" },
+  "style_pack": "platformer_24",
+  "archetype": { "name": "humanoid_side", "size": { "height": 16 }, "params": { "armor_ramp": "red", "skin_ramp": "skin" } },
+  "features": [ "cap_round", "overalls", "gloves", "boots_round", "moustache_block" ],
+  "animations": {
+    "idle": { "template": "idle_breathe" }, "walk": { "template": "walk_cycle_6" },
+    "attack": { "template": "attack_slash" }, "hurt": { "template": "hurt" }, "death": { "template": "death" }
+  },
+  "variants": [
+    { "id": "hero.knight.big", "override": { "archetype": { "size": { "height": 32 } }, "features": [ "cap_round", "overalls", "gloves", "boots_round", "moustache_block", "belt_buckle" ] } },
+    { "id": "hero.knight.fire", "from": "hero.knight.big", "palette_swap": { "red": "gold" } }
+  ],
+  "tests": [
+    { "assert": "baseline_stable", "anchor": "foot_f", "max": 1 },
+    { "assert": "pivot_stable", "max": 0 },
+    { "assert": "min_feature", "min": 2 },
+    { "assert": "cell_fill", "min": 0.25, "max": 0.75 },
+    { "assert": "contrast_min", "against": ["sky_blue", "ground_dark"], "min": 3 },
+    { "assert": "palette_size", "max": 24 }
+  ],
+  "export": { "formats": ["png", "spritesheet"] }
+}

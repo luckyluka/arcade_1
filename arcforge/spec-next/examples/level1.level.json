@@ -1,0 +1,10 @@
+{
+  "arcforge_level": "1.0", "id": "level.1", "tile_size": 16, "sky": "sky_blue",
+  "legend": { "G": "tile.ground.top", "g": "tile.ground.fill", "B": "tile.brick.plain", "?": "tile.block_question", "P": "tile.pipe.top" },
+  "layers": [
+    { "id": "far", "kind": "scenery", "parallax": 50, "items": [ { "asset": "scenery.hill.large", "at": [0, 11] }, { "asset": "scenery.cloud.small", "at": [6, 3] } ] },
+    { "id": "main", "kind": "tiles", "rows": [ "................", "................", "....?B?B........", "................", "GGGGGGGGGGGGGGGG", "gggggggggggggggg" ] },
+    { "id": "ents", "kind": "entities", "items": [ { "asset": "enemy.walker.small", "at": [9, 3], "facing": "left" } ] }
+  ],
+  "spawn": [2, 3]
+}

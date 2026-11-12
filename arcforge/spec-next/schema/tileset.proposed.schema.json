@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ArcForge Tileset / Atlas (PROPOSED)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "arcforge_tileset",
+    "id",
+    "pack",
+    "entries",
+    "output"
+  ],
+  "properties": {
+    "arcforge_tileset": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string"
+    },
+    "padding": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8
+    },
+    "extrude": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
+    },
+    "max_size": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 8
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "pack": {
+      "enum": [
+        "shelf_height_desc_id"
+      ]
+    },
+    "trim": {
+      "type": "boolean"
+    },
+    "pow2": {
+      "type": "boolean"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset"
+        ],
+        "properties": {
+          "asset": {
+            "type": "string"
+          },
+          "animations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "png",
+        "json"
+      ],
+      "properties": {
+        "png": {
+          "type": "string"
+        },
+        "json": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
