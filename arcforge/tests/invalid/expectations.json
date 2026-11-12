@@ -35,5 +35,8 @@
   "unknown_size_param": [
     "E_UNKNOWN_SIZE_PARAM"
   ],
-  "clipped": { "run": "test", "errors": ["E_CLIPPED"], "warnings": [] }
+  "clipped": { "run": "test", "errors": ["E_CLIPPED"], "warnings": [] },
+  "feature_too_small": { "run": "test", "errors": [], "warnings": ["W_FEATURE_TOO_SMALL"] },
+  "occluded_feature": { "run": "test", "errors": [], "warnings": ["W_OCCLUDED"] },
+  "symmetric_violation": { "run": "sweep", "errors": ["E_BODY_ASYMMETRY"], "warnings": [] }
 }

@@ -1,0 +1,21 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.min_feature",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: arcade_16_min3 demands 3px minimum features; the 1px sword blade is below it."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16_min3",
+  "archetype": { "name": "humanoid_hero" },
+  "features": [
+    {
+      "recipe": "energy_sword",
+      "params": { "length": 6, "thickness": 1, "glow": "strong", "angle": 0 }
+    }
+  ],
+  "tests": [
+    { "assert": "feature_present", "recipe": "energy_sword" }
+  ]
+}

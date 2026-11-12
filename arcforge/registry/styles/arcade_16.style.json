@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps.",
   "max_colors": 16,
+  "min_feature_px": 1,
   "outline": { "mode": "outer", "ramp": "outline", "separate_layers": ["back"],
                "inner": { "mode": "part", "parts": ["head", "torso", "arm_l", "arm_r", "leg_l", "leg_r"] } },
   "ramps": {

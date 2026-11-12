@@ -10,6 +10,8 @@
     "version": { "type": "string" },
     "description": { "type": "string" },
     "max_colors": { "type": "integer", "minimum": 2, "maximum": 256 },
+    "min_feature_px": { "type": "integer", "minimum": 1, "maximum": 64,
+                        "description": "Smallest filled dimension any compiled shape may have before the size sweep and every test run report W_FEATURE_TOO_SMALL. 1 = no constraint." },
     "outline": { "type": "object", "additionalProperties": false, "required": ["mode", "ramp"],
       "properties": {
         "mode": { "enum": ["none", "outer"] },

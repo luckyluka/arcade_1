@@ -11,6 +11,8 @@ Commands:
   test     ASSET            validate + render + asset assertions
   golden   ASSET [--update] compare (or write) per-frame pixel hashes
   lint                      validate the registry itself and render every recipe example
+  sweep   ARCHETYPE         size-sweep an archetype file: sizes x recipes x parameter
+                            extremes; contact sheet + JSON table in out/sweep/
   list     [archetypes|recipes|styles]
   describe KIND NAME        print one registry entry (JSON)
 """
@@ -691,6 +693,7 @@ def compile_asset(asset, reg, base_dir):
         "asset": asset, "arch": arch, "style": style, "W": W, "H": H, "drawables": drawables,
         "anchors": anchors, "parts": parts, "features": feature_names, "animations": anims, "hitboxes": hitboxes,
         "auto": auto, "min_cell": mc, "clip_policy": asset["target"].get("clip_policy", "error"),
+        "env": env,
     }
 
 
@@ -950,7 +953,297 @@ def run_tests(ir, renders):
                     diags.append(D("W_CLIPPED", p,
                                    f"{f['clipped']} pixel(s) fall outside the canvas and were clipped",
                                    observed=f["clipped"], severity="warning"))
+    # minimum feature size (style pack min_feature_px): the *compiled* shape
+    # extent, integer, independent of the raster. min_feature_px 1 (or an
+    # absent field) is vacuous, so the baseline pays nothing here.
+    minf = ir["style"].get("min_feature_px")
+    if minf and minf > 1:
+        for d in ir["drawables"]:
+            w, h = shape_extent(d)
+            if min(w, h) < minf:
+                kind, _, rest = d["src"].partition(":")
+                p = f"/features/{rest}" if kind == "feature" else f"/{kind}/{rest}"
+                diags.append(D("W_FEATURE_TOO_SMALL", p,
+                               f"shape of '{d['src']}' is {w}x{h}px, below min_feature_px {minf}",
+                               observed=[w, h], expected=f">= {minf}px on both axes",
+                               severity="warning"))
+    # occlusion: a feature whose every drawable pixel is overpainted in every
+    # frame contributes nothing to the picture (spec 01 §9).
+    feat = {}
+    for d in ir["drawables"]:
+        if d["src"].startswith("feature:"):
+            feat.setdefault(d["src"][len("feature:"):], set()).add((d["seq"], d["part"]))
+    if feat:
+        seen = {(v[1], v[2]) for f in frames for v in f["grid"].values()}
+        for fname in sorted(feat):
+            if not (feat[fname] & seen):
+                diags.append(D("W_OCCLUDED", f"/features/{fname}",
+                               f"feature '{fname}' is fully occluded in every frame",
+                               severity="warning"))
     return results, diags
+
+
+# --------------------------------------------------------------------------
+# Size sweep (spec-next 01 §9): sizes x recipes x parameter extremes
+# --------------------------------------------------------------------------
+SWEEP_ANIM_NAMES = ("idle", "walk", "attack", "hurt", "death")
+
+
+def shape_extent(d):
+    """Filled extent of one compiled shape in whole pixels, using exactly the
+    rasterizer's pixel test so the number matches what gets drawn."""
+    if d["kind"] == "ellipse":
+        return d["box"][2], d["box"][3]
+    if d["kind"] == "px":
+        xs = [p[0] for p in d["px"]]
+        ys = [p[1] for p in d["px"]]
+        return max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
+    pts = d["pts"]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, x1 = min(xs) // 64, max(xs) // 64 + 1
+    y0, y1 = min(ys) // 64, max(ys) // 64 + 1
+    fx, fy = [], []
+    for py in range(y0, y1 + 1):
+        for px in range(x0, x1 + 1):
+            if point_in_poly(pts, px * 64 + 32, py * 64 + 32):
+                fx.append(px)
+                fy.append(py)
+    if not fx:
+        return 0, 0
+    return max(fx) - min(fx) + 1, max(fy) - min(fy) + 1
+
+
+def body_asymmetry(grid, axis):
+    """Pixels breaking mirror symmetry about column `axis` (spec 01 §6).
+    Colour only: painter order/seq is not observable in the output."""
+    bad = 0
+    for (x, y), v in grid.items():
+        m = grid.get((2 * axis - x, y))
+        if m is None or (m[-2], m[-1]) != (v[-2], v[-1]):
+            bad += 1
+    return bad
+
+
+def sweep_sizes(arch):
+    """size.min, each class boundary on both sides (max, max+1), size.max."""
+    spec = arch["size"]
+    primary = next(iter(spec))
+    lo, hi = spec[primary]["min"], spec[primary]["max"]
+    vals = {lo, hi}
+    for c in arch.get("classes", []):
+        vals.add(c["max"])
+        vals.add(c["max"] + 1)
+    return sorted(v for v in vals if lo <= v <= hi)
+
+
+def sweep_extremes(specs, avail, style):
+    """Derived extreme parameter sets: int min/max, bool both, enum/ramp every
+    value, percent declared bounds (else 0/100). A percent whose `of` is not an
+    archetype dimension is unavailable there and is skipped, not guessed."""
+    mins, maxs, singles = {}, {}, []
+    for k in sorted(specs):
+        s, t = specs[k], specs[k]["type"]
+        if t == "percent":
+            if s.get("of") not in avail:
+                continue
+            mins[k], maxs[k] = s.get("min", 0), s.get("max", 100)
+        elif t == "int":
+            mins[k], maxs[k] = s["min"], s["max"]
+        elif t == "bool":
+            mins[k], maxs[k] = False, True
+            singles += [(k, "false", False), (k, "true", True)]
+        else:                                   # enum | ramp
+            if t == "enum":
+                vals = list(s["values"])
+            else:
+                vals = s.get("allow") or [r for r in sorted(style["ramps"])
+                                          if r != style["outline"]["ramp"]]
+                vals = [v for v in vals if v in style["ramps"]]
+            if not vals:
+                continue
+            mins[k], maxs[k] = vals[0], vals[-1]
+            singles += [(k, str(v), v) for v in vals]
+    return mins, maxs, singles
+
+
+def write_contact_sheet(path, cells, nrows, ncols, scale=4, pad=2, bg=(52, 56, 72)):
+    """Contact sheet: one row per size, columns = body + per-recipe variants.
+    cells[(row, col)] = (w, h, rgba); absent cells stay background. Cells are
+    bottom-aligned in their row band like the spec-next prototype."""
+    colw = [8] * ncols
+    rowh = [8] * nrows
+    for (r, c), (w, h, _) in cells.items():
+        colw[c] = max(colw[c], w)
+        rowh[r] = max(rowh[r], h)
+    W = sum(colw) + pad * (ncols + 1)
+    H = sum(rowh) + pad * (nrows + 1)
+    buf = bytearray(W * H * 4)
+    for (r, c), (w, h, rgba) in sorted(cells.items()):
+        x0 = pad + sum(colw[:c]) + (colw[c] - w) // 2
+        y0 = pad + sum(rowh[:r]) + (rowh[r] - h)
+        for y in range(h):
+            dst = ((y0 + y) * W + x0) * 4
+            buf[dst:dst + w * 4] = rgba[y * w * 4:(y + 1) * w * 4]
+    path.write_bytes(png_bytes(W, H, bytes(buf), scale=scale, bg=bg))
+
+
+def sweep_archetype(arch, reg, base_path="", out_dir=None):
+    """Spec-next 01 §9 size sweep for one archetype.
+
+    Sizes = size.min, each class boundary (both sides), size.max; the cell is
+    the archetype's own min_cell(size) (else canvas.default), so the sweep also
+    executes the min-cell formula. Per size: the body alone (palette, clipping,
+    mirror symmetry when `symmetric`), then every applicable recipe alone at
+    default, its authored examples and derived extreme parameters; a recipe
+    outside its declared `sizes` span is skipped there, not failed. Writes
+    <out_dir>/<arch>.contact_sheet.png and .table.json. Returns
+    (diagnostics, summary); diagnostic paths are
+    <base_path>/sweep/<size>/<feature>/<label><path>."""
+    size_specs = arch.get("size") or {}
+    if not size_specs:
+        return [], None
+    name = arch["archetype"]
+    primary = next(iter(size_specs))
+    out_dir = Path(out_dir) if out_dir else ROOT / "out" / "sweep"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    regx = dict(reg)
+    regx["archetypes"] = dict(reg["archetypes"])
+    regx["archetypes"][name] = arch              # fixture archetypes are not in the registry
+    style_name = sorted(reg["styles"])[0]
+    style = reg["styles"][style_name]
+    sizes = sweep_sizes(arch)
+    avail = (set(size_specs) | set(arch.get("params", {}))
+             | {m[0] for m in arch.get("metrics", [])})
+    recipes = [r for _, r in sorted(reg["recipes"].items()) if name in r["applies_to"]]
+
+    def doc(size_val, cell, features):
+        a = {"arcforge": "2.1",
+             "asset": {"id": f"sweep.{name}", "type": "character", "version": "1.0.0"},
+             "target": {"profile": "arcade1-draft", "canvas": list(cell), "clip_policy": "error"},
+             "style_pack": style_name,
+             "archetype": {"name": name, "size": {primary: size_val}},
+             "features": features}
+        anims = {n: {"template": n} for n in SWEEP_ANIM_NAMES if n in arch.get("animations", {})}
+        if anims:
+            a["animations"] = anims
+        return a
+
+    def p_at(sv, feature, label, p):
+        return f"{base_path}/sweep/{sv}/{feature}/{label}" + p
+
+    # per-recipe variant sets: deterministic labels, deduped on parameters
+    per_recipe = []
+    for rec in recipes:
+        mins, maxs, singles = sweep_extremes(rec["parameters"], avail, style)
+        variants = ([("default", {})]
+                    + [(f"example#{i}", dict(ex)) for i, ex in enumerate(rec.get("examples", []), 1)]
+                    + [("all_min", mins), ("all_max", maxs)]
+                    + [(f"{k}={lv}", {k: v}) for k, lv, v in singles])
+        seen, uniq = set(), []
+        for label, params in variants:
+            key = json.dumps(params, sort_keys=True)
+            if key not in seen:
+                seen.add(key)
+                uniq.append((label, params))
+        per_recipe.append((rec, uniq))
+
+    # sheet columns: body + default/all_min/all_max of each recipe
+    col_of, columns = {}, ["body"]
+    for rec, uniq in per_recipe:
+        for label, _ in uniq:
+            if label in ("default", "all_min", "all_max"):
+                col_of[(rec["recipe"], label)] = len(columns)
+                columns.append(f"{rec['recipe']}:{label}")
+
+    def failed(sv, ds, rows, why):
+        for d in ds:
+            diags.append(dict(d, path=p_at(sv, "body", "default", d["path"])))
+        rows.append({"size": sv, "error": why})
+
+    diags, rows, cells = [], [], {}
+    for ri, sv in enumerate(sizes):
+        # ---- cell probe: execute the archetype's own min_cell(size) -------
+        d0, ir0 = compile_asset(doc(sv, arch["canvas"]["default"], []), regx, ROOT)
+        if ir0 is None:
+            small = [d for d in d0 if d["code"] == "E_CELL_TOO_SMALL"]
+            other = [d for d in d0 if d["code"] != "E_CELL_TOO_SMALL"]
+            if not (small and not other):
+                failed(sv, other or d0, rows, "compile failed at canvas.default")
+                continue
+            cell = list(small[0]["expected"])   # min_cell(size) from the diagnostic
+            d0, ir0 = compile_asset(doc(sv, cell, []), regx, ROOT)
+            if ir0 is None:
+                failed(sv, d0, rows, "compile failed at min_cell")
+                continue
+        else:
+            cell = ir0.get("min_cell") or arch["canvas"]["default"]
+            if cell != arch["canvas"]["default"]:
+                d0, ir0 = compile_asset(doc(sv, cell, []), regx, ROOT)
+                if ir0 is None:
+                    failed(sv, d0, rows, "compile failed at min_cell")
+                    continue
+        # ---- body: palette/clipping + mirror symmetry ---------------------
+        renders = render_all(ir0)
+        _, bdiags = run_tests(ir0, renders)
+        asym = 0
+        if arch.get("symmetric"):
+            axis = ir0["env"].get("cx", ir0["W"] // 2)
+            asym = body_asymmetry(renders["base"][0]["grid"], axis)
+            if asym:
+                diags.append(D("E_BODY_ASYMMETRY", p_at(sv, "body", "default", "/symmetry"),
+                               f"body is not mirror-symmetric about x={axis} at {primary}={sv}",
+                               observed=asym, expected=0))
+        for d in bdiags:
+            diags.append(dict(d, path=p_at(sv, "body", "default", d["path"])))
+        cells[(ri, 0)] = (ir0["W"], ir0["H"], renders["base"][0]["rgba"])
+        row = {"size": sv, "cell": [ir0["W"], ir0["H"]],
+               "body": {"asymmetric_px": asym, "codes": sorted({d["code"] for d in bdiags})},
+               "recipes": {}}
+        # ---- every applicable recipe alone, at its parameter extremes ------
+        for rec, uniq in per_recipe:
+            rname = rec["recipe"]
+            span = rec.get("sizes")
+            inside = span is None or span["min"] <= sv <= span["max"]
+            rrow = {}
+            for label, params in uniq:
+                if not inside:
+                    rrow[label] = {"skipped": f"outside sizes {span['min']}..{span['max']}"}
+                    continue
+                dv, irv = compile_asset(doc(sv, cell, [{"recipe": rname, "params": params}]), regx, ROOT)
+                vdiags = list(dv)
+                if irv is None:
+                    for d in vdiags:
+                        diags.append(dict(d, path=p_at(sv, rname, label, d["path"])))
+                    rrow[label] = {"codes": sorted({d["code"] for d in vdiags})}
+                    continue
+                vrenders = render_all(irv)
+                _, v2 = run_tests(irv, vrenders)
+                vdiags += v2
+                if (rname, label) in col_of:
+                    cells[(ri, col_of[(rname, label)])] = (irv["W"], irv["H"], vrenders["base"][0]["rgba"])
+                for d in vdiags:
+                    diags.append(dict(d, path=p_at(sv, rname, label, d["path"])))
+                rrow[label] = {"codes": sorted({d["code"] for d in vdiags})}
+            row["recipes"][rname] = rrow
+        rows.append(row)
+
+    sheet = out_dir / f"{name}.contact_sheet.png"
+    write_contact_sheet(sheet, cells, len(sizes), len(columns))
+    tpath = out_dir / f"{name}.table.json"
+    tpath.write_text(json.dumps({"archetype": name, "primary_size": primary,
+                                 "sizes": sizes, "columns": columns, "rows": rows},
+                                indent=2) + "\n")
+
+    def rel(p):
+        try:
+            return str(p.relative_to(ROOT))
+        except ValueError:
+            return str(p)
+
+    summary = {"sizes": sizes, "recipes": [rec["recipe"] for rec, _ in per_recipe],
+               "cells": len(cells), "sheet": rel(sheet), "table": rel(tpath)}
+    return diags, summary
 
 
 # --------------------------------------------------------------------------
@@ -1137,7 +1430,33 @@ def cmd_lint(args):
                 for x in d2:
                     x["path"] = f"recipe:{name}:example#{ex_i}{x['path']}"
                 diags += d2
-    r = report("lint", "registry", diags, stats={"archetypes": len(reg["archetypes"]), "recipes": len(reg["recipes"]), "styles": len(reg["styles"])})
+    # size sweep (01 §9) over every size-parametric archetype
+    sweep_stats = {}
+    for aname in sorted(reg["archetypes"]):
+        a = reg["archetypes"][aname]
+        if not a.get("size"):
+            continue
+        sd, summary = sweep_archetype(a, reg, base_path=f"archetype:{aname}",
+                                      out_dir=ROOT / "out" / "sweep")
+        diags += sd
+        if summary:
+            sweep_stats[aname] = summary
+    r = report("lint", "registry", diags, stats={"archetypes": len(reg["archetypes"]), "recipes": len(reg["recipes"]),
+                                                 "styles": len(reg["styles"]), "sweep": sweep_stats})
+    print(json.dumps(r, indent=2))
+    return 0 if r["status"] == "PASS" else 1
+
+
+def cmd_sweep(args):
+    reg = load_registry()
+    arch, _ = load_asset(args.archetype)
+    diags = schema_diags(arch, "archetype.schema.json")
+    if diags:
+        print(json.dumps(report("sweep", arch.get("archetype", "?"), diags), indent=2))
+        return 1
+    sd, summary = sweep_archetype(arch, reg, base_path=f"archetype:{arch['archetype']}",
+                                  out_dir=ROOT / "out" / "sweep")
+    r = report("sweep", arch["archetype"], sd, stats=summary or {})
     print(json.dumps(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
@@ -1185,6 +1504,9 @@ def main():
     p.set_defaults(fn=cmd_golden)
     p = sp.add_parser("lint")
     p.set_defaults(fn=cmd_lint)
+    p = sp.add_parser("sweep")
+    p.add_argument("archetype")
+    p.set_defaults(fn=cmd_sweep)
     p = sp.add_parser("list")
     p.add_argument("kind", nargs="?", choices=["archetypes", "recipes", "styles"])
     p.set_defaults(fn=cmd_list)

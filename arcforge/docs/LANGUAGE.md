@@ -75,7 +75,7 @@ Rasterization: a pixel is filled if its **centre** lies inside the shape (even-o
 Archetype templates give per-frame integer offsets per part (`root` moves everything). No rotation or squash in v2.0 (rigid translation only). The asset binds names `idle|walk|attack|hurt|death` to templates. Recipes follow their anchor's part automatically.
 
 ## Assertions (`tests`)
-`dimensions`, `palette_size`, `feature_present`, `silhouette_area`, `bbox_margin`, `anchor_inside_canvas`, `root_stable`, `frame_count`. Evaluated on the compiled result, not by a vision model. Palette budget and clipping are checked implicitly (`E_PALETTE_BUDGET`, `W_CLIPPED`).
+`dimensions`, `palette_size`, `feature_present`, `silhouette_area`, `bbox_margin`, `anchor_inside_canvas`, `root_stable`, `frame_count`. Evaluated on the compiled result, not by a vision model. Always on, independently of `tests`: palette budget (`E_PALETTE_BUDGET`), clipping (`E_CLIPPED`/`W_CLIPPED` per `clip_policy`), minimum feature size (`W_FEATURE_TOO_SMALL`: any compiled shape whose smaller extent is below the style pack's `min_feature_px`, which defaults to unconstrained) and occlusion (`W_OCCLUDED`: a feature not one of whose pixels survives in any frame). The size sweep adds body mirror symmetry (`E_BODY_ASYMMETRY`, see below).
 
 ## v2.1 size model (implemented in X0)
 Three sizes are never conflated: **cell** (the canvas), **body size** (archetype
@@ -88,6 +88,7 @@ size parameters) and derived **metrics**.
 | archetype | `proportions: {class: {p_*: int}}` | the resolved row is injected as `$p_*` (small heroes get big heads) |
 | archetype | `metrics: [[name, expr], ...]` | ordered derived integers (environment above); evaluation failure → `E_ARCHETYPE_EXPR` |
 | archetype | `min_cell: [wExpr, hExpr]` | minimum fixed cell at this size → smaller canvas is `E_CELL_TOO_SMALL` |
+| archetype | `symmetric: bool` | when true the size sweep asserts exact mirror symmetry of the body about `$cx` (or `floor($W/2)`, colour only) → `E_BODY_ASYMMETRY` |
 | archetype | `anchors.*.at` | may be expressions; evaluated once per asset after metrics |
 | asset | `archetype.size: {name: int}` | per-asset size selection |
 | asset | `target.canvas` | `[w,h]` (fixed) or `{ "mode": "auto", "margin"?, "multiple_of"?, "align"? }`; defaults margin 1, multiple_of 1, align `pivot_bottom_center` |
@@ -112,6 +113,31 @@ a pure shift, never a re-render, so an auto canvas can never clip. The
 `origin`-anchor position inside the resolved cell is exported as `pivot` in
 `atlas.json`; games align by `pivot`, never by cell size, so differently sized
 assets mix freely.
+
+### Size sweep (2.1)
+`arcforge_ref.py sweep ARCHETYPE` (and `lint`, over every archetype that
+declares `size`) executes spec 01 §9:
+
+- **Sizes** = `size.min`, each class boundary on both sides (`max`, `max+1`),
+  `size.max`, clamped and deduped. The cell at each size is the archetype's own
+  `min_cell(size)` (else `canvas.default`) — the sweep therefore executes the
+  min-cell formula itself; a probe at `canvas.default` may report
+  `E_CELL_TOO_SMALL`, which is consumed as the formula's answer, not a failure.
+- **Body** renders alone (palette budget, clipping, and — when `symmetric` —
+  exact mirror symmetry about `$cx`/`floor($W/2)`, colour only; a mismatch is
+  `E_BODY_ASYMMETRY`).
+- **Recipes**: every recipe whose `applies_to` contains the archetype, alone on
+  the body, at default parameters, its authored `examples`, `all_min`/`all_max`
+  (int min/max, bool both, enum/ramp every value, percent declared bounds else
+  0/100) and one variant per enum/ramp/bool value. Percent parameters whose
+  `of` is not an archetype dimension are skipped there (unavailable, never
+  guessed). A size outside a recipe's declared `sizes` span is skipped for that
+  recipe, not failed.
+- **Output**: `out/sweep/<archetype>.contact_sheet.png` (rows = sizes, columns =
+  body + each recipe's default/all_min/all_max, integer scale) and
+  `out/sweep/<archetype>.table.json`; the diagnostics carry paths
+  `archetype:<name>/sweep/<size>/<feature>/<label>/...`. Sweep errors fail
+  `lint`, so `make check` fails with them.
 
 ## What the language refuses to do
 Describe appearance in prose, reference things the compiler cannot build, or silently ignore input. If the vocabulary cannot express an idea, the answer is "NO RECIPE EXISTS" plus alternatives, and the author may supply a `.px` fragment.

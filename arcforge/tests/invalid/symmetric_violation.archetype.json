@@ -1,0 +1,28 @@
+{
+  "archetype": "t_asym",
+  "version": "1.0.0",
+  "description": "Negative fixture: declared symmetric, but the two marks are not mirror images about $cx.",
+  "view": "front",
+  "canvas": { "default": [8, 8], "supported": [[8, 8]] },
+  "params": {},
+  "layers": ["body"],
+  "parts": {
+    "root": { "shapes": [] },
+    "mark_l": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": 1, "y": 2, "w": 2, "h": 3, "fill": "steel.base" }
+      ]
+    },
+    "mark_r": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": 5, "y": 2, "w": 2, "h": 3, "fill": "steel.base" }
+      ]
+    }
+  },
+  "anchors": { "origin": { "part": "root", "at": [4, 7] } },
+  "animations": { "idle": { "fps": 6, "loop": true, "frames": [{ "offsets": {} }] } },
+  "size": { "height": { "min": 4, "max": 8, "default": 6 } },
+  "metrics": [["cx", "floor($W/2)"]],
+  "min_cell": [8, 8],
+  "symmetric": true
+}

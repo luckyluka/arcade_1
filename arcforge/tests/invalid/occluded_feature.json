@@ -1,0 +1,19 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.occluded",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: a full-cover fragment on fx overpaints helmet_closed in every frame."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "features": [ "helmet_closed" ],
+  "custom": [
+    { "id": "cover", "type": "px_fragment", "file": "fragments/cover.px", "anchor": "head_center", "layer": "fx" }
+  ],
+  "tests": [
+    { "assert": "feature_present", "recipe": "helmet_closed" }
+  ]
+}
