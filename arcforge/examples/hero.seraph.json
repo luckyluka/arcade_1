@@ -1,0 +1,31 @@
+{
+  "arcforge": "2.0",
+  "asset": { "id": "hero.seraph", "type": "character", "version": "1.0.0", "description": "Angelic being: gilded armour, steel-feather wings, light blade. Free text: metadata only, never executable." },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero", "params": { "armor_ramp": "gold", "skin_ramp": "skin" } },
+  "features": [
+    "shoulder_armor_heavy",
+    { "recipe": "energy_sword", "params": { "length": 10, "thickness": 3, "color": "blue", "glow": "strong", "angle": 0 } },
+    "boots_heavy"
+  ],
+  "custom": [
+    { "id": "wings", "type": "px_fragment", "file": "fragments/wings.px", "anchor": "back", "layer": "back" }
+  ],
+  "animations": {
+    "idle":   { "template": "idle_breathe" },
+    "walk":   { "template": "walk_cycle" },
+    "attack": { "template": "attack_slash" }
+  },
+  "tests": [
+    { "assert": "dimensions", "expected": [32, 32] },
+    { "assert": "palette_size", "max": 16 },
+    { "assert": "feature_present", "recipe": "energy_sword" },
+    { "assert": "feature_present", "recipe": "boots_heavy" },
+    { "assert": "silhouette_area", "min": 0.2, "max": 0.7 },
+    { "assert": "bbox_margin", "min": 0 },
+    { "assert": "anchor_inside_canvas", "anchor": "hand_r" },
+    { "assert": "root_stable", "max": 0 },
+    { "assert": "frame_count", "max": 16 }
+  ]
+}

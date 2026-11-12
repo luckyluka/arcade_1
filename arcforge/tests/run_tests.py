@@ -20,11 +20,13 @@ def check(name, ok, detail=""):
 
 rc, r = run("lint")
 check("registry lint", r["status"] == "PASS", "" if r["status"] == "PASS" else json.dumps(r["diagnostics"])[:300])
-ex = str(ROOT / "examples" / "hero.iron_knight.json")
-rc, r = run("test", ex)
-check("example assertions", r["status"] == "PASS", "" if r["status"] == "PASS" else json.dumps(r["diagnostics"])[:300])
-rc, r = run("golden", ex)
-check("example golden hashes", r["status"] == "PASS", "" if r["status"] == "PASS" else json.dumps(r["diagnostics"])[:300])
+for ex in sorted((ROOT / "examples").glob("*.json")):
+    rc, r = run("test", ex)
+    check(f"example assertions ({ex.name})", r["status"] == "PASS",
+          "" if r["status"] == "PASS" else json.dumps(r["diagnostics"])[:300])
+    rc, r = run("golden", ex)
+    check(f"example golden hashes ({ex.name})", r["status"] == "PASS",
+          "" if r["status"] == "PASS" else json.dumps(r["diagnostics"])[:300])
 exp = json.loads((ROOT / "tests/invalid/expectations.json").read_text())
 for name, codes in exp.items():
     rc, r = run("validate", str(ROOT / "tests/invalid" / f"{name}.json"))
