@@ -1,0 +1,12 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.invalid_size",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: humanoid_hero declares no size parameters."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero", "size": { "height": 32 } }
+}

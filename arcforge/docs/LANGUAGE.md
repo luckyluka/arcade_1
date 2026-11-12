@@ -1,6 +1,8 @@
-# ArcForge language (v2.0)
+# ArcForge language (v2.0, plus the v2.1 subset marked below)
 
 Normative spec. The reference tool (`tools/arcforge_ref.py`) implements exactly this.
+Documents with `"arcforge": "2.0"` and `"arcforge": "2.1"` are both accepted; 2.0
+documents cannot use the 2.1 fields (`arcforge` unknown value or unknown key → `E_UNKNOWN_FIELD`).
 
 ## Document
 ```json
@@ -41,14 +43,24 @@ Only `description` and `metadata` are free-form, and neither affects output. Any
 | `bool` | default | |
 | `enum` | values, default | |
 | `ramp` | default, allow? | a colour ramp name from the style pack (not the outline ramp) |
-Unknown parameter → `E_UNKNOWN_PARAM`. Recipe parameter names must not shadow archetype parameter names.
+| `percent` (2.1) | of, default, min?, max?, min_px? | resolves to pixels: `px = max(min_px, (dim * pct + 50) // 100)`; `of` must name an integer archetype dimension (size parameter or metric), else supplying it is `E_UNKNOWN_SIZE_PARAM`; pct bounds default 0..100 (`E_PARAM_RANGE`) |
+Unknown parameter → `E_UNKNOWN_PARAM`. Recipe parameter names must not shadow archetype names (parameters, size parameters, metrics, `$W/$H/$class`).
 
-## Expression language (recipe geometry)
+## Expression language (archetype shapes, anchors, metrics, recipe geometry)
 Total, side-effect free, no loops, no user functions.
-- Literals: numbers, `'strings'`, `true`/`false`. Variables: `$name` (recipe params + archetype params).
-- Operators: `+ - * /` (true division), comparisons, `&& || !`.
-- Functions: `floor ceil round min max abs clamp`.
-- Geometry results are **floored** to integers (half-open pixel semantics).
+- Literals: numbers, `'strings'`, `true`/`false`. Variables: `$name`.
+- Environment: `$W $H` (cell), archetype size parameters, `$class` (string),
+  `$class_idx` (0-based), `$p_*` proportions of the resolved class, archetype
+  parameters, metrics (archetype, in declaration order), recipe parameters and
+  recipe `locals` (recipe scope only). Archetype `metrics` see `$W $H`, size,
+  class and proportions only — not archetype parameters.
+- Operators: `+ - * /` (true division; floored where an integer is required),
+  `//` (floor division) and `%` (modulo) — both floor semantics for negatives
+  (`-7 // 2 == -4`, `-7 % 2 == 1`), comparisons, `&& || !`.
+- Functions: `floor ceil round min max abs clamp` plus 2.1 `odd` (next odd ≥ x),
+  `even` (next even ≥ x), `half` (= `floor(x/2)`).
+- Geometry results are **floored** to integers (half-open pixel semantics);
+  every metric value is floored on assignment.
 - `when` on a shape: drawn only if true.
 
 ## Shapes
@@ -64,6 +76,26 @@ Archetype templates give per-frame integer offsets per part (`root` moves everyt
 
 ## Assertions (`tests`)
 `dimensions`, `palette_size`, `feature_present`, `silhouette_area`, `bbox_margin`, `anchor_inside_canvas`, `root_stable`, `frame_count`. Evaluated on the compiled result, not by a vision model. Palette budget and clipping are checked implicitly (`E_PALETTE_BUDGET`, `W_CLIPPED`).
+
+## v2.1 size model (implemented in X0)
+Three sizes are never conflated: **cell** (the canvas), **body size** (archetype
+size parameters) and derived **metrics**.
+
+| where | field | meaning |
+|---|---|---|
+| archetype | `size: {name: {min,max,default}}` | declared body-size parameters; asset values outside range → `E_SIZE_RANGE` (clamped fix), unknown keys → `E_UNKNOWN_SIZE_PARAM` |
+| archetype | `classes: [{name,max}]` | size classes; the resolved class feeds `$class`/`$class_idx`; smallest `max >= size`, else the last class |
+| archetype | `proportions: {class: {p_*: int}}` | the resolved row is injected as `$p_*` (small heroes get big heads) |
+| archetype | `metrics: [[name, expr], ...]` | ordered derived integers (environment above); evaluation failure → `E_ARCHETYPE_EXPR` |
+| archetype | `min_cell: [wExpr, hExpr]` | minimum fixed cell at this size → smaller canvas is `E_CELL_TOO_SMALL` |
+| archetype | `anchors.*.at` | may be expressions; evaluated once per asset after metrics |
+| asset | `archetype.size: {name: int}` | per-asset size selection |
+| recipe | `sizes: {min,max}` | primary size-parameter range the recipe supports (primary = first `size` key of the archetype); use outside → `E_RECIPE_SIZE_RANGE` |
+| recipe | `locals: [[name, expr], ...]` | ordered, floored, visible only inside the recipe; failure → `E_RECIPE_EXPR` |
+
+A sized archetype's canvas check is `min_cell`, not the v2.0 `canvas.supported`
+list (which still governs unsized archetypes). Metric ratios are written as
+integer percentages (`$height*30/100`), never as source floats.
 
 ## What the language refuses to do
 Describe appearance in prose, reference things the compiler cannot build, or silently ignore input. If the vocabulary cannot express an idea, the answer is "NO RECIPE EXISTS" plus alternatives, and the author may supply a `.px` fragment.

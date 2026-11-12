@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["arcforge", "asset", "target", "style_pack", "archetype"],
   "properties": {
-    "arcforge": { "const": "2.0" },
+    "arcforge": { "enum": ["2.0", "2.1"] },
     "asset": {
       "type": "object",
       "additionalProperties": false,
@@ -36,7 +36,10 @@
       "required": ["name"],
       "properties": {
         "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "params": { "type": "object" }
+        "params": { "type": "object" },
+        "size": { "type": "object", "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z0-9_]{1,64}$" },
+          "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 512 } }
       }
     },
     "features": {

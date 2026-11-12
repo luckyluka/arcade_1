@@ -26,7 +26,13 @@
           { "type": "object", "additionalProperties": false, "required": ["type", "values", "default"],
             "properties": { "type": { "const": "enum" }, "values": { "type": "array", "items": { "type": "string" }, "minItems": 2 }, "default": { "type": "string" } } },
           { "type": "object", "additionalProperties": false, "required": ["type", "default"],
-            "properties": { "type": { "const": "ramp" }, "default": { "type": "string" }, "allow": { "type": "array", "items": { "type": "string" } } } }
+            "properties": { "type": { "const": "ramp" }, "default": { "type": "string" }, "allow": { "type": "array", "items": { "type": "string" } } } },
+          { "type": "object", "additionalProperties": false, "required": ["type", "of", "default"],
+            "properties": { "type": { "const": "percent" }, "of": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+                            "default": { "type": "integer", "minimum": 0, "maximum": 100 },
+                            "min": { "type": "integer", "minimum": 0, "maximum": 100 },
+                            "max": { "type": "integer", "minimum": 0, "maximum": 100 },
+                            "min_px": { "type": "integer", "minimum": 0 } } }
         ]
       }
     },
@@ -61,6 +67,11 @@
         }
       }
     },
-    "examples": { "type": "array", "items": { "type": "object" }, "minItems": 1 }
+    "examples": { "type": "array", "items": { "type": "object" }, "minItems": 1 },
+    "sizes": { "type": "object", "additionalProperties": false, "required": ["min", "max"],
+      "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } } },
+    "locals": { "type": "array",
+      "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": false,
+        "prefixItems": [ { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }, { "type": "string" } ] } }
   }
 }

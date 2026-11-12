@@ -9,10 +9,24 @@ A recipe is an engine capability: deterministic geometry with typed parameters, 
 | `applies_to` | archetypes this recipe is built for |
 | `slot`, `stackable?`, `conflicts_with?` | exclusivity model |
 | `requires_anchors` | anchors that must exist on the archetype |
-| `parameters` | typed, ranged, with defaults |
+| `parameters` | typed, ranged, with defaults (types: `int`, `bool`, `enum`, `ramp`, and 2.1 `percent`) |
 | `geometry` | shapes: anchor, layer, shape, fill, rotate?, when? (see LANGUAGE.md) |
 | `hitboxes?` | anchor-relative rects with `active_in` animations |
+| `sizes?` | 2.1: `{min,max}` on the archetype's primary size parameter; using the recipe outside → `E_RECIPE_SIZE_RANGE` |
+| `locals?` | 2.1: ordered `[name, expression]` pairs, floored, visible only inside this recipe |
 | `examples` | parameter sets used by `lint`: defaults plus extremes. Required. |
+
+### 2.1 notes
+- A `percent` parameter (`{type:"percent", of:"height", default:30, min_px:3, min?, max?}`)
+  binds **pixels**: `px = max(min_px, (dim*pct + 50)//100)`. `of` names an integer
+  archetype dimension (size parameter or metric); on an archetype that lacks it the
+  parameter is unavailable (supplying it → `E_UNKNOWN_SIZE_PARAM`), which lets one
+  recipe serve both fixed-art and size-parametric archetypes.
+- Percent bounds (`min`/`max`, default 0..100) exist so the authoring rule below
+  stays satisfiable: the sweep renders every recipe at its declared extremes, so a
+  recipe that only fits at "reasonable" percentages must declare that range.
+- Recipe `sizes` is checked against the archetype's **primary** size parameter
+  (the first key of its `size` object).
 
 ## Authoring checklist
 1. Pick the slot and layer. Decide which part's motion it should follow (via the anchor).

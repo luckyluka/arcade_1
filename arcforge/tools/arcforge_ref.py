@@ -86,7 +86,16 @@ class ExprError(Exception):
 FUNCS = {
     "floor": math.floor, "ceil": math.ceil, "round": lambda v: math.floor(v + 0.5),
     "min": min, "max": max, "abs": abs, "clamp": lambda v, a, b: max(a, min(b, v)),
+    # 2.1: parity helpers, floor semantics for negatives (odd/even = smallest
+    # value of that parity that is >= x), half = floor(x/2).
+    "odd": lambda v: _parity(math.floor(v), 1),
+    "even": lambda v: _parity(math.floor(v), 0),
+    "half": lambda v: math.floor(v / 2),
 }
+
+
+def _parity(v, want):
+    return v if v % 2 == want else v + 1
 CONSTS = {"true": True, "false": False}
 
 
@@ -103,7 +112,10 @@ def ev(expr, env):
         tree = ast.parse(_prep(expr), mode="eval")
     except SyntaxError:
         raise ExprError(f"syntax error in expression {expr!r}")
-    return _ev(tree.body, env)
+    try:
+        return _ev(tree.body, env)
+    except TypeError:
+        raise ExprError(f"type error in expression {expr!r}")
 
 
 def _ev(n, env):
@@ -138,6 +150,14 @@ def _ev(n, env):
             if b == 0:
                 raise ExprError("division by zero")
             return a / b
+        if isinstance(n.op, ast.FloorDiv):
+            if b == 0:
+                raise ExprError("floor division by zero")
+            return a // b
+        if isinstance(n.op, ast.Mod):
+            if b == 0:
+                raise ExprError("modulo by zero")
+            return a % b
     if isinstance(n, ast.BoolOp):
         vals = [_ev(v, env) for v in n.values]
         return all(vals) if isinstance(n.op, ast.And) else any(vals)
@@ -154,7 +174,11 @@ def _ev(n, env):
             left = right
         return True
     if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in FUNCS and not n.keywords:
-        return FUNCS[n.func.id](*[_ev(a, env) for a in n.args])
+        args = [_ev(a, env) for a in n.args]
+        try:
+            return FUNCS[n.func.id](*args)
+        except TypeError:
+            raise ExprError(f"wrong number or type of arguments to {n.func.id}()")
     raise ExprError("unsupported expression")
 
 
@@ -284,7 +308,7 @@ def schema_diags(doc, schema_name, base_path=""):
     return diags
 
 
-def check_params(specs, given, path, style, diags, label):
+def check_params(specs, given, path, style, diags, label, env=None):
     out = {}
     for k in given:
         if k not in specs:
@@ -294,6 +318,33 @@ def check_params(specs, given, path, style, diags, label):
         v = given.get(k, spec["default"])
         t = spec["type"]
         pp = f"{path}/{k}"
+        if t == "percent":
+            # px = max(min_px, (dim * pct + 50) // 100), integer only. `of` must
+            # name an integer dimension of the archetype (size parameter or
+            # metric); without it the parameter is unavailable on this
+            # archetype: supplying it is an error, omitting it leaves it
+            # unbound so fixed-art archetypes keep compiling.
+            dim = env.get(spec.get("of")) if isinstance(env, dict) else None
+            available = isinstance(dim, int) and not isinstance(dim, bool)
+            if not available:
+                if k in given:
+                    diags.append(D("E_UNKNOWN_SIZE_PARAM", pp,
+                                   f"parameter '{k}' is a percent of '{spec.get('of')}', which this archetype does not provide",
+                                   observed=given[k], expected=f"archetype dimension '{spec.get('of')}'",
+                                   suggestions=(close(spec.get("of"), sorted(env)) if env else None)))
+                continue
+            if isinstance(v, bool) or not isinstance(v, int):
+                diags.append(D("E_PARAM_TYPE", pp, f"'{k}' must be an integer percent", observed=v, expected="integer"))
+                continue
+            lo, hi = spec.get("min", 0), spec.get("max", 100)
+            if v < lo or v > hi:
+                c = max(lo, min(hi, v))
+                diags.append(D("E_PARAM_RANGE", pp, f"'{k}' out of range", observed=v,
+                               expected=f"{lo}..{hi}",
+                               fix=[{"op": "replace", "path": pp, "value": c}]))
+                continue
+            out[k] = max(spec.get("min_px", 0), (dim * v + 50) // 100)
+            continue
         if t == "int":
             if isinstance(v, bool) or not isinstance(v, int):
                 diags.append(D("E_PARAM_TYPE", pp, f"'{k}' must be an integer", observed=v, expected="integer"))
@@ -388,18 +439,89 @@ def compile_asset(asset, reg, base_dir):
         return diags, None
 
     W, H = asset["target"]["canvas"]
-    if [W, H] not in arch["canvas"]["supported"]:
+    # ---- size parameters (2.1) ------------------------------------------
+    size_specs = arch.get("size") or {}
+    size_env = {}
+    given_size = asset["archetype"].get("size", {})
+    for k in given_size:
+        if k not in size_specs:
+            diags.append(D("E_UNKNOWN_SIZE_PARAM", ptr("archetype", "size", k),
+                           f"archetype '{arch['archetype']}' has no size parameter '{k}'",
+                           observed=k, expected=sorted(size_specs), suggestions=close(k, size_specs),
+                           fix=[{"op": "remove", "path": ptr("archetype", "size", k)}]))
+    for k, spec in size_specs.items():
+        v = given_size.get(k, spec["default"])
+        if v < spec["min"] or v > spec["max"]:
+            c = max(spec["min"], min(spec["max"], v))
+            diags.append(D("E_SIZE_RANGE", ptr("archetype", "size", k),
+                           f"size parameter '{k}' out of range", observed=v,
+                           expected=f"{spec['min']}..{spec['max']}",
+                           fix=[{"op": "replace", "path": ptr("archetype", "size", k), "value": c}]))
+            v = c
+        size_env[k] = v
+    # A sized archetype expresses its cell contract through min_cell(size);
+    # the fixed `supported` list applies only to unsized (v2.0) archetypes.
+    if not size_specs and [W, H] not in arch["canvas"]["supported"]:
         diags.append(D("E_CANVAS_UNSUPPORTED", "/target/canvas", "archetype does not support this canvas size",
                        observed=[W, H], expected=arch["canvas"]["supported"],
                        fix=[{"op": "replace", "path": "/target/canvas", "value": arch["canvas"]["default"]}]))
 
-    env = check_params(arch["params"], asset["archetype"].get("params", {}), "/archetype/params", style, diags,
-                       f"archetype '{arch['archetype']}'")
+    # ---- expression environment: cell, size, class, proportions ----------
+    menv = {"W": W, "H": H}
+    menv.update(size_env)
+    classes = arch.get("classes", [])
+    cls_name, cls_idx = "default", 0
+    if size_specs and classes:
+        primary = next(iter(size_specs))          # document order = primary size parameter
+        sv = size_env[primary]
+        cands = [c for c in classes if sv <= c["max"]]
+        pick = min(cands, key=lambda c: c["max"]) if cands else max(classes, key=lambda c: c["max"])
+        cls_name, cls_idx = pick["name"], classes.index(pick)
+    menv["class"], menv["class_idx"] = cls_name, cls_idx
+    row = arch.get("proportions", {}).get(cls_name)
+    if isinstance(row, dict):
+        menv.update(row)
+
+    params = check_params(arch["params"], asset["archetype"].get("params", {}), "/archetype/params", style, diags,
+                          f"archetype '{arch['archetype']}'", env=menv)
+    env = dict(menv)
+    env.update(params)
+    # ---- metrics: ordered list, every value floored to an integer --------
+    for mi, mdef in enumerate(arch.get("metrics", [])):
+        mname, mexpr = mdef[0], mdef[1]
+        try:
+            env[mname] = to_int(ev(mexpr, env))
+        except (ExprError, ValueError) as e:
+            diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "metrics", mi),
+                           f"metric '{mname}' failed to evaluate: {e}"))
+            env[mname] = 0
+    # ---- min_cell(size): a fixed canvas must contain the body at this size
+    if size_specs and arch.get("min_cell"):
+        try:
+            mc = [to_int(ev(v, env)) for v in arch["min_cell"]]
+        except (ExprError, ValueError) as e:
+            diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "min_cell"),
+                           f"min_cell failed to evaluate: {e}"))
+        else:
+            if W < mc[0] or H < mc[1]:
+                fix = ([{"op": "replace", "path": "/target/canvas", "value": mc}]
+                       if all(1 <= x <= 256 for x in mc) else None)
+                diags.append(D("E_CELL_TOO_SMALL", "/target/canvas",
+                               f"canvas {W}x{H} is smaller than the archetype minimum {mc[0]}x{mc[1]} at this size",
+                               observed=[W, H], expected=mc, fix=fix))
     layers = arch["layers"]
     ramps = style["ramps"]
     drawables = []
     seq = 0
-    anchors = arch["anchors"]
+    anchors = {}
+    for aname, adef in arch["anchors"].items():
+        try:
+            at = [to_int(ev(v, env)) for v in adef["at"]]
+        except (ExprError, ValueError) as e:
+            diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "anchors", aname),
+                           f"anchor '{aname}' failed to evaluate: {e}"))
+            at = [0, 0]
+        anchors[aname] = {"part": adef["part"], "at": at}
     parts = list(arch["parts"])
 
     def add(d, part, src):
@@ -449,17 +571,37 @@ def compile_asset(asset, reg, base_dir):
                            fix=[{"op": "remove", "path": fp}]))
             continue
         used_slots[slot] = (i, name)
+        # a recipe may declare the primary size-parameter range it supports
+        if rec.get("sizes") and size_specs:
+            primary = next(iter(size_specs))
+            sv = size_env[primary]
+            lo, hi = rec["sizes"]["min"], rec["sizes"]["max"]
+            if sv < lo or sv > hi:
+                diags.append(D("E_RECIPE_SIZE_RANGE", fp,
+                               f"recipe '{name}' supports {primary} {lo}..{hi}; this asset uses {sv}",
+                               observed=sv, expected=f"{lo}..{hi}",
+                               fix=[{"op": "replace", "path": ptr("archetype", "size", primary),
+                                     "value": max(lo, min(hi, sv))}]))
+                continue
         feature_names.append(name)
         pdiags_before = len(diags)
-        params = check_params(rec["parameters"], given, fp + "/params", style, diags, f"recipe '{name}'")
+        params = check_params(rec["parameters"], given, fp + "/params", style, diags, f"recipe '{name}'", env=env)
         if len(diags) > pdiags_before:
             continue
         renv = dict(env)
         clash = set(params) & set(env)
         if clash:
-            diags.append(D("E_PARAM_SHADOW", fp, f"recipe parameters shadow archetype parameters: {sorted(clash)}"))
+            diags.append(D("E_PARAM_SHADOW", fp, f"recipe parameters shadow archetype names: {sorted(clash)}"))
             continue
         renv.update(params)
+        ldiags_before = len(diags)
+        for lname, lexpr in rec.get("locals", []):
+            try:
+                renv[lname] = to_int(ev(lexpr, renv))
+            except (ExprError, ValueError) as e:
+                diags.append(D("E_RECIPE_EXPR", fp, f"recipe '{name}' local '{lname}' failed to evaluate: {e}"))
+        if len(diags) > ldiags_before:
+            continue
         try:
             for sh in rec["geometry"]:
                 if sh["layer"] not in layers:
