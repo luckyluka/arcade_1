@@ -29,7 +29,7 @@ The engineering is straightforward and already demonstrated. The open question i
 ## Decision gates
 - **G1 (end of M1, ~40 h in):** produce 6 different heroes/enemies by changing only JSON (no new recipes). Review blind with the human. Pass = at least 4 of 6 are acceptable as prototype art. Fail = stop recipe work; pivot to a kit-bash model (recipes become parameterised `.px` stamps with palette roles) or hand-drawn `.px` with ArcForge only as palette/anim/export tooling.
 - **G2 (mid-M2):** if average recipe cost exceeds ~4 h, cap the library at ~25 recipes and rely on `.px` fragments (including image-model → quantize → `.px` import) for the long tail.
-- **G3 (before M4):** do not build the Go port or Arcade-1 export until a game is actually consuming assets.
+- **G3 (before M4):** do not build the C compiler or Arcade-1 export until a game is actually consuming assets.
 
 ## Is it worth doing?
 Yes if there is a sprite-based game that needs characters, enemies and effects and no artist: the platformer milestone on the ARCADE-1 roadmap is the natural first customer. No if the games stay vector/code-drawn. Doing M1 first answers the question with a bounded spend.
@@ -41,5 +41,8 @@ Yes if there is a sprite-based game that needs characters, enemies and effects a
 | M1 vertical slice to taste + gate G1 | 25–40 | hero that looks good; 8–10 recipes; inner outlines |
 | M2 breadth | 60–100 | 2nd archetype, 20+ recipes, 2nd style pack, PNG→.px import |
 | M3 animation depth | 30–50 | hooks, variants, hurt/death |
-| M4 Go port + ARCADE-1 export | 40–60 | after asset format exists |
+| X0 variable-size core (`spec-next`) | 20–30 | metrics, expression anchors, `percent`, size sweep lint |
+| X1 language extensions (`spec-next`) | 25–40 | `mirror`/`repeat`/`variants`/`extends`, locals, assertions |
+| M4 C compiler + ARCADE-1 export | 90–130 | after asset format exists |
 | M5 AI tool interface (MCP) + vision loop | 15–25 | model drives the loop |
+| **Total (M1–M5 incl. X0/X1)** | **265–415** | M0 done |

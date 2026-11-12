@@ -6,13 +6,14 @@
 | 2 | Free text is metadata only | No field may pretend to be executable |
 | 3 | Archetype → recipes(params) → `.px` | Finite vocabulary, huge design space, honest escape hatch |
 | 4 | Unknown names return suggestions + JSON Patch fixes | The engine teaches the AI its own vocabulary |
-| 5 | Integer/fixed-point rasterization | Bit-exact across Python and Go, golden-testable |
+| 5 | Integer/fixed-point rasterization | Bit-exact across the Python and C implementations, golden-testable |
 | 6 | Screen-relative l/r | Avoids anatomical left/right bugs |
 | 7 | Rigid translation animation first | Rotation of pixel art is hard to make look good; add variants later |
-| 8 | Python reference before Go | Spec still moving; goldens make the port verifiable |
+| 8 | Python reference before the C compiler (M4) | Spec still moving; goldens make the port verifiable |
 | 9 | Palette roles (ramp.tone), no raw RGB | Style packs can restyle everything |
 | 10 | Structural tests instead of vision tests | The compiler knows what it placed |
 | 11 | Image models only as optional `.px` producers | Keeps the core deterministic |
+| 12 | Go port replaced by a standalone C compiler (M4) | Embedding in the arcade1 toolchain, dependency-free binary |
 
 ## v1 spec → v2 fate
 | v1 element | fate |

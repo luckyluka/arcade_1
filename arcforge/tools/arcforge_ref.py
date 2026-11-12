@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """ArcForge reference implementation (spike).
 
-Purpose: make the spec executable. This is the oracle that a future Go port
-must match byte-for-byte (see tests/golden). Dependencies: Python 3.9+, jsonschema.
+Purpose: make the spec executable. This is the oracle that the future C
+compiler (ROADMAP M4) must match byte-for-byte (see tests/golden).
+Dependencies: Python 3.9+, jsonschema.
 
 Commands:
   validate ASSET            schema + registry validation, structured diagnostics (JSON)
@@ -164,7 +165,7 @@ def to_int(v):
 
 
 # --------------------------------------------------------------------------
-# Fixed-point geometry (1/64 px). All raster tests are integer-only so a Go
+# Fixed-point geometry (1/64 px). All raster tests are integer-only so a C
 # port is bit-identical. Trig is an integer-degree table rounded to 1e-6.
 # --------------------------------------------------------------------------
 COS = {d: int(round(math.cos(math.radians(d)) * 1e6)) for d in range(-180, 181)}

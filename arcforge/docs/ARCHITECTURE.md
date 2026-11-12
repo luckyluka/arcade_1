@@ -30,4 +30,4 @@ A flat list of drawables `{kind, geometry, fill(ramp,tone), layer index, sequenc
 Only at the edges: (a) authoring/repairing the JSON through the diagnostic loop; (b) optionally producing `.px` fragments from reference images; (c) visually reviewing renders. The compiler itself never calls a model.
 
 ## Implementation plan
-Python reference (this repo) until the format settles; then a Go implementation that must reproduce `tests/golden` exactly. Both share `schema/` and `registry/`.
+Python reference (this repo) until the format settles; then the standalone C compiler (ROADMAP M4) that must reproduce `tests/golden` and every diagnostics report exactly. Both read the same `schema/` and `registry/` data files.
