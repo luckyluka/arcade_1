@@ -438,7 +438,18 @@ def compile_asset(asset, reg, base_dir):
     if diags:
         return diags, None
 
-    W, H = asset["target"]["canvas"]
+    # ---- cell: fixed [w,h] or 2.1 auto {mode,...} ------------------------
+    canvas = asset["target"]["canvas"]
+    if isinstance(canvas, dict):
+        # Auto: the real cell is derived after rendering on an unbounded plane.
+        # Metrics/anchors see the provisional cell = archetype canvas.default.
+        auto = {"margin": canvas.get("margin", 1),
+                "multiple_of": canvas.get("multiple_of", 1),
+                "align": canvas.get("align", "pivot_bottom_center")}
+        W, H = arch["canvas"]["default"]
+    else:
+        auto = None
+        W, H = canvas
     # ---- size parameters (2.1) ------------------------------------------
     size_specs = arch.get("size") or {}
     size_env = {}
@@ -460,8 +471,8 @@ def compile_asset(asset, reg, base_dir):
             v = c
         size_env[k] = v
     # A sized archetype expresses its cell contract through min_cell(size);
-    # the fixed `supported` list applies only to unsized (v2.0) archetypes.
-    if not size_specs and [W, H] not in arch["canvas"]["supported"]:
+    # the fixed `supported` list applies only to unsized, fixed-canvas assets.
+    if auto is None and not size_specs and [W, H] not in arch["canvas"]["supported"]:
         diags.append(D("E_CANVAS_UNSUPPORTED", "/target/canvas", "archetype does not support this canvas size",
                        observed=[W, H], expected=arch["canvas"]["supported"],
                        fix=[{"op": "replace", "path": "/target/canvas", "value": arch["canvas"]["default"]}]))
@@ -495,7 +506,9 @@ def compile_asset(asset, reg, base_dir):
             diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "metrics", mi),
                            f"metric '{mname}' failed to evaluate: {e}"))
             env[mname] = 0
-    # ---- min_cell(size): a fixed canvas must contain the body at this size
+    # ---- min_cell(size): evaluated whenever declared; a *fixed* canvas must
+    # contain the body at this size (auto cells are built to satisfy it later)
+    mc = None
     if size_specs and arch.get("min_cell"):
         try:
             mc = [to_int(ev(v, env)) for v in arch["min_cell"]]
@@ -503,7 +516,7 @@ def compile_asset(asset, reg, base_dir):
             diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "min_cell"),
                            f"min_cell failed to evaluate: {e}"))
         else:
-            if W < mc[0] or H < mc[1]:
+            if auto is None and (W < mc[0] or H < mc[1]):
                 fix = ([{"op": "replace", "path": "/target/canvas", "value": mc}]
                        if all(1 <= x <= 256 for x in mc) else None)
                 diags.append(D("E_CELL_TOO_SMALL", "/target/canvas",
@@ -677,6 +690,7 @@ def compile_asset(asset, reg, base_dir):
     return diags, {
         "asset": asset, "arch": arch, "style": style, "W": W, "H": H, "drawables": drawables,
         "anchors": anchors, "parts": parts, "features": feature_names, "animations": anims, "hitboxes": hitboxes,
+        "auto": auto, "min_cell": mc, "clip_policy": asset["target"].get("clip_policy", "error"),
     }
 
 
@@ -689,7 +703,9 @@ def part_offset(offsets, part):
     return rx + px, ry + py
 
 
-def render_frame(ir, offsets):
+def render_frame(ir, offsets, clip=True):
+    """Rasterize one frame. clip=False renders on an unbounded plane (auto
+    canvas pass 1): nothing is dropped, `clipped` stays 0."""
     W, H = ir["W"], ir["H"]
     grid = {}   # (x, y) -> (li, seq, part, ramp, tone): seq orders pixels within
                 # a layer and part identity feeds the inner-outline pass;
@@ -698,10 +714,10 @@ def render_frame(ir, offsets):
 
     def put(x, y, li, seq, part, fill):
         nonlocal clipped
-        if 0 <= x < W and 0 <= y < H:
-            grid[(x, y)] = (li, seq, part, fill[0], fill[1])
-        else:
+        if clip and not (0 <= x < W and 0 <= y < H):
             clipped += 1
+        else:
+            grid[(x, y)] = (li, seq, part, fill[0], fill[1])
 
     for d in sorted(ir["drawables"], key=lambda d: (d["li"], d["seq"])):
         ox, oy = part_offset(offsets, d["part"])
@@ -745,7 +761,7 @@ def render_frame(ir, offsets):
         for (x, y) in grid:
             for dx, dy in nbrs:
                 p = (x + dx, y + dy)
-                if p not in grid and 0 <= p[0] < W and 0 <= p[1] < H:
+                if p not in grid and (not clip or (0 <= p[0] < W and 0 <= p[1] < H)):
                     out[p] = (len(layers), 0, None, ol["ramp"], "base")
         grid = out
     # Per-part inner outline (style pack outline.inner): a pixel of a listed
@@ -799,17 +815,68 @@ def png_bytes(w, h, rgba, scale=1, bg=None):
             + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
+def resolve_auto_cell(ir, entries):
+    """2.1 auto canvas (spec-next 01 §2): one cell for the whole asset.
+
+    Union bbox of every frame of every animation (outline included) + margin,
+    rounded up to multiple_of, raised to min_cell(size), placed per `align`
+    (clamped so the bbox keeps >= margin on every side) and translated into the
+    final cell. Metrics were evaluated at the provisional cell, so this is a
+    pure grid/anchor/hitbox shift: nothing is re-derived, nothing can clip."""
+    a = ir["auto"]
+    xs = [x for _, _, f in entries for (x, _) in f["grid"]]
+    ys = [y for _, _, f in entries for (_, y) in f["grid"]]
+    minx, maxx = (min(xs), max(xs)) if xs else (0, 0)
+    miny, maxy = (min(ys), max(ys)) if ys else (0, 0)
+    bw = (maxx - minx + 1) if xs else 0
+    bh = (maxy - miny + 1) if ys else 0
+    m, k = a["margin"], a["multiple_of"]
+    w, h = bw + 2 * m, bh + 2 * m
+    mc = ir.get("min_cell")
+    if mc:
+        w, h = max(w, mc[0]), max(h, mc[1])
+    w, h = max(1, (w + k - 1) // k * k), max(1, (h + k - 1) // k * k)
+    px, py = ir["anchors"].get("origin", {}).get("at", [0, 0])
+    if a["align"] == "top_left":
+        dx, dy = m - minx, m - miny
+    elif a["align"] == "pivot_center":
+        dx, dy = w // 2 - px, h // 2 - py
+    else:                                   # pivot_bottom_center
+        dx, dy = w // 2 - px, h - 1 - m - py
+    if xs:                                  # clamp into [margin .. cell-1-margin]
+        dx = max(m - minx, min((w - 1 - m) - maxx, dx))
+    if ys:
+        dy = max(m - miny, min((h - 1 - m) - maxy, dy))
+    ir["W"], ir["H"] = w, h
+    for _, _, f in entries:
+        f["grid"] = {(x + dx, y + dy): v for (x, y), v in f["grid"].items()}
+        f["clipped"] = 0
+    for ad in ir["anchors"].values():
+        ad["at"] = [ad["at"][0] + dx, ad["at"][1] + dy]
+    for hb in ir["hitboxes"]:
+        hb["rect"] = [hb["rect"][0] + dx, hb["rect"][1] + dy, hb["rect"][2], hb["rect"][3]]
+
+
 def render_all(ir):
-    """Returns {'base': frame, 'idle': [frames]...}; frame = dict(grid, rgba, clipped, offsets)."""
+    """Returns {'base': frame, 'idle': [frames]...}; frame = dict(grid, rgba, clipped, offsets).
+    For an auto canvas the cell is derived here, before rgba is produced."""
     res = {}
+    auto = bool(ir.get("auto"))
 
     def mk(offsets):
-        grid, clipped = render_frame(ir, offsets)
-        return {"grid": grid, "rgba": to_rgba(ir, grid), "clipped": clipped, "offsets": offsets}
+        grid, clipped = render_frame(ir, offsets, clip=not auto)
+        return {"grid": grid, "rgba": None, "clipped": clipped, "offsets": offsets}
 
-    res["base"] = [mk({})]
+    entries = [("base", 0, mk({}))]
     for name, tpl in ir["animations"].items():
-        res[name] = [mk({k: tuple(v) for k, v in fr["offsets"].items()}) for fr in tpl["frames"]]
+        for i, fr in enumerate(tpl["frames"]):
+            entries.append((name, i, mk({k: tuple(v) for k, v in fr["offsets"].items()})))
+    if auto:
+        resolve_auto_cell(ir, entries)
+    for _, _, f in entries:
+        f["rgba"] = to_rgba(ir, f["grid"])
+    for name, i, f in entries:
+        res.setdefault(name, []).append(f)
     return res
 
 
@@ -870,11 +937,19 @@ def run_tests(ir, renders):
     if len(cols) > ir["style"]["max_colors"]:
         diags.append(D("E_PALETTE_BUDGET", "/style_pack", "palette budget exceeded", observed=len(cols),
                        expected=f"<= {ir['style']['max_colors']}"))
+    policy = ir.get("clip_policy", "error")
     for name, fs in renders.items():
         for n, f in enumerate(fs):
             if f["clipped"]:
-                diags.append(D("W_CLIPPED", f"/animations/{name}/{n}" if name != "base" else "/", 
-                               f"{f['clipped']} pixel(s) fall outside the canvas and were clipped", observed=f["clipped"], severity="warning"))
+                p = f"/animations/{name}/{n}" if name != "base" else "/"
+                if policy == "error":
+                    diags.append(D("E_CLIPPED", p,
+                                   f"{f['clipped']} pixel(s) fall outside the canvas and clip_policy is 'error'",
+                                   observed=f["clipped"], expected="0"))
+                else:
+                    diags.append(D("W_CLIPPED", p,
+                                   f"{f['clipped']} pixel(s) fall outside the canvas and were clipped",
+                                   observed=f["clipped"], severity="warning"))
     return results, diags
 
 
@@ -956,7 +1031,9 @@ def cmd_render(args):
     out.mkdir(parents=True, exist_ok=True)
     W, H, s = ir["W"], ir["H"], args.scale
     (out / "base.png").write_bytes(png_bytes(W, H, renders["base"][0]["rgba"]))
-    atlas = {"cell": [W, H], "animations": {}}
+    atlas = {"cell": [W, H],
+             "pivot": list(ir["anchors"].get("origin", {}).get("at", [0, 0])),
+             "animations": {}}
     rows = [(n, fs) for n, fs in renders.items() if n != "base"]
     cols = max([len(fs) for _, fs in rows] + [1])
     sheet = bytearray(W * cols * H * max(len(rows), 1) * 4)
@@ -1045,7 +1122,10 @@ def cmd_lint(args):
         for ex_i, ex in enumerate(rec["examples"]):
             style_name = sorted(reg["styles"])[0]
             asset = {"arcforge": "2.0", "asset": {"id": f"lint.{name}", "type": "character", "version": "1.0.0"},
-                     "target": {"profile": "arcade1-draft", "canvas": reg["archetypes"][rec["applies_to"][0]]["canvas"]["default"]},
+                     "target": {"profile": "arcade1-draft", "canvas": reg["archetypes"][rec["applies_to"][0]]["canvas"]["default"],
+                                # registry examples may sit at the canvas edge; the
+                                # baseline keeps reporting that as W_CLIPPED, not an error
+                                "clip_policy": "warn"},
                      "style_pack": style_name, "archetype": {"name": rec["applies_to"][0]},
                      "features": [{"recipe": name, "params": ex}]}
             d, ir = compile_asset(asset, reg, ROOT)

@@ -26,7 +26,17 @@
       "required": ["profile", "canvas"],
       "properties": {
         "profile": { "enum": ["arcade1-draft"] },
-        "canvas": { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 256 }, "minItems": 2, "maxItems": 2 }
+        "canvas": { "oneOf": [
+          { "type": "array", "items": { "type": "integer", "minimum": 1, "maximum": 256 }, "minItems": 2, "maxItems": 2 },
+          { "type": "object", "additionalProperties": false, "required": ["mode"],
+            "properties": {
+              "mode": { "const": "auto" },
+              "margin": { "type": "integer", "minimum": 0, "maximum": 8 },
+              "multiple_of": { "type": "integer", "minimum": 1, "maximum": 64 },
+              "align": { "enum": ["pivot_bottom_center", "pivot_center", "top_left"] }
+            } }
+        ] },
+        "clip_policy": { "enum": ["error", "warn"] }
       }
     },
     "style_pack": { "type": "string", "pattern": "^[a-z0-9_]+$" },

@@ -34,5 +34,6 @@
   ],
   "unknown_size_param": [
     "E_UNKNOWN_SIZE_PARAM"
-  ]
+  ],
+  "clipped": { "run": "test", "errors": ["E_CLIPPED"], "warnings": [] }
 }

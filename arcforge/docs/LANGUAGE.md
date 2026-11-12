@@ -90,12 +90,28 @@ size parameters) and derived **metrics**.
 | archetype | `min_cell: [wExpr, hExpr]` | minimum fixed cell at this size → smaller canvas is `E_CELL_TOO_SMALL` |
 | archetype | `anchors.*.at` | may be expressions; evaluated once per asset after metrics |
 | asset | `archetype.size: {name: int}` | per-asset size selection |
+| asset | `target.canvas` | `[w,h]` (fixed) or `{ "mode": "auto", "margin"?, "multiple_of"?, "align"? }`; defaults margin 1, multiple_of 1, align `pivot_bottom_center` |
+| asset | `target.clip_policy` | `error` (default) or `warn`; clipped pixels → `E_CLIPPED` / `W_CLIPPED` |
 | recipe | `sizes: {min,max}` | primary size-parameter range the recipe supports (primary = first `size` key of the archetype); use outside → `E_RECIPE_SIZE_RANGE` |
 | recipe | `locals: [[name, expr], ...]` | ordered, floored, visible only inside the recipe; failure → `E_RECIPE_EXPR` |
 
 A sized archetype's canvas check is `min_cell`, not the v2.0 `canvas.supported`
 list (which still governs unsized archetypes). Metric ratios are written as
 integer percentages (`$height*30/100`), never as source floats.
+
+### Auto canvas (2.1)
+Metrics and anchors see the **provisional cell** = the archetype's
+`canvas.default`. Every frame of every animation then renders on an unbounded
+plane, and the compiler takes the union bounding box (outline included), adds
+`margin`, rounds each dimension up to `multiple_of`, raises it to
+`min_cell(size)`, places the content per `align` (`top_left`: bbox at the
+margin corner; `pivot_center` / `pivot_bottom_center`: aim the `origin` anchor
+at the cell centre / bottom centre) clamped so the bbox keeps at least `margin`
+on every side, and finally translates grid, anchors and hitboxes into the cell —
+a pure shift, never a re-render, so an auto canvas can never clip. The
+`origin`-anchor position inside the resolved cell is exported as `pivot` in
+`atlas.json`; games align by `pivot`, never by cell size, so differently sized
+assets mix freely.
 
 ## What the language refuses to do
 Describe appearance in prose, reference things the compiler cannot build, or silently ignore input. If the vocabulary cannot express an idea, the answer is "NO RECIPE EXISTS" plus alternatives, and the author may supply a `.px` fragment.

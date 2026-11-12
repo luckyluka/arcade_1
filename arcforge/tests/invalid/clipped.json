@@ -1,0 +1,15 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.clip_overhang",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: attached at origin (16,30) the 8x6 block hangs below y=31; default clip_policy is error."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "custom": [
+    { "id": "block", "type": "px_fragment", "file": "fragments/block.px", "anchor": "origin", "layer": "fx" }
+  ]
+}

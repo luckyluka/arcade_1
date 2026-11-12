@@ -1,0 +1,14 @@
+px 1
+name block
+size 8 6
+anchor attach 0 0
+legend
+  x red.base
+  y red.light
+rows
+  xxxxxxxx
+  yyyyyyyy
+  xxxxxxxx
+  yyyyyyyy
+  xxxxxxxx
+  yyyyyyyy
