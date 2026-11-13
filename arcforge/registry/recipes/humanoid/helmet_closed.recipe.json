@@ -3,20 +3,29 @@
   "version": "1.0.0",
   "category": "humanoid/head",
   "description": "Closed helmet with a visor slit and optional crest. Hides the face.",
-  "applies_to": ["humanoid_hero"],
+  "applies_to": ["humanoid_hero", "humanoid_front_scalable"],
   "slot": "head_gear",
   "requires_anchors": ["head_center"],
   "parameters": {
     "visor": { "type": "ramp", "default": "red", "allow": ["red", "blue", "gold"] },
     "crest": { "type": "bool", "default": false }
   },
-  "geometry": [
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -6, "y": -4, "w": 12, "h": 11, "fill": "$armor_ramp.base" },
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -5, "y": -3, "w": 4,  "h": 2,  "fill": "$armor_ramp.light" },
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -4, "y": -1, "w": 8,  "h": 3,  "fill": "outline" },
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -3, "y": 0,  "w": 2,  "h": 1,  "fill": "$visor.light" },
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": 1,  "y": 0,  "w": 2,  "h": 1,  "fill": "$visor.light" },
-    { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -1, "y": -5, "w": 2,  "h": 1,  "fill": "$visor.base", "when": "$crest" }
-  ],
+  "geometry": {
+    "humanoid_hero": [
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -6, "y": -4, "w": 12, "h": 11, "fill": "$armor_ramp.base" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -5, "y": -3, "w": 4,  "h": 2,  "fill": "$armor_ramp.light" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -4, "y": -1, "w": 8,  "h": 3,  "fill": "outline" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -3, "y": 0,  "w": 2,  "h": 1,  "fill": "$visor.light" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": 1,  "y": 0,  "w": 2,  "h": 1,  "fill": "$visor.light" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -1, "y": -5, "w": 2,  "h": 1,  "fill": "$visor.base", "when": "$crest" }
+    ],
+    "humanoid_front_scalable": [
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": "-half($head_w)", "y": "-half($head_h)", "w": "$head_w", "h": "$head_h + 1", "fill": "$armor_ramp.base" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": "-half($head_w) + 1", "y": "-half($head_h) + 1", "w": "max(2, $head_w // 3)", "h": "$u", "fill": "$armor_ramp.light" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": "-half($head_w) + 1", "y": "-half(max(1, $head_h // 4))", "w": "$head_w - 2", "h": "max(1, $head_h // 4)", "fill": "outline" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": "-half($head_w) + 2", "y": "-half(max(1, $head_h // 4))", "w": "max(1, $head_w - 4)", "h": "max(1, $head_h // 4 - 1)", "fill": "$visor.light" },
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": "-half($u)", "y": "-half($head_h) - 1", "w": "2 * half($u) + 1", "h": "max(1, $u)", "fill": "$visor.base", "when": "$crest" }
+    ]
+  },
   "examples": [ {}, { "crest": true, "visor": "blue" } ]
 }

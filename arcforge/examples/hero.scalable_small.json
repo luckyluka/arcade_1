@@ -1,0 +1,33 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_small",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Size-parametric archetype at the small-class extreme: height 16 (recipe sizes start at 16), fixed canvas above min_cell(16)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [26, 28] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "params": { "armor_ramp": "steel" }, "size": { "height": 16 } },
+  "features": [
+    { "recipe": "helmet_closed", "params": { "visor": "blue", "crest": true } },
+    "boots_heavy",
+    { "recipe": "energy_sword", "params": { "color": "red", "glow": "strong" } }
+  ],
+  "animations": {
+    "idle":   { "template": "idle" },
+    "walk":   { "template": "walk" },
+    "attack": { "template": "attack" }
+  },
+  "tests": [
+    { "assert": "dimensions", "expected": [26, 28] },
+    { "assert": "palette_size", "max": 16 },
+    { "assert": "feature_present", "recipe": "helmet_closed" },
+    { "assert": "feature_present", "recipe": "energy_sword" },
+    { "assert": "feature_present", "recipe": "boots_heavy" },
+    { "assert": "bbox_margin", "min": 0 },
+    { "assert": "anchor_inside_canvas", "anchor": "hand_r" },
+    { "assert": "root_stable", "max": 1 },
+    { "assert": "frame_count", "max": 16 }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_recipe_size_range",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: energy_sword supports height 16..64; this asset sits at 12 (the cell still satisfies min_cell(12))."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [24, 22] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "size": { "height": 12 } },
+  "features": [ { "recipe": "energy_sword", "params": {} } ]
+}

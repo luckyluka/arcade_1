@@ -38,5 +38,10 @@
   "clipped": { "run": "test", "errors": ["E_CLIPPED"], "warnings": [] },
   "feature_too_small": { "run": "test", "errors": [], "warnings": ["W_FEATURE_TOO_SMALL"] },
   "occluded_feature": { "run": "test", "errors": [], "warnings": ["W_OCCLUDED"] },
-  "symmetric_violation": { "run": "sweep", "errors": ["E_BODY_ASYMMETRY"], "warnings": [] }
+  "symmetric_violation": { "run": "sweep", "errors": ["E_BODY_ASYMMETRY"], "warnings": [] },
+  "size_range": { "run": "validate", "errors": ["E_SIZE_RANGE"], "warnings": [] },
+  "cell_too_small": { "run": "validate", "errors": ["E_CELL_TOO_SMALL"], "warnings": [] },
+  "recipe_size_range": { "run": "validate", "errors": ["E_RECIPE_SIZE_RANGE"], "warnings": [] },
+  "percent_unknown_of": { "run": "validate", "errors": ["E_UNKNOWN_SIZE_PARAM"], "warnings": [] },
+  "keyed_geometry": { "run": "validate", "errors": ["E_RECIPE_GEOMETRY"], "warnings": [] }
 }

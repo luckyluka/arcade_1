@@ -10,7 +10,7 @@ A recipe is an engine capability: deterministic geometry with typed parameters, 
 | `slot`, `stackable?`, `conflicts_with?` | exclusivity model |
 | `requires_anchors` | anchors that must exist on the archetype |
 | `parameters` | typed, ranged, with defaults (types: `int`, `bool`, `enum`, `ramp`, and 2.1 `percent`) |
-| `geometry` | shapes: anchor, layer, shape, fill, rotate?, when? (see LANGUAGE.md) |
+| `geometry` | shapes: anchor, layer, shape, fill, rotate?, when? (see LANGUAGE.md). Either one array shared by every `applies_to` member, or an object keyed by archetype name (2.1) |
 | `hitboxes?` | anchor-relative rects with `active_in` animations |
 | `sizes?` | 2.1: `{min,max}` on the archetype's primary size parameter; using the recipe outside → `E_RECIPE_SIZE_RANGE` |
 | `locals?` | 2.1: ordered `[name, expression]` pairs, floored, visible only inside this recipe |
@@ -27,6 +27,16 @@ A recipe is an engine capability: deterministic geometry with typed parameters, 
   recipe that only fits at "reasonable" percentages must declare that range.
 - Recipe `sizes` is checked against the archetype's **primary** size parameter
   (the first key of its `size` object).
+- **Keyed geometry**: when `geometry` is an object, every `applies_to` member
+  needs a key and every key must be in `applies_to` (`E_RECIPE_GEOMETRY`). The
+  selected key's shapes are the whole geometry for that archetype. Recipe-level
+  `locals` are shared by all keys and evaluate in the *current* archetype's
+  environment, so a local naming a dimension only one archetype has fails
+  everywhere (`E_RECIPE_EXPR`): keep locals common to every key and inline
+  key-specific expressions into the shapes. Parameters may be consumed by only
+  one key (`energy_sword`'s `length`/`thickness`/`angle` drive the fixed-art key,
+  the percent `reach`/`blade_w` the scalable one) — they stay declared and bound
+  either way, and `hitboxes` are shared across keys for the same reason.
 
 ## Authoring checklist
 1. Pick the slot and layer. Decide which part's motion it should follow (via the anchor).

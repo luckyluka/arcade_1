@@ -1,0 +1,12 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_cell_too_small",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: a fixed canvas must contain min_cell(size); 32x32 is below min_cell(40) = 48x46."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "size": { "height": 40 } }
+}

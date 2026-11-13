@@ -1,0 +1,16 @@
+{
+  "recipe": "t_keyed_geometry",
+  "version": "1.0.0",
+  "category": "humanoid/head",
+  "description": "Negative fixture: geometry is keyed for an archetype that is not in applies_to (the key can never be reached).",
+  "applies_to": ["humanoid_hero"],
+  "slot": "head_gear",
+  "requires_anchors": ["head_center"],
+  "parameters": {},
+  "geometry": {
+    "humanoid_front_scalable": [
+      { "anchor": "head_center", "layer": "armor", "shape": "rect", "x": -2, "y": -2, "w": 4, "h": 4, "fill": "steel.base" }
+    ]
+  },
+  "examples": [ {} ]
+}

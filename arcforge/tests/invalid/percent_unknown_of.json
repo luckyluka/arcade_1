@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.percent_unknown_of",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: reach is a percent of 'height', which humanoid_hero does not provide; supplying it is an error."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "features": [ { "recipe": "energy_sword", "params": { "reach": 30 } } ]
+}

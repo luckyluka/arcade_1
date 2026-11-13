@@ -1,0 +1,15 @@
+{
+  "asset": "hero.scalable_small",
+  "frames": {
+    "base/0": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068",
+    "idle/0": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068",
+    "idle/1": "681904f7c2072df353d7f7ebbdab8db56b7abefed595de6a3f45804de8edce6d",
+    "walk/0": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068",
+    "walk/1": "588de150f36c39ded1f2e5f5a978eadb83baae4f3b5261ff9583cc8908a2a23b",
+    "walk/2": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068",
+    "walk/3": "681904f7c2072df353d7f7ebbdab8db56b7abefed595de6a3f45804de8edce6d",
+    "attack/0": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068",
+    "attack/1": "cadf806d4d48d92db4b2f50e6491ffc04936f33902f8b416b1047ae4d318c18e",
+    "attack/2": "cb8c1fd0d59542cbb23b890c2d9c4fc377c67e0fe567b969f8e7b66aae0a1068"
+  }
+}

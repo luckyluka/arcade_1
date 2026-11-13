@@ -1,0 +1,126 @@
+{
+  "archetype": "humanoid_front_scalable",
+  "version": "1.0.0",
+  "description": "Front-view humanoid parametric in size (2.1): one size parameter `height` (12..64) drives every metric, three classes vary the head proportion, and min_cell(size) is the cell contract. Body is mirror-symmetric about $cx.",
+  "view": "front",
+  "canvas": {
+    "default": [48, 46],
+    "supported": [[48, 46]]
+  },
+  "params": {
+    "armor_ramp": { "type": "ramp", "default": "steel", "allow": ["steel", "blue", "gold"] },
+    "skin_ramp": { "type": "ramp", "default": "skin", "allow": ["skin"] }
+  },
+  "layers": ["back", "body", "armor", "held", "foreground", "fx"],
+  "symmetric": true,
+  "size": {
+    "height": { "min": 12, "max": 64, "default": 40 }
+  },
+  "classes": [
+    { "name": "small", "max": 24 },
+    { "name": "medium", "max": 40 },
+    { "name": "large", "max": 64 }
+  ],
+  "proportions": {
+    "small": { "p_head": 36 },
+    "medium": { "p_head": 30 },
+    "large": { "p_head": 26 }
+  },
+  "metrics": [
+    ["u",         "max(1, $height // 16)"],
+    ["head_h",    "max(4, ($height * $p_head + 50) // 100)"],
+    ["leg_h",     "max(3, ($height * 30 + 50) // 100)"],
+    ["torso_h",   "$height - $head_h - $leg_h"],
+    ["torso_w",   "odd(($height * 55 + 50) // 100)"],
+    ["head_w",    "odd(($height * 45 + 50) // 100)"],
+    ["leg_w",     "max(2, ($height * 18 + 50) // 100)"],
+    ["gap",       "2 * half($u) + 1"],
+    ["arm_w",     "max(2, ($height * 14 + 50) // 100)"],
+    ["half_t",    "half($torso_w)"],
+    ["half_h",    "half($head_w)"],
+    ["cx",        "half($W)"],
+    ["foot_y",    "$H - 3"],
+    ["leg_top",   "$foot_y - $leg_h + 1"],
+    ["torso_top", "$leg_top - $torso_h"],
+    ["head_top",  "$torso_top - $head_h"],
+    ["arm_h",     "max(3, $torso_h - $u)"],
+    ["hand_h",    "max(1, $arm_h // 4)"],
+    ["leg_l_x",   "$cx - half($gap) - $leg_w"],
+    ["leg_r_x",   "$cx + half($gap) + 1"],
+    ["sword_reach", "max(4, ($height * 55 + 50) // 100)"],
+    ["sword_w",     "max(1, ($height * 12 + 50) // 100)"]
+  ],
+  "min_cell": [
+    "$torso_w + $arm_w + $sword_w + 2 * $u + 10",
+    "max($height + 4, $leg_h + 3 * $u + $sword_reach + 6)"
+  ],
+  "parts": {
+    "root": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": "$leg_l_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.shadow" },
+        { "shape": "rect", "layer": "body", "x": "$leg_r_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.shadow" },
+        { "shape": "rect", "layer": "body", "x": "$cx - $half_t", "y": "$torso_top", "w": "$torso_w", "h": "$torso_h", "fill": "$armor_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$cx - $half_t", "y": "$torso_top + $torso_h - $u", "w": "$torso_w", "h": "$u", "fill": "$armor_ramp.shadow" },
+        { "shape": "rect", "layer": "body", "x": "$cx - $half_h", "y": "$head_top", "w": "$head_w", "h": "$head_h", "fill": "$skin_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$cx - 1", "y": "$head_top + half($head_h)", "w": 1, "h": 1, "fill": "outline" },
+        { "shape": "rect", "layer": "body", "x": "$cx + 1", "y": "$head_top + half($head_h)", "w": 1, "h": 1, "fill": "outline" },
+        { "shape": "rect", "layer": "body", "x": "$cx - $half_t - $arm_w", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h", "fill": "$armor_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$cx - $half_t - $arm_w", "y": "$torso_top + $arm_h - $hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "$skin_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$cx + $half_t + 1", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h", "fill": "$armor_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$cx + $half_t + 1", "y": "$torso_top + $arm_h - $hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "$skin_ramp.base" }
+      ]
+    }
+  },
+  "anchors": {
+    "head_center": { "part": "root", "at": ["$cx", "$head_top + half($head_h)"] },
+    "hand_r": { "part": "root", "at": ["$cx + $half_t + 1 + half($arm_w)", "$torso_top + $arm_h - 1"] },
+    "foot_l": { "part": "root", "at": ["$leg_l_x + half($leg_w)", "$foot_y"] },
+    "foot_r": { "part": "root", "at": ["$leg_r_x + half($leg_w)", "$foot_y"] },
+    "origin": { "part": "root", "at": ["$cx", "$foot_y"] }
+  },
+  "animations": {
+    "idle": {
+      "fps": 4,
+      "loop": true,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "root": [0, 1] } }
+      ]
+    },
+    "walk": {
+      "fps": 8,
+      "loop": true,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "root": [0, -1] } },
+        { "offsets": {} },
+        { "offsets": { "root": [0, 1] } }
+      ]
+    },
+    "attack": {
+      "fps": 8,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "root": [1, 0] } },
+        { "offsets": {} }
+      ]
+    },
+    "hurt": {
+      "fps": 6,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "root": [-1, 0] } }
+      ]
+    },
+    "death": {
+      "fps": 4,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "root": [0, 1] } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_big",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Size-parametric archetype near the large-class extreme: height 56, percent sword parameters at their declared maxima."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [64, 68] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "params": { "armor_ramp": "blue" }, "size": { "height": 56 } },
+  "features": [
+    { "recipe": "helmet_closed", "params": { "visor": "gold", "crest": true } },
+    "boots_heavy",
+    { "recipe": "energy_sword", "params": { "color": "gold", "glow": "strong", "reach": 55, "blade_w": 12 } }
+  ],
+  "animations": {
+    "idle":   { "template": "idle" },
+    "walk":   { "template": "walk" },
+    "attack": { "template": "attack" }
+  },
+  "tests": [
+    { "assert": "dimensions", "expected": [64, 68] },
+    { "assert": "palette_size", "max": 16 },
+    { "assert": "feature_present", "recipe": "energy_sword" },
+    { "assert": "feature_present", "recipe": "helmet_closed" },
+    { "assert": "bbox_margin", "min": 0 },
+    { "assert": "anchor_inside_canvas", "anchor": "hand_r" },
+    { "assert": "root_stable", "max": 1 },
+    { "assert": "frame_count", "max": 16 }
+  ]
+}

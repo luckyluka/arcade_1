@@ -575,6 +575,18 @@ def compile_asset(asset, reg, base_dir):
             diags.append(D("E_RECIPE_NOT_APPLICABLE", rp, f"recipe '{name}' does not apply to archetype '{arch['archetype']}'",
                            expected=rec["applies_to"]))
             continue
+        # geometry is either one array shared by every applies_to member or an
+        # object keyed by archetype name (2.1); a keyed recipe must cover this
+        # archetype or it contributes nothing here.
+        geo = rec["geometry"]
+        if isinstance(geo, dict):
+            geo = geo.get(arch["archetype"])
+            if geo is None:
+                diags.append(D("E_RECIPE_GEOMETRY", fp,
+                               f"recipe '{name}' has no geometry keyed for archetype '{arch['archetype']}'",
+                               observed=sorted(rec["geometry"]), expected=rec["applies_to"],
+                               suggestions=close(arch["archetype"], rec["geometry"])))
+                continue
         missing = [a for a in rec["requires_anchors"] if a not in anchors]
         if missing:
             diags.append(D("E_MISSING_ANCHOR", rp, f"archetype lacks anchors required by '{name}'", expected=missing))
@@ -618,7 +630,7 @@ def compile_asset(asset, reg, base_dir):
         if len(diags) > ldiags_before:
             continue
         try:
-            for sh in rec["geometry"]:
+            for sh in geo:
                 if sh["layer"] not in layers:
                     raise ExprError(f"unknown layer '{sh['layer']}'")
                 if sh["anchor"] not in anchors:
@@ -1279,6 +1291,41 @@ def is_style_pack_doc(doc):
             and "arcforge" not in doc)
 
 
+def is_recipe_doc(doc):
+    return isinstance(doc, dict) and "recipe" in doc and "geometry" in doc and "arcforge" not in doc
+
+
+def check_recipe_doc(doc, reg, base_path=""):
+    """Schema + keyed-geometry cross-checks for a recipe document.
+
+    An array geometry is shared by every applies_to member. An object geometry
+    is keyed by archetype name and must cover applies_to exactly: a missing key
+    would silently drop the recipe on that archetype, an extra key can never be
+    reached. Both are E_RECIPE_GEOMETRY."""
+    diags = schema_diags(doc, "recipe.schema.json", base_path)
+    if diags:
+        return diags
+    geo = doc.get("geometry")
+    if not isinstance(geo, dict):
+        return diags
+    applies = doc.get("applies_to", [])
+    for a in applies:
+        if a not in geo:
+            sug = close(a, geo)
+            diags.append(D("E_RECIPE_GEOMETRY", base_path + "/geometry",
+                           f"recipe '{doc.get('recipe', '?')}' has no geometry keyed for applies_to archetype '{a}'",
+                           observed=sorted(geo), expected=a, suggestions=sug,
+                           fix=([{"op": "add", "path": base_path + "/geometry" + ptr(sug[0]),
+                                  "value": geo[sug[0]]}] if sug else None)))
+    for k in geo:
+        if k not in applies:
+            diags.append(D("E_RECIPE_GEOMETRY", base_path + "/geometry" + ptr(k),
+                           f"geometry key '{k}' is not in applies_to",
+                           observed=k, expected=applies, suggestions=close(k, applies),
+                           fix=[{"op": "remove", "path": base_path + "/geometry" + ptr(k)}]))
+    return diags
+
+
 def check_style_pack(doc, reg, base_path=""):
     """Schema + registry cross-checks for a style-pack document."""
     diags = schema_diags(doc, "style_pack.schema.json", base_path)
@@ -1305,6 +1352,9 @@ def cmd_validate(args):
     if is_style_pack_doc(doc):
         diags = check_style_pack(doc, reg)
         r = report("validate", doc.get("style_pack", "?"), diags)
+    elif is_recipe_doc(doc):
+        diags = check_recipe_doc(doc, reg)
+        r = report("validate", doc.get("recipe", "?"), diags)
     else:
         diags, ir = compile_asset(doc, reg, base)
         r = report("validate", asset_id(doc), diags)
@@ -1407,6 +1457,10 @@ def cmd_lint(args):
             rel = str(p.relative_to(ROOT))
             if schema == "style_pack.schema.json":
                 for d in check_style_pack(load_json(p), reg, rel + ":"):
+                    diags.append(d)
+                continue
+            if schema == "recipe.schema.json":
+                for d in check_recipe_doc(load_json(p), reg, rel):
                     diags.append(d)
                 continue
             for d in schema_diags(load_json(p), schema, rel):

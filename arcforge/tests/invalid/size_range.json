@@ -1,0 +1,12 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_size_range",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: height 99 is above the archetype's declared max 64."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [76, 76] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "size": { "height": 99 } }
+}

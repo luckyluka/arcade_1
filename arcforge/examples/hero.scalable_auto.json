@@ -1,0 +1,34 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "hero.scalable_auto",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Auto canvas at height 40: the cell grows from the drawn extent (margin 2, rounded to a multiple of 8, bottom-centre aligned) and is raised to min_cell(40)."
+  },
+  "target": {
+    "profile": "arcade1-draft",
+    "canvas": { "mode": "auto", "margin": 2, "multiple_of": 8, "align": "pivot_bottom_center" },
+    "clip_policy": "error"
+  },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable", "params": { "armor_ramp": "gold" }, "size": { "height": 40 } },
+  "features": [
+    { "recipe": "helmet_closed", "params": { "visor": "red" } },
+    "boots_heavy",
+    { "recipe": "energy_sword", "params": { "color": "blue", "glow": "weak", "reach": 45, "blade_w": 8 } }
+  ],
+  "animations": {
+    "idle":   { "template": "idle" },
+    "walk":   { "template": "walk" },
+    "attack": { "template": "attack" }
+  },
+  "tests": [
+    { "assert": "palette_size", "max": 16 },
+    { "assert": "feature_present", "recipe": "energy_sword" },
+    { "assert": "bbox_margin", "min": 2 },
+    { "assert": "anchor_inside_canvas", "anchor": "hand_r" },
+    { "assert": "root_stable", "max": 1 },
+    { "assert": "frame_count", "max": 16 }
+  ]
+}

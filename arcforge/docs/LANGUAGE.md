@@ -94,6 +94,7 @@ size parameters) and derived **metrics**.
 | asset | `target.canvas` | `[w,h]` (fixed) or `{ "mode": "auto", "margin"?, "multiple_of"?, "align"? }`; defaults margin 1, multiple_of 1, align `pivot_bottom_center` |
 | asset | `target.clip_policy` | `error` (default) or `warn`; clipped pixels → `E_CLIPPED` / `W_CLIPPED` |
 | recipe | `sizes: {min,max}` | primary size-parameter range the recipe supports (primary = first `size` key of the archetype); use outside → `E_RECIPE_SIZE_RANGE` |
+| recipe | `geometry` | one array shared by `applies_to`, or an object keyed by archetype name; the keys must cover `applies_to` exactly (missing/extra key → `E_RECIPE_GEOMETRY`). Only the selected key's shapes are compiled, but parameters, recipe `locals` and `hitboxes` are evaluated per archetype for every key. Failure → `E_RECIPE_EXPR` |
 | recipe | `locals: [[name, expr], ...]` | ordered, floored, visible only inside the recipe; failure → `E_RECIPE_EXPR` |
 
 A sized archetype's canvas check is `min_cell`, not the v2.0 `canvas.supported`
