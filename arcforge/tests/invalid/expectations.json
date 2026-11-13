@@ -43,5 +43,8 @@
   "cell_too_small": { "run": "validate", "errors": ["E_CELL_TOO_SMALL"], "warnings": [] },
   "recipe_size_range": { "run": "validate", "errors": ["E_RECIPE_SIZE_RANGE"], "warnings": [] },
   "percent_unknown_of": { "run": "validate", "errors": ["E_UNKNOWN_SIZE_PARAM"], "warnings": [] },
-  "keyed_geometry": { "run": "validate", "errors": ["E_RECIPE_GEOMETRY"], "warnings": [] }
+  "keyed_geometry": { "run": "validate", "errors": ["E_RECIPE_GEOMETRY"], "warnings": [] },
+  "repeat_bound": { "run": "sweep", "errors": ["E_REPEAT_BOUND"], "warnings": [] },
+  "line_even_thickness": { "run": "sweep", "errors": ["E_SHAPE_PARAM"], "warnings": [] },
+  "mirror_rotate": { "run": "sweep", "errors": ["E_SHAPE_PARAM"], "warnings": [] }
 }

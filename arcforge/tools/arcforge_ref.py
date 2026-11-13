@@ -423,6 +423,263 @@ def build_shape(sh, env, anchor_at, layer_idx, ramps):
     return {"kind": "poly", "pts": fixed, "fill": fill, "li": layer_idx}
 
 
+class ShapeErr(Exception):
+    """A shape-vocabulary violation (spec 02 §C): reported per shape with the
+    new codes E_SHAPE_PARAM / E_REPEAT_BOUND while the rest of the shape list
+    still compiles. Expression failures stay ExprError (E_ARCHETYPE_EXPR /
+    E_RECIPE_EXPR), exactly as before."""
+    def __init__(self, code, msg, observed=None, expected=None):
+        super().__init__(msg)
+        self.code, self.msg = code, msg
+        self.observed, self.expected = observed, expected
+
+    def diag(self, path):
+        return D(self.code, path, self.msg, observed=self.observed, expected=self.expected)
+
+
+def bresenham(x1, y1, x2, y2):
+    """Integer line through both endpoints inclusive, fixed step order."""
+    pts = []
+    dx, dy = abs(x2 - x1), -abs(y2 - y1)
+    sx = 1 if x1 < x2 else -1
+    sy = 1 if y1 < y2 else -1
+    err = dx + dy
+    x, y = x1, y1
+    while True:
+        pts.append((x, y))
+        if x == x2 and y == y2:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+    return pts
+
+
+def reflect_shape(d, a):
+    """Exact integer reflection of one compiled drawable about column a, applied
+    before rasterization (spec 02 §C `mirror`). Poly points are fixed-point:
+    X' = (2a+1)*64 - X mirrors pixel centres exactly, so a rectangle
+    [x, x+w) lands on [2a-x-w+1, 2a-x+1) — the same set the rasterizer fills.
+    px entries keep `at` and mirror their offsets: dx' = 2a - 2*at - dx."""
+    if d["kind"] == "ellipse":
+        x, y, w, h = d["box"]
+        d["box"] = (2 * a - x - w + 1, y, w, h)
+    elif d["kind"] == "px":
+        ax = d["at"][0]
+        d["px"] = sorted((2 * a - 2 * ax - dx, dy, fill) for dx, dy, fill in d["px"])
+    else:
+        d["pts"] = [((2 * a + 1) * 64 - X, Y) for X, Y in d["pts"]]
+    return d
+
+
+def shift_shape(d, dx, dy):
+    """Translate one compiled drawable by whole pixels (repeat steps)."""
+    if d["kind"] == "ellipse":
+        x, y, w, h = d["box"]
+        d["box"] = (x + dx, y + dy, w, h)
+    elif d["kind"] == "px":
+        ax, ay = d["at"]
+        d["at"] = (ax + dx, ay + dy)
+    else:
+        d["pts"] = [(X + dx * 64, Y + dy * 64) for X, Y in d["pts"]]
+    return d
+
+
+def shape_layer(sh, g):
+    """Layer of a shape; recipe children inherit it from their repeat."""
+    layer = sh.get("layer", g.get("layer"))
+    if layer is None:
+        raise ExprError("shape has no layer")
+    if layer not in g["layers"]:
+        raise ExprError(f"unknown layer '{layer}'")
+    return layer
+
+
+def shape_anchor(sh, g):
+    """Anchor of a recipe shape; children inherit it from their repeat.
+    Archetype shapes have no anchor unless they are a px fragment."""
+    anchor = sh.get("anchor", g.get("anchor"))
+    if anchor is None:
+        raise ExprError("shape has no anchor")
+    if anchor not in g["anchors"]:
+        raise ExprError(f"unknown anchor '{anchor}'")
+    return anchor
+
+
+def build_line(sh, env, at, li, fill_str, ramps):
+    """`line {x1,y1,x2,y2,thickness}` (spec 02 §C): integer Bresenham with a
+    thickness^2 square brush centred on every step; thickness must be a positive
+    odd integer. Emitted as a px drawable, which the rasterizer draws as-is."""
+    deg = to_int(ev(sh["rotate"], env)) if "rotate" in sh else 0
+    if deg:
+        raise ShapeErr("E_SHAPE_PARAM", "line cannot be rotated", observed=deg, expected=0)
+    x1, y1, x2, y2 = (to_int(ev(sh[k], env)) for k in ("x1", "y1", "x2", "y2"))
+    th = to_int(ev(sh["thickness"], env))
+    if th < 1 or th % 2 == 0:
+        raise ShapeErr("E_SHAPE_PARAM", "line thickness must be a positive odd integer",
+                       observed=th, expected="odd >= 1")
+    fill = resolve_fill(fill_str, env, ramps)
+    r = th // 2
+    ax, ay = at if at else (0, 0)
+    pts = sorted({(px + i, py + j)
+                  for px, py in bresenham(x1, y1, x2, y2)
+                  for i in range(-r, r + 1) for j in range(-r, r + 1)})
+    return {"kind": "px", "at": (ax, ay), "px": [(dx, dy, fill) for dx, dy in pts], "li": li}
+
+
+def build_px(sh, g, at, li, path):
+    """`px {file, flip?}` (spec 02 §C): a fixed .px fragment inside a shape
+    list; `flip` mirrors the pixel offsets about the fragment's attach pixel.
+    File and legend failures reuse the custom-fragment codes."""
+    fpath = Path(g["base_dir"]) / sh["file"]
+    if not fpath.exists():
+        g["diags"].append(D("E_PX_NOT_FOUND", path + "/file", f"fragment file not found: {sh['file']}"))
+        return []
+    try:
+        px = parse_px(fpath.read_text())
+    except PxError as e:
+        g["diags"].append(D("E_PX_PARSE", path + "/file", f"{sh['file']} line {e.line}: {e.msg}"))
+        return []
+    legend = {}
+    bad = False
+    for ch, val in px["legend"].items():
+        if val == "transparent":
+            continue
+        try:
+            legend[ch] = resolve_fill(val, {}, g["ramps"])
+        except ExprError as e:
+            g["diags"].append(D("E_PX_LEGEND", path + "/file", f"{sh['file']}: legend '{ch}': {e}"))
+            bad = True
+    if bad:
+        return []
+    pxs = []
+    fax, fay = px["anchors"]["attach"]
+    for r, (_, row) in enumerate(px["rows"]):
+        for col, ch in enumerate(row):
+            if ch in legend:
+                pxs.append((col - fax, r - fay, legend[ch]))
+    flip = sh.get("flip")
+    if flip == "x":
+        pxs = [(-dx, dy, fill) for dx, dy, fill in pxs]
+    elif flip == "y":
+        pxs = [(dx, -dy, fill) for dx, dy, fill in pxs]
+    if not pxs:
+        return []
+    ax, ay = at if at else (0, 0)
+    return [{"kind": "px", "at": (ax, ay), "px": pxs, "li": li}]
+
+
+def build_repeat(sh, env, g, path, depth):
+    """`repeat {var,count,step_x,step_y,max,shapes[]}` (spec 02 §C): a bounded
+    loop; `$var` and `$i` are bound per iteration in fixed order 0..count-1.
+    count <= max <= 256 and nesting <= 2 levels, else E_REPEAT_BOUND."""
+    if depth >= 2:
+        raise ShapeErr("E_REPEAT_BOUND", "repeat nesting exceeds 2 levels",
+                       observed=depth + 1, expected="<= 2")
+    mx = to_int(ev(sh["max"], env))
+    if mx < 0 or mx > 256:
+        raise ShapeErr("E_REPEAT_BOUND", "repeat max must be within 0..256",
+                       observed=mx, expected="0..256")
+    cnt = to_int(ev(sh["count"], env))
+    if cnt < 0 or cnt > mx:
+        raise ShapeErr("E_REPEAT_BOUND", "repeat count must be within 0..max",
+                       observed=cnt, expected=f"0..{mx}")
+    var = sh["var"]
+    step_x = to_int(ev(sh.get("step_x", 0), env))
+    step_y = to_int(ev(sh.get("step_y", 0), env))
+    child_g = dict(g)
+    if g["mode"] == "recipe":
+        # children inherit anchor/layer/fill from the repeat itself
+        child_g["anchor"] = sh.get("anchor")
+        child_g["layer"] = sh.get("layer")
+        child_g["fill"] = sh.get("fill")
+    out = []
+    n0 = len(g["diags"])
+    for i in range(cnt):
+        cenv = dict(env)
+        cenv[var] = i
+        cenv["i"] = i
+        for d in compile_shapes(sh["shapes"], cenv, child_g, f"{path}/shapes", depth + 1):
+            out.append(shift_shape(d, i * step_x, i * step_y))
+    # a broken child compiles once per iteration: report each distinct
+    # diagnostic once instead of count times
+    tail, seen = [], set()
+    for d in g["diags"][n0:]:
+        key = json.dumps(d, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            tail.append(d)
+    g["diags"][n0:] = tail
+    return out
+
+
+def build_one(sh, env, g, path, depth):
+    """Compile one shape into drawables (part stamped; seq/src left to the
+    caller's add()). Raises ShapeErr or ExprError; returns [] when `when`
+    gates the shape off or a px file failed (already reported)."""
+    kind = sh["shape"]
+    if "when" in sh and not ev(sh["when"], env):
+        return []
+    if "mirror" in sh and "rotate" in sh:
+        raise ShapeErr("E_SHAPE_PARAM", "mirror cannot be combined with rotate")
+    if kind == "repeat":
+        if g["mode"] == "recipe":
+            # children inherit these; validate them even when count is 0
+            shape_layer(sh, g)
+            shape_anchor(sh, g)
+        out = build_repeat(sh, env, g, path, depth)
+        # no part stamping: every drawable already carries its own part
+    else:
+        li = g["layers"].index(shape_layer(sh, g))
+        if g["mode"] == "recipe":
+            a = g["anchors"][shape_anchor(sh, g)]
+            at, part = a["at"], a["part"]
+        else:
+            part = g["part"]
+            at = None
+            if "anchor" in sh:            # archetype px fragment at an anchor
+                a = g["anchors"][shape_anchor(sh, g)]
+                at, part = a["at"], a["part"]
+        if kind == "px":
+            out = build_px(sh, g, at, li, path)
+        else:
+            fill = sh.get("fill", g.get("fill"))
+            if fill is None:
+                raise ShapeErr("E_SHAPE_PARAM",
+                               "shape has no fill and its repeat declares none")
+            if kind == "line":
+                out = [build_line(sh, env, at, li, fill, g["ramps"])]
+            else:
+                if "fill" not in sh:
+                    sh = {**sh, "fill": fill}   # inherited from the repeat
+                d = build_shape(sh, env, at, li, g["ramps"])
+                out = [d] if d else []
+        for d in out:
+            d["part"] = part
+    if sh.get("mirror") == "x":
+        # also draw the exact integer reflection (spec 02 §C); reflect_shape
+        # rebinds box/px/pts, so a shallow copy leaves the original intact
+        out += [reflect_shape(dict(d), g["axis"]) for d in out]
+    return out
+
+
+def compile_shapes(shapes, env, g, path, depth=0):
+    """Compile a shape list. ShapeErr is reported per shape and the rest of
+    the list still compiles; ExprError/ValueError propagate to the caller's
+    existing handler (E_ARCHETYPE_EXPR / E_RECIPE_EXPR)."""
+    out = []
+    for i, sh in enumerate(shapes):
+        try:
+            out.extend(build_one(sh, env, g, f"{path}/{i}", depth))
+        except ShapeErr as e:
+            g["diags"].append(e.diag(f"{path}/{i}"))
+    return out
+
+
 def compile_asset(asset, reg, base_dir):
     """Validate and compile. Returns (diagnostics, ir or None)."""
     diags = schema_diags(asset, "asset.schema.json")
@@ -545,17 +802,37 @@ def compile_asset(asset, reg, base_dir):
         seq += 1
         drawables.append(d)
 
-    # archetype body
+    # ---- mirror axis (2.1 §C): archetype `mirror_axis`, else $cx, else
+    # floor($W/2) — the same fallback the symmetry check uses ---------------
+    axis_name = arch.get("mirror_axis", "cx")
+    axis_val = env.get(axis_name)
+    if isinstance(axis_val, int) and not isinstance(axis_val, bool):
+        axis = axis_val
+    elif "mirror_axis" in arch:
+        axis_keys = sorted(env)
+        diags.append(D("E_ARCHETYPE_EXPR", ptr("archetype", "mirror_axis"),
+                       f"mirror_axis '{axis_name}' is not an integer metric or parameter",
+                       observed=axis_name, expected=axis_keys,
+                       suggestions=close(axis_name, axis_keys)))
+        axis = W // 2
+    else:
+        axis = W // 2
+
+    # archetype body (2.1 §C: mirror / line / repeat / px shapes)
+    g_arch = {"mode": "archetype", "ramps": ramps, "axis": axis, "layers": layers,
+              "base_dir": base_dir, "diags": diags, "anchors": anchors, "part": None}
     try:
         for part, pdef in arch["parts"].items():
-            for sh in pdef["shapes"]:
-                d = build_shape(sh, env, None, layers.index(sh["layer"]), ramps)
-                if d:
-                    add(d, part, f"archetype:{part}")
+            g_arch["part"] = part
+            for d in compile_shapes(pdef["shapes"], env, g_arch,
+                                    ptr("archetype", "parts", part, "shapes")):
+                add(d, d["part"], f"archetype:{part}")
     except (ExprError, ValueError) as e:
         diags.append(D("E_ARCHETYPE_EXPR", "/archetype", f"archetype geometry failed: {e}"))
 
     # features
+    g_rec = {"mode": "recipe", "ramps": ramps, "axis": axis, "layers": layers,
+             "base_dir": base_dir, "diags": diags, "anchors": anchors}
     used_slots = {}
     feature_names = []
     hitboxes = []
@@ -629,16 +906,10 @@ def compile_asset(asset, reg, base_dir):
                 diags.append(D("E_RECIPE_EXPR", fp, f"recipe '{name}' local '{lname}' failed to evaluate: {e}"))
         if len(diags) > ldiags_before:
             continue
+        gpath = fp + "/geometry" + (ptr(arch["archetype"]) if isinstance(rec["geometry"], dict) else "")
         try:
-            for sh in geo:
-                if sh["layer"] not in layers:
-                    raise ExprError(f"unknown layer '{sh['layer']}'")
-                if sh["anchor"] not in anchors:
-                    raise ExprError(f"unknown anchor '{sh['anchor']}'")
-                a = anchors[sh["anchor"]]
-                d = build_shape(sh, renv, a["at"], layers.index(sh["layer"]), ramps)
-                if d:
-                    add(d, a["part"], f"feature:{name}")
+            for d in compile_shapes(geo, renv, g_rec, gpath):
+                add(d, d["part"], f"feature:{name}")
             for hb in rec.get("hitboxes", []):
                 a = anchors[hb["anchor"]]
                 x, y, w, h = (to_int(ev(v, renv)) for v in hb["rect"])

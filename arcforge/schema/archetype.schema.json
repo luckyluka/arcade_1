@@ -16,7 +16,7 @@
     "params": { "type": "object" },
     "layers": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
     "parts": { "type": "object", "additionalProperties": { "type": "object", "required": ["shapes"], "additionalProperties": false,
-      "properties": { "shapes": { "type": "array" } } } },
+      "properties": { "shapes": { "type": "array", "items": { "$ref": "#/$defs/shape" } } } } },
     "anchors": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["part", "at"],
       "properties": { "part": { "type": "string" }, "at": { "type": "array", "items": { "type": ["integer", "string"] }, "minItems": 2, "maxItems": 2 } } } },
     "animations": { "type": "object", "additionalProperties": { "type": "object", "required": ["fps", "loop", "frames"],
@@ -27,6 +27,8 @@
     "collision": { "type": "object" },
     "symmetric": { "type": "boolean",
                    "description": "The size sweep asserts exact mirror symmetry of the body about $cx (or floor(W/2)) when true." },
+    "mirror_axis": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$",
+                     "description": "Metric (or parameter) naming the x column that `mirror: \"x\"` shapes reflect about; defaults to $cx, else floor($W/2)." },
     "size": { "type": "object", "minProperties": 1,
       "propertyNames": { "pattern": "^[a-z0-9_]{1,64}$" },
       "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["min", "max", "default"],
@@ -43,5 +45,47 @@
       "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": false,
         "prefixItems": [ { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }, { "type": "string" } ] } },
     "min_cell": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": ["integer", "string"] } }
+  },
+  "$defs": {
+    "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape"],
+      "properties": {
+        "shape": { "enum": ["rect", "ellipse", "poly", "line", "repeat", "px"] },
+        "layer": { "type": "string" },
+        "fill": { "type": "string" },
+        "x": { "type": ["number", "string"] }, "y": { "type": ["number", "string"] },
+        "w": { "type": ["number", "string"] }, "h": { "type": ["number", "string"] },
+        "points": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": ["number", "string"] } }, "minItems": 3 },
+        "x1": { "type": ["number", "string"] }, "y1": { "type": ["number", "string"] },
+        "x2": { "type": ["number", "string"] }, "y2": { "type": ["number", "string"] },
+        "thickness": { "type": ["number", "string"] },
+        "rotate": { "type": ["number", "string"] },
+        "when": { "type": "string" },
+        "mirror": { "enum": ["x"] },
+        "var": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+        "count": { "type": ["number", "string"] },
+        "step_x": { "type": ["number", "string"] },
+        "step_y": { "type": ["number", "string"] },
+        "max": { "type": ["number", "string"] },
+        "shapes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/shape" } },
+        "file": { "type": "string" },
+        "anchor": { "type": "string" },
+        "flip": { "enum": ["x", "y"] }
+      },
+      "allOf": [
+        { "if": { "required": ["shape"], "properties": { "shape": { "enum": ["rect", "ellipse"] } } },
+          "then": { "required": ["layer", "fill", "x", "y", "w", "h"] } },
+        { "if": { "required": ["shape"], "properties": { "shape": { "const": "poly" } } },
+          "then": { "required": ["layer", "fill", "points"] } },
+        { "if": { "required": ["shape"], "properties": { "shape": { "const": "line" } } },
+          "then": { "required": ["layer", "fill", "x1", "y1", "x2", "thickness"] } },
+        { "if": { "required": ["shape"], "properties": { "shape": { "const": "repeat" } } },
+          "then": { "required": ["var", "count", "max", "shapes"] } },
+        { "if": { "required": ["shape"], "properties": { "shape": { "const": "px" } } },
+          "then": { "required": ["layer", "file"] } }
+      ]
+    }
   }
 }

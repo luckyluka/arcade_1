@@ -1,0 +1,22 @@
+{
+  "archetype": "t_mirror_rotate",
+  "version": "1.0.0",
+  "description": "Negative fixture: mirror cannot be combined with rotate (E_SHAPE_PARAM).",
+  "view": "front",
+  "canvas": { "default": [8, 8], "supported": [[8, 8]] },
+  "params": {},
+  "layers": ["body"],
+  "parts": {
+    "root": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": 1, "y": 2, "w": 3, "h": 3,
+          "fill": "steel.base", "mirror": "x", "rotate": 45 }
+      ]
+    }
+  },
+  "anchors": { "origin": { "part": "root", "at": [4, 7] } },
+  "animations": { "idle": { "fps": 6, "loop": true, "frames": [{ "offsets": {} }] } },
+  "size": { "height": { "min": 4, "max": 8, "default": 6 } },
+  "metrics": [["cx", "floor($W/2)"]],
+  "min_cell": [8, 8]
+}

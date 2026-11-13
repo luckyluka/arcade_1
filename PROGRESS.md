@@ -222,6 +222,7 @@ regression, ~72 s each). Measured on this machine:
 
 | date | commit | `make clean && make check` |
 |---|---|---|
+| 2026-11-13 | X1 commit 1 (arcforge shape vocabulary — schemas/oracle/fixtures only; **no root test, no root code**: zero `arcforge` references in `tests/ tools/ src/`, so the suite itself cannot have changed) | 9 m 60 s (599.87 s; a second run measured 594.49 s) — **over the 500 s line on the loaded evening desktop (load avg 2.8, VS Code + Brave renderers), same load/drift pattern as the 2026-11-07 rows; zero compiler warnings, rc=0** |
 | 2026-11-09 | Wave 10 roadmap card (docs only — the FPGA milestone, §10; no code, no new test) | 7 m 59 s (479 s) — **inside the 500 s budget** |
 | 2026-11-07 | Audio-v2 decision brief (card 8.3, **docs only — no new test, no code**) — still over the 500 s line on the loaded evening desktop (load avg 2.2–2.5); the same box measured HEAD at 631 s earlier today against the 443 s idle baseline (card 8.2's row carries the A/B) | 8 m 29 s (509 s) |
 | 2026-11-07 | Live audio (card 8.2; **no new `make check` test** — section 6 lives in the by-hand play-window test) — **starved, not suite growth**: A/B on the same loaded desktop (load avg 2.6–3.2, Brave + Transmission) measured **HEAD itself at 631 s** against this card's 666 s, while the idle-night baseline is 443 s (M5 494/429 and the 2026-10-22 starved row, again) | 11 m 6 s (666 s) |

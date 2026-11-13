@@ -67,6 +67,18 @@ Total, side-effect free, no loops, no user functions.
 `rect {x,y,w,h}`, `ellipse {x,y,w,h}` (bounding box), `poly {points}`; fields may be numbers or expressions. Relative to the shape's `anchor` in recipes, absolute in archetypes. `rotate` allowed on rect/poly (not ellipse). `fill` = `outline` | `<ramp>.<tone>` | `$param.<tone>`, tone ∈ shadow, base, light.
 Rasterization: a pixel is filled if its **centre** lies inside the shape (even-odd rule), computed in 1/64-pixel integers.
 
+### Shape vocabulary (2.1, X1)
+| shape / field | meaning |
+|---|---|
+| `line {x1,y1,x2,y2,thickness}` | integer Bresenham between two points (same coordinates as `rect`), square brush `thickness²` centred on every step; `thickness` must be a positive odd integer, `line` cannot be rotated — violations are `E_SHAPE_PARAM` |
+| `repeat {var,count,step_x?,step_y?,max,shapes[]}` | bounded loop; `$var` and `$i` are bound per iteration, fixed order `0..count-1`; `step_x`/`step_y` default 0 and shift that iteration's drawables; `count` must evaluate to `0..max`, `max` ≤ 256, nesting ≤ 2 levels — violations are `E_REPEAT_BOUND` |
+| `px {file,anchor?,flip?,when?}` | draw a fixed `.px` fragment (resolved against the asset's directory, like `custom`); `anchor` defaults to the shape's own anchor in recipes, the cell origin in archetypes; `flip: "x"` / `"y"` mirrors the fragment's pixel offsets about its attach pixel; file/legend failures reuse `E_PX_NOT_FOUND` / `E_PX_PARSE` / `E_PX_LEGEND` |
+| `mirror: "x"` | **also** draw the exact integer reflection about the mirror axis: the archetype's `mirror_axis` metric if declared (not an integer metric/parameter → `E_ARCHETYPE_EXPR`), else `$cx` when the archetype declares it, else `floor($W/2)`. Cannot be combined with `rotate` (`E_SHAPE_PARAM`) |
+
+- Recipe `repeat` children inherit `anchor`, `layer` and `fill` from the repeat itself when they omit them; a child that still has no fill is `E_SHAPE_PARAM`. Archetype `repeat` children are full shapes: they declare `layer` and `fill` themselves.
+- `mirror` may sit on `repeat`: iterations are built and stepped first, then every result is reflected. The reflection is a second drawable drawn after the original (same fill), so a shape straddling the axis thickens by overlap.
+- `line` compiles to a pixel set; the rasterizer, extents, and `min_feature_px` checks treat it like any `.px` geometry.
+
 ## Layers, slots, conflicts
 - Layers are ordered names defined by the archetype (`back, body, armor, held, foreground, fx`).
 - A **slot** (e.g. `head_gear`, `weapon_main`) holds one recipe unless the recipe is `stackable`. Two recipes in one slot → `E_SLOT_CONFLICT`.
