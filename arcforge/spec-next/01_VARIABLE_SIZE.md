@@ -2,6 +2,13 @@
 
 > PROPOSED (v2.1). Evidence: `prototype/size_sweep.py` renders one archetype at four hero heights.
 
+> **Status (X0, implemented in `tools/arcforge_ref.py`)**: §1–§5, §7 and §9 are live —
+> exercised by `registry/archetypes/humanoid_front_scalable.archetype.json`, its recipes
+> and `make check`'s sweep. §6 is partial (`symmetric` and the odd-width convention are
+> real; the `mirror` shape flag is not), §3's `size.unit` is not accepted by the schema,
+> §8/§10 are findings and prose. §9's "recipe stays on its slot region" check is not
+> implemented. The document stays PROPOSED until every section is.
+
 ## 1. Three sizes, never conflated
 | name | meaning | where declared |
 |---|---|---|

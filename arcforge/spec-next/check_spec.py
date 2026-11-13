@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Checks the PROPOSED spec is internally consistent: schemas are valid, examples validate,
-docs carry the PROPOSED banner, and the size-sweep prototype passes (symmetry 0, clipping 0)."""
+docs carry the PROPOSED banner, the size-sweep prototype still runs, and the live X0 size
+sweep (real tool over the real registry) passes: symmetric, no clipping, every size."""
 import json, subprocess, sys
 from pathlib import Path
 from jsonschema import Draft202012Validator
@@ -31,5 +32,15 @@ for md in sorted(HERE.glob("0*.md")):
     check(f"PROPOSED banner: {md.name}", "PROPOSED" in md.read_text()[:400])
 
 r = subprocess.run([sys.executable, str(HERE / "prototype/size_sweep.py"), "--out", str(HERE / "prototype/out")], capture_output=True, text=True)
-check("size sweep: symmetric, no clipping at 4 sizes", r.returncode == 0, r.stderr[-200:])
+check("prototype size sweep: symmetric, no clipping at 4 sizes", r.returncode == 0, r.stderr[-200:])
+
+# X0: the live sweep — the real tool, the real registry, the implemented archetype.
+sw = subprocess.run([sys.executable, str(HERE.parent / "tools" / "arcforge_ref.py"), "sweep",
+                     str(HERE.parent / "registry" / "archetypes" / "humanoid_front_scalable.archetype.json")],
+                    capture_output=True, text=True)
+try:
+    sw_ok = sw.returncode == 0 and json.loads(sw.stdout)["status"] == "PASS"
+except (ValueError, KeyError):
+    sw_ok = False
+check("live sweep: humanoid_front_scalable, 6 sizes, symmetric, no clipping", sw_ok, "" if sw_ok else (sw.stdout or sw.stderr)[-200:])
 print("\nALL GREEN" if not fails else f"\n{fails} FAILED"); sys.exit(1 if fails else 0)
