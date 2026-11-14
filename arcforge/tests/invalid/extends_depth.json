@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "extends": "extends_depth2.json",
+  "asset": {
+    "id": "t_ext_depth",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: link 1 of an extends chain deeper than 3 links (E_EXTENDS_DEPTH)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" }
+}

@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "t_pswap_ramp",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: palette_swap names a target ramp the style pack does not have (E_UNKNOWN_RAMP)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "palette_swap": { "red": "nonexistent_ramp" }
+}

@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "extends": "extends_depth4.json",
+  "asset": {
+    "id": "t_ext_depth3",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Helper for extends_depth: link 3."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" }
+}

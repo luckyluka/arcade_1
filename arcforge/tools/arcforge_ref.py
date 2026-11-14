@@ -376,7 +376,7 @@ def check_params(specs, given, path, style, diags, label, env=None):
     return out
 
 
-def resolve_fill(fill, env, ramps):
+def resolve_fill(fill, env, ramps, swap=None):
     if fill == "outline":
         return ("outline", "base")
     m = re.fullmatch(r"(\$?[A-Za-z_][A-Za-z0-9_]*)\.(shadow|base|light)", fill)
@@ -387,16 +387,18 @@ def resolve_fill(fill, env, ramps):
         if ramp[1:] not in env:
             raise ExprError(f"unknown variable {ramp}")
         ramp = env[ramp[1:]]
+    if swap and ramp in swap:
+        ramp = swap[ramp]   # palette_swap (02 §E): applied when fills resolve
     if ramp not in ramps or m.group(2) not in ramps[ramp]:
         raise ExprError(f"ramp/tone '{ramp}.{m.group(2)}' does not exist in the style pack")
     return (ramp, m.group(2))
 
 
-def build_shape(sh, env, anchor_at, layer_idx, ramps):
+def build_shape(sh, env, anchor_at, layer_idx, ramps, swap=None):
     """Evaluate one shape; returns a drawable dict (without part/seq) or None."""
     if "when" in sh and not ev(sh["when"], env):
         return None
-    fill = resolve_fill(sh["fill"], env, ramps)
+    fill = resolve_fill(sh["fill"], env, ramps, swap)
     ax, ay = anchor_at if anchor_at else (0, 0)
     deg = to_int(ev(sh["rotate"], env)) if "rotate" in sh else 0
     if not -180 <= deg <= 180:
@@ -510,7 +512,7 @@ def shape_anchor(sh, g):
     return anchor
 
 
-def build_line(sh, env, at, li, fill_str, ramps):
+def build_line(sh, env, at, li, fill_str, ramps, swap=None):
     """`line {x1,y1,x2,y2,thickness}` (spec 02 §C): integer Bresenham with a
     thickness^2 square brush centred on every step; thickness must be a positive
     odd integer. Emitted as a px drawable, which the rasterizer draws as-is."""
@@ -522,7 +524,7 @@ def build_line(sh, env, at, li, fill_str, ramps):
     if th < 1 or th % 2 == 0:
         raise ShapeErr("E_SHAPE_PARAM", "line thickness must be a positive odd integer",
                        observed=th, expected="odd >= 1")
-    fill = resolve_fill(fill_str, env, ramps)
+    fill = resolve_fill(fill_str, env, ramps, swap)
     r = th // 2
     ax, ay = at if at else (0, 0)
     pts = sorted({(px + i, py + j)
@@ -550,7 +552,7 @@ def build_px(sh, g, at, li, path):
         if val == "transparent":
             continue
         try:
-            legend[ch] = resolve_fill(val, {}, g["ramps"])
+            legend[ch] = resolve_fill(val, {}, g["ramps"], g.get("swap"))
         except ExprError as e:
             g["diags"].append(D("E_PX_LEGEND", path + "/file", f"{sh['file']}: legend '{ch}': {e}"))
             bad = True
@@ -652,11 +654,11 @@ def build_one(sh, env, g, path, depth):
                 raise ShapeErr("E_SHAPE_PARAM",
                                "shape has no fill and its repeat declares none")
             if kind == "line":
-                out = [build_line(sh, env, at, li, fill, g["ramps"])]
+                out = [build_line(sh, env, at, li, fill, g["ramps"], g.get("swap"))]
             else:
                 if "fill" not in sh:
                     sh = {**sh, "fill": fill}   # inherited from the repeat
-                d = build_shape(sh, env, at, li, g["ramps"])
+                d = build_shape(sh, env, at, li, g["ramps"], g.get("swap"))
                 out = [d] if d else []
         for d in out:
             d["part"] = part
@@ -783,6 +785,17 @@ def compile_asset(asset, reg, base_dir):
                                observed=[W, H], expected=mc, fix=fix))
     layers = arch["layers"]
     ramps = style["ramps"]
+    # ---- palette_swap (02 §E): ramp-name map applied when fills resolve;
+    # both ends must exist in the style pack ------------------------------
+    swap = asset.get("palette_swap") or {}
+    for k in sorted(swap):
+        for who, name in (("source", k), ("target", swap[k])):
+            if name not in ramps:
+                diags.append(D("E_UNKNOWN_RAMP", ptr("palette_swap", k),
+                               f"palette_swap {who} ramp '{name}' does not exist in the style pack",
+                               observed=name, expected=sorted(ramps),
+                               suggestions=close(name, sorted(ramps)),
+                               fix=[{"op": "remove", "path": ptr("palette_swap", k)}]))
     drawables = []
     seq = 0
     anchors = {}
@@ -819,7 +832,7 @@ def compile_asset(asset, reg, base_dir):
         axis = W // 2
 
     # archetype body (2.1 §C: mirror / line / repeat / px shapes)
-    g_arch = {"mode": "archetype", "ramps": ramps, "axis": axis, "layers": layers,
+    g_arch = {"mode": "archetype", "ramps": ramps, "swap": swap, "axis": axis, "layers": layers,
               "base_dir": base_dir, "diags": diags, "anchors": anchors, "part": None}
     try:
         for part, pdef in arch["parts"].items():
@@ -831,7 +844,7 @@ def compile_asset(asset, reg, base_dir):
         diags.append(D("E_ARCHETYPE_EXPR", "/archetype", f"archetype geometry failed: {e}"))
 
     # features
-    g_rec = {"mode": "recipe", "ramps": ramps, "axis": axis, "layers": layers,
+    g_rec = {"mode": "recipe", "ramps": ramps, "swap": swap, "axis": axis, "layers": layers,
              "base_dir": base_dir, "diags": diags, "anchors": anchors}
     used_slots = {}
     feature_names = []
@@ -944,7 +957,7 @@ def compile_asset(asset, reg, base_dir):
             if val == "transparent":
                 continue
             try:
-                legend[ch] = resolve_fill(val, {}, ramps)
+                legend[ch] = resolve_fill(val, {}, ramps, swap)
             except ExprError as e:
                 diags.append(D("E_PX_LEGEND", cp + "/file", f"{c['file']}: legend '{ch}': {e}"))
                 bad = True
@@ -1548,6 +1561,181 @@ def asset_id(asset):
     return asset.get("asset", {}).get("id", "?") if isinstance(asset, dict) else "?"
 
 
+# --------------------------------------------------------------------------
+# Derived assets (spec-next 02 §E): extends, variants, palette_swap
+# --------------------------------------------------------------------------
+EXTENDS_MAX_HOPS = 3
+
+
+def merge_patch(base, patch):
+    """RFC 7386 JSON Merge Patch: objects merge recursively, null deletes a
+    key, everything else (arrays included) replaces whole. Documents are
+    never mutated in place, so shared subtrees are safe."""
+    if not isinstance(base, dict) or not isinstance(patch, dict):
+        return patch
+    out = dict(base)
+    for k, v in patch.items():
+        if v is None:
+            out.pop(k, None)
+        else:
+            out[k] = merge_patch(out[k], v) if k in out else v
+    return out
+
+
+def resolve_extends(doc, file_path, diags):
+    """Follow the `extends` chain (02 §E): the path is relative to each
+    extending file, must stay inside the repo root, at most
+    EXTENDS_MAX_HOPS links, no file visited twice. Returns the merged base
+    document, or None when a diagnostic was reported. All diagnostics are
+    reported at /extends of the file the command was given."""
+    cur, cur_file = doc, Path(file_path).resolve()
+    visited = {cur_file}
+    hops = 0
+    while isinstance(cur, dict) and "extends" in cur:
+        ref = cur["extends"]
+        if not isinstance(ref, str):
+            diags.append(D("E_SCHEMA", "/extends", "'extends' must be a string",
+                           observed=type(ref).__name__, expected="string"))
+            return None
+        target = (cur_file.parent / ref).resolve()
+        where = f" (at '{cur_file.name}')" if cur_file != Path(file_path).resolve() else ""
+        if target in visited:
+            diags.append(D("E_EXTENDS_CYCLE", "/extends",
+                           f"extends chain revisits '{ref}'{where}: cycle",
+                           observed=ref, expected="a file not already in the chain",
+                           fix=[{"op": "remove", "path": "/extends"}]))
+            return None
+        if hops >= EXTENDS_MAX_HOPS:
+            diags.append(D("E_EXTENDS_DEPTH", "/extends",
+                           f"extends chain exceeds {EXTENDS_MAX_HOPS} links{where}",
+                           observed=hops + 1, expected=f"<= {EXTENDS_MAX_HOPS}",
+                           fix=[{"op": "remove", "path": "/extends"}]))
+            return None
+        root = ROOT.resolve()
+        if target != root and root not in target.parents:
+            diags.append(D("E_EXTENDS_PATH", "/extends",
+                           f"extends target '{ref}' escapes the repo root{where}",
+                           observed=ref, expected=f"a path inside {root}",
+                           fix=[{"op": "remove", "path": "/extends"}]))
+            return None
+        if not target.is_file():
+            diags.append(D("E_EXTENDS_PATH", "/extends",
+                           f"extends target '{ref}' not found{where}",
+                           observed=ref, expected="an existing asset file",
+                           fix=[{"op": "remove", "path": "/extends"}]))
+            return None
+        try:
+            parent = json.loads(target.read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            diags.append(D("E_EXTENDS_PATH", "/extends",
+                           f"extends target '{ref}' cannot be read: {e}{where}",
+                           observed=ref, expected="a readable JSON asset"))
+            return None
+        if not (isinstance(parent, dict) and "arcforge" in parent):
+            diags.append(D("E_EXTENDS_PATH", "/extends",
+                           f"extends target '{ref}' is not an asset document{where}",
+                           observed=ref, expected="an asset document"))
+            return None
+        if "extends" not in parent:
+            # a complete document is checked here; a patch's own fields are
+            # checked on the merged result by compile_asset
+            bad = schema_diags(parent, "asset.schema.json")
+            if bad:
+                diags.append(D("E_EXTENDS_PATH", "/extends",
+                               f"extends target '{ref}' is invalid: {bad[0]['code']} at {bad[0]['path'] or '/'}: {bad[0]['message']}{where}",
+                               observed=ref, expected="a valid asset document"))
+                return None
+        own = {k: v for k, v in cur.items() if k != "extends"}
+        cur = merge_patch(parent, own)
+        cur_file = target
+        hops += 1
+    return cur
+
+
+def expand_variants(base, diags):
+    """02 §E `variants`: ordered entries composed from the base document (or
+    an earlier entry) plus their RFC-7386 `override`. Returns
+    [(id, doc, path_prefix)] — base first with prefix '', entry i with
+    '/variants/<i>' — or None when a diagnostic was reported. Diagnostics
+    compiled from a prefixed doc are reported under that file pointer."""
+    entries = base.get("variants") or []
+    base_doc = {k: v for k, v in base.items() if k != "variants"}
+    base_id = base_doc["asset"]["id"]
+    out = [(base_id, base_doc, "")]
+    known = {base_id: base_doc}
+    for i, e in enumerate(entries):
+        p = f"/variants/{i}"
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+            diags.append(D("E_SCHEMA", p, "'id' is a required property",
+                           expected="string"))
+            continue
+        vid = e["id"]
+        if "from" in e and not isinstance(e["from"], str):
+            diags.append(D("E_SCHEMA", p + "/from", "'from' must be a string",
+                           observed=type(e["from"]).__name__, expected="string"))
+            continue
+        if "override" in e and not isinstance(e["override"], dict):
+            diags.append(D("E_SCHEMA", p + "/override", "'override' must be an object",
+                           observed=type(e["override"]).__name__, expected="object"))
+            continue
+        if vid in known:
+            diags.append(D("E_DUPLICATE_ID", p + "/id",
+                           f"compiled id '{vid}' is already used in this file",
+                           observed=vid, expected=sorted(known),
+                           fix=[{"op": "remove", "path": p}]))
+            continue
+        if "from" in e:
+            if e["from"] not in known:
+                diags.append(D("E_UNKNOWN_VARIANT", p + "/from",
+                               f"no variant '{e['from']}' earlier in this file to build from",
+                               observed=e["from"], expected=sorted(known),
+                               suggestions=close(e["from"], sorted(known)),
+                               fix=[{"op": "remove", "path": p + "/from"}]))
+                continue
+            src = known[e["from"]]
+        else:
+            src = base_doc
+        doc = merge_patch(src, e.get("override") or {})
+        if "palette_swap" in e:
+            doc = dict(doc)
+            doc["palette_swap"] = merge_patch(doc.get("palette_swap") or {}, e["palette_swap"])
+        doc = dict(doc)
+        doc["asset"] = dict(doc.get("asset") or {}, id=vid)
+        doc.pop("extends", None)
+        doc.pop("variants", None)
+        out.append((vid, doc, p))
+        known[vid] = doc
+    return out
+
+
+def load_asset_docs(path):
+    """Load an asset file and expand `extends` + `variants` (02 §E).
+    Returns (docs, diags, base_dir); docs is empty when a file-level
+    diagnostic was reported. A document with `extends` is a patch: its
+    required fields may come from the target, so the raw schema check runs
+    only for documents without one — types and unknown keys of a patch are
+    caught on the merged document by compile_asset, and expansion reports
+    its own diagnostics first."""
+    doc, base = load_asset(path)
+    if "extends" not in doc:
+        raw = schema_diags(doc, "asset.schema.json")
+        if raw:
+            return [], raw, base
+    diags = []
+    merged = resolve_extends(doc, path, diags)
+    if merged is None:
+        return [], diags, base
+    docs = expand_variants(merged, diags)
+    if diags:
+        return [], diags, base
+    return docs, [], base
+
+
+def prefixed(diags, pfx):
+    """Report a variant's diagnostics under its file pointer /variants/<i>."""
+    return [dict(d, path=pfx + d["path"]) for d in diags] if pfx else diags
+
+
 def known_parts(reg):
     """Every part name an archetype can attach a drawable to (parts + anchor targets)."""
     names = set()
@@ -1627,68 +1815,115 @@ def cmd_validate(args):
         diags = check_recipe_doc(doc, reg)
         r = report("validate", doc.get("recipe", "?"), diags)
     else:
-        diags, ir = compile_asset(doc, reg, base)
-        r = report("validate", asset_id(doc), diags)
+        docs, xdiags, base = load_asset_docs(args.asset)
+        if xdiags:
+            r = report("validate", asset_id(doc), xdiags)
+        else:
+            diags, ids = [], []
+            for aid, d2, pfx in docs:
+                d3, _ = compile_asset(d2, reg, base)
+                diags += prefixed(d3, pfx)
+                ids.append(aid)
+            extra = {"stats": {"ids": ids}} if len(ids) > 1 else {}
+            r = report("validate", asset_id(doc), diags, **extra)
     print(json.dumps(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
 def cmd_render(args):
     reg = load_registry()
-    asset, base = load_asset(args.asset)
-    diags, ir = compile_asset(asset, reg, base)
-    if ir is None:
-        print(json.dumps(report("validate", asset_id(asset), diags), indent=2))
+    docs, xdiags, base = load_asset_docs(args.asset)
+    if xdiags:
+        doc, _ = load_asset(args.asset)
+        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
-    renders = render_all(ir)
-    out = Path(args.out) / asset["asset"]["id"]
-    out.mkdir(parents=True, exist_ok=True)
-    W, H, s = ir["W"], ir["H"], args.scale
-    (out / "base.png").write_bytes(png_bytes(W, H, renders["base"][0]["rgba"]))
-    atlas = {"cell": [W, H],
-             "pivot": list(ir["anchors"].get("origin", {}).get("at", [0, 0])),
-             "animations": {}}
-    rows = [(n, fs) for n, fs in renders.items() if n != "base"]
-    cols = max([len(fs) for _, fs in rows] + [1])
-    sheet = bytearray(W * cols * H * max(len(rows), 1) * 4)
-    for ri, (n, fs) in enumerate(rows):
-        tpl = ir["animations"][n]
-        atlas["animations"][n] = {"row": ri, "frames": len(fs), "fps": tpl["fps"], "loop": tpl["loop"],
-                                  "hit_frames": tpl.get("hit_frames", [])}
-        for ci, f in enumerate(fs):
-            (out / f"{n}_{ci}.png").write_bytes(png_bytes(W, H, f["rgba"]))
-            for y in range(H):
-                dst = ((ri * H + y) * W * cols + ci * W) * 4
-                sheet[dst:dst + W * 4] = f["rgba"][y * W * 4:(y + 1) * W * 4]
-    if rows:
-        (out / "spritesheet.png").write_bytes(png_bytes(W * cols, H * len(rows), bytes(sheet)))
-    atlas["hitboxes"] = ir["hitboxes"]
-    atlas["anchors"] = {k: v for k, v in ir["anchors"].items()}
-    (out / "atlas.json").write_text(json.dumps(atlas, indent=2))
-    # preview: base frame + every animation row, scaled, on a dark backdrop
-    pw = W * cols + (cols * 0)
-    allrows = [("base", renders["base"])] + rows
-    prev = bytearray(pw * H * len(allrows) * 4)
-    for ri, (_, fs) in enumerate(allrows):
-        for ci, f in enumerate(fs):
-            for y in range(H):
-                dst = ((ri * H + y) * pw + ci * W) * 4
-                prev[dst:dst + W * 4] = f["rgba"][y * W * 4:(y + 1) * W * 4]
-    (out / "preview.png").write_bytes(png_bytes(pw, H * len(allrows), bytes(prev), scale=s, bg=(52, 56, 72)))
-    print(json.dumps(report("render", asset["asset"]["id"], [], stats={"out": str(out), "frames": sum(len(fs) for fs in renders.values())}), indent=2))
+    compiled = []
+    fail = []
+    ids = []
+    for aid, d2, pfx in docs:
+        diags, ir = compile_asset(d2, reg, base)
+        fail += prefixed(diags, pfx)
+        ids.append(aid)
+        if ir is None:
+            continue
+        compiled.append((aid, d2, pfx, ir))
+    if len(compiled) != len(docs):
+        doc, _ = load_asset(args.asset)
+        print(json.dumps(report("validate", asset_id(doc), fail), indent=2))
+        return 1
+    stats = {}
+    total = 0
+    for aid, d2, pfx, ir in compiled:
+        renders = render_all(ir)
+        out = Path(args.out) / aid
+        out.mkdir(parents=True, exist_ok=True)
+        W, H, s = ir["W"], ir["H"], args.scale
+        (out / "base.png").write_bytes(png_bytes(W, H, renders["base"][0]["rgba"]))
+        atlas = {"cell": [W, H],
+                 "pivot": list(ir["anchors"].get("origin", {}).get("at", [0, 0])),
+                 "animations": {}}
+        rows = [(n, fs) for n, fs in renders.items() if n != "base"]
+        cols = max([len(fs) for _, fs in rows] + [1])
+        sheet = bytearray(W * cols * H * max(len(rows), 1) * 4)
+        for ri, (n, fs) in enumerate(rows):
+            tpl = ir["animations"][n]
+            atlas["animations"][n] = {"row": ri, "frames": len(fs), "fps": tpl["fps"], "loop": tpl["loop"],
+                                      "hit_frames": tpl.get("hit_frames", [])}
+            for ci, f in enumerate(fs):
+                (out / f"{n}_{ci}.png").write_bytes(png_bytes(W, H, f["rgba"]))
+                for y in range(H):
+                    dst = ((ri * H + y) * W * cols + ci * W) * 4
+                    sheet[dst:dst + W * 4] = f["rgba"][y * W * 4:(y + 1) * W * 4]
+        if rows:
+            (out / "spritesheet.png").write_bytes(png_bytes(W * cols, H * len(rows), bytes(sheet)))
+        atlas["hitboxes"] = ir["hitboxes"]
+        atlas["anchors"] = {k: v for k, v in ir["anchors"].items()}
+        (out / "atlas.json").write_text(json.dumps(atlas, indent=2))
+        # preview: base frame + every animation row, scaled, on a dark backdrop
+        pw = W * cols + (cols * 0)
+        allrows = [("base", renders["base"])] + rows
+        prev = bytearray(pw * H * len(allrows) * 4)
+        for ri, (_, fs) in enumerate(allrows):
+            for ci, f in enumerate(fs):
+                for y in range(H):
+                    dst = ((ri * H + y) * pw + ci * W) * 4
+                    prev[dst:dst + W * 4] = f["rgba"][y * W * 4:(y + 1) * W * 4]
+        (out / "preview.png").write_bytes(png_bytes(pw, H * len(allrows), bytes(prev), scale=s, bg=(52, 56, 72)))
+        stats[aid] = str(out)
+        total += sum(len(fs) for fs in renders.values())
+    st = {"out": stats[ids[0]], "frames": total}
+    if len(ids) > 1:
+        st = {"out": stats, "frames": total, "ids": ids}
+    print(json.dumps(report("render", ids[0], [], stats=st), indent=2))
     return 0
 
 
 def cmd_test(args):
     reg = load_registry()
-    asset, base = load_asset(args.asset)
-    diags, ir = compile_asset(asset, reg, base)
-    if ir is None:
-        print(json.dumps(report("validate", asset_id(asset), diags), indent=2))
+    docs, xdiags, base = load_asset_docs(args.asset)
+    if xdiags:
+        doc, _ = load_asset(args.asset)
+        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
-    renders = render_all(ir)
-    results, d2 = run_tests(ir, renders)
-    r = report("test", asset["asset"]["id"], diags + d2, tests=results)
+    diags, results, ids = [], [], []
+    for aid, d2, pfx in docs:
+        d3, ir = compile_asset(d2, reg, base)
+        ids.append(aid)
+        if ir is None:
+            diags += prefixed(d3, pfx)
+            continue
+        renders = render_all(ir)
+        r2, d4 = run_tests(ir, renders)
+        diags += prefixed(d3 + d4, pfx)
+        results += r2
+    if not results and diags:
+        # nothing compiled (the single-document v2.0 shape): validate stage
+        print(json.dumps(report("validate", ids[0], diags), indent=2))
+        return 1
+    extra = {"tests": results}
+    if len(ids) > 1:
+        extra["stats"] = {"ids": ids}
+    r = report("test", ids[0], diags, **extra)
     print(json.dumps(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
@@ -1699,21 +1934,44 @@ def frame_hashes(renders):
 
 def cmd_golden(args):
     reg = load_registry()
-    asset, base = load_asset(args.asset)
-    diags, ir = compile_asset(asset, reg, base)
-    if ir is None:
-        print(json.dumps(report("validate", asset_id(asset), diags), indent=2))
+    docs, xdiags, base = load_asset_docs(args.asset)
+    if xdiags:
+        doc, _ = load_asset(args.asset)
+        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
-    hashes = frame_hashes(render_all(ir))
-    gp = ROOT / "tests" / "golden" / f"{asset['asset']['id']}.json"
-    if args.update:
-        gp.write_text(json.dumps({"asset": asset["asset"]["id"], "frames": hashes}, indent=2) + "\n")
-        print(json.dumps(report("golden", asset["asset"]["id"], [], stats={"written": str(gp), "frames": len(hashes)}), indent=2))
+    diags, ids, total, written, compiled_n = [], [], 0, [], 0
+    for aid, d2, pfx in docs:
+        diags3, ir = compile_asset(d2, reg, base)
+        ids.append(aid)
+        if ir is None:
+            diags += prefixed(diags3, pfx)
+            continue
+        compiled_n += 1
+        hashes = frame_hashes(render_all(ir))
+        total += len(hashes)
+        gp = ROOT / "tests" / "golden" / f"{aid}.json"
+        if args.update:
+            gp.write_text(json.dumps({"asset": aid, "frames": hashes}, indent=2) + "\n")
+            written.append(str(gp))
+            continue
+        want = json.loads(gp.read_text())["frames"] if gp.exists() else {}
+        diags += [dict(D("E_GOLDEN_MISMATCH", "/" + k, "frame differs from golden",
+                         observed=hashes.get(k, "missing")[:12],
+                         expected=want.get(k, "missing")[:12]), path=pfx + "/" + k)
+                  for k in sorted(set(hashes) | set(want)) if hashes.get(k) != want.get(k)]
+    if not compiled_n and diags:
+        print(json.dumps(report("validate", ids[0], diags), indent=2))
+        return 1
+    if args.update and not diags:
+        st = {"written": written[0] if len(written) == 1 else written, "frames": total}
+        if len(ids) > 1:
+            st["ids"] = ids
+        print(json.dumps(report("golden", ids[0], [], stats=st), indent=2))
         return 0
-    want = json.loads(gp.read_text())["frames"] if gp.exists() else {}
-    d = [D("E_GOLDEN_MISMATCH", "/" + k, "frame differs from golden", observed=hashes.get(k, "missing")[:12],
-           expected=want.get(k, "missing")[:12]) for k in sorted(set(hashes) | set(want)) if hashes.get(k) != want.get(k)]
-    r = report("golden", asset["asset"]["id"], d, stats={"frames": len(hashes)})
+    st = {"frames": total}
+    if len(ids) > 1:
+        st["ids"] = ids
+    r = report("golden", ids[0], diags, stats=st)
     print(json.dumps(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 

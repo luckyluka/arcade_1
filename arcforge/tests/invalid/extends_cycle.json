@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "extends": "extends_cycle.json",
+  "asset": {
+    "id": "t_ext_cycle",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: the extends chain revisits this file (E_EXTENDS_CYCLE)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" }
+}

@@ -1,0 +1,16 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "t_dup",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: two variants compile to the same id (E_DUPLICATE_ID)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "variants": [
+    { "id": "t_dup.a", "override": {} },
+    { "id": "t_dup.a", "override": {} }
+  ]
+}

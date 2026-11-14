@@ -17,7 +17,7 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
 | commit | message | scope |
 |---|---|---|
 | 1 | x1: shape vocabulary — mirror, line, repeat, px shape | 02 §C + 01 §6: `mirror:"x"` (+ archetype `mirror_axis`), `line` (Bresenham, odd thickness), `repeat` (`$i`, count ≤ max ≤ 256, nesting ≤ 2, `E_REPEAT_BOUND`), `px {file,anchor?,flip?,when?}` in archetype/recipe geometry (no `frame` yet — §C has none; it lands with px 2 in commit 3); codes: `E_REPEAT_BOUND` (§J), `E_SHAPE_PARAM` (even line thickness, `mirror`+`rotate`, missing fill — beyond §J) |
-| 2 | x1: extends, variants, palette_swap | 02 §E: RFC-7386 `extends` (depth ≤ 3, `E_EXTENDS_CYCLE`), `variants` array form (`id`, `from`, `override`, `palette_swap`), top-level `palette_swap`; ids unique per file (`E_DUPLICATE_ID`); test/golden/render iterate base + variants (golden per id); codes `E_EXTENDS_CYCLE`, `E_DUPLICATE_ID` (§J), `E_UNKNOWN_VARIANT` (beyond §J) |
+| 2 | x1: extends, variants, palette_swap | 02 §E: RFC-7386 `extends` (depth ≤ 3), `variants` array form (`id`, `from`, `override`, `palette_swap`), top-level `palette_swap`; ids unique per file (`E_DUPLICATE_ID`); test/golden/render iterate base + variants (golden per id, loop lives in the CLI — `run_tests.py` needs no change); codes `E_EXTENDS_CYCLE`, `E_DUPLICATE_ID` (§J), `E_EXTENDS_PATH`, `E_EXTENDS_DEPTH`, `E_UNKNOWN_VARIANT`, `E_UNKNOWN_RAMP` (named in §E, absent from §J — reported) |
 | 3 | x1: px 2 multi-frame | 02 §G: `px 2` header, `frames N` + `frame i` blocks, shared size/legend, v1 unchanged; `frame` field on `px` shape and `custom` (default 0) as the minimal honest binding (see D9); code `E_PX_FRAMES` (§J) |
 | 4 | x1: tracks, swap frames, hold, atlas facing | 02 §F archetype-frame half: `params` tracks (kinds size/int/bool/enum/percent; size clamped), `swap {part: set}`, `hold`; atlas gains `facing:"right"`; codes `E_TRACK_PARAM` (§J), `E_UNKNOWN_SWAP_SET` (beyond §J) |
 | 5 | x1: §H assertions + exercise asset, docs/spec-next marked | 7 per-asset assertions (D13), one new example asset exercising every X1 feature on existing archetypes (+ own new golden), specs 02 status line updated, LANGUAGE/RECIPES/DECISIONS reconciliation |
@@ -33,9 +33,9 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
    (sweep form); `arcforge/docs/LANGUAGE.md`.
 2. `arcforge/schema/asset.schema.json` (`extends`, `variants`, `palette_swap`);
    `arcforge/tools/arcforge_ref.py` (merge-patch loader, variant expansion, CLI
-   iteration over ids); `arcforge/tests/run_tests.py` (golden loop over ids);
-   `arcforge/tests/invalid/{extends_cycle, duplicate_id, unknown_variant}.json`
-   + `expectations.json`; `arcforge/docs/LANGUAGE.md`.
+   iteration over ids); `arcforge/tests/invalid/{extends_cycle, extends_path,
+   extends_depth, extends_depth2..4, duplicate_id, unknown_variant,
+   palette_swap_ramp}.json` + `expectations.json`; `arcforge/docs/LANGUAGE.md`.
 3. `arcforge/tools/arcforge_ref.py` (`parse_px` px-2, `px` shape `frame`);
    `arcforge/schema/{asset,recipe}.schema.json` (`frame` fields); fixture
    `tests/invalid/px_frames.v2` + `.px` file + `expectations.json`;
@@ -76,9 +76,14 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
   px 2 (D9, commit 3). Legend → ramps resolution identical to `custom`;
   missing file reuses `E_PX_NOT_FOUND`, bad legend `E_PX_LEGEND`.
 - **D5 extends.** Path relative to the extending file, must stay inside the
-  repo root (escape → `E_EXTENDS_PATH`, beyond §J); depth ≤ 3; RFC 7386 merge
-  (objects merge, everything else replaced whole); cycle → `E_EXTENDS_CYCLE`.
-  Application order: `extends` chain first, then `variants` overrides.
+  repo root (escape/missing/non-asset/invalid target → `E_EXTENDS_PATH`,
+  beyond §J); depth ≤ 3 links → `E_EXTENDS_DEPTH` (beyond §J; §J names only
+  the cycle code for extends); RFC 7386 merge (objects merge, everything else
+  replaced whole); cycle → `E_EXTENDS_CYCLE` (§J). Application order: `extends`
+  chain first, then `variants` overrides. A document *with* `extends` is a
+  patch: the raw schema check runs only on documents without one (required
+  fields come from the target), so types/unknown keys are caught on the merged
+  document; leaf targets are fully schema-checked when loaded.
 - **D6 variants.** Array form only — the proposed schema's undocumented
   `matrix` form stays unimplemented (gap recorded). `from` may reference the
   base document or an **earlier** entry (forward refs and self refs →
@@ -90,8 +95,9 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
   golden files are named per id (`tests/golden/<id>.json`, new files only);
   `render` writes `out/<id>/`. Existing goldens untouched (ids are new).
 - **D8 palette_swap.** Ramp-name map applied when fills resolve, only for the
-  variant that declares it; both ramps must exist in the style pack
-  (`E_UNKNOWN_RAMP` reused). Assertions (palette_size) see the swapped palette.
+  document that declares it; both ramps must exist in the style pack
+  (`E_UNKNOWN_RAMP` — named by 02 §E but absent from §J: a new code, reported).
+  Assertions (palette_size) see the swapped palette.
 - **D9 px 2.** `px 2` header + `frames N` + `frame i` blocks; all frames share
   size and legend; `N` must match the blocks (`E_PX_FRAMES`). Spec 02 §G never
   says how an animated px is *bound* (gap) — minimal honest binding: optional
@@ -141,7 +147,9 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
    `matrix` form** the prose never describes.
 4. 02 §C names no code for `line` thickness violations, `mirror`+`rotate`, or
    an unknown swap set → new codes beyond §J: `E_SHAPE_PARAM`,
-   `E_UNKNOWN_SWAP_SET` (+ `E_EXTENDS_PATH`, `E_UNKNOWN_VARIANT` if triggered).
+   `E_UNKNOWN_SWAP_SET` (+ `E_EXTENDS_PATH`, `E_EXTENDS_DEPTH`,
+   `E_UNKNOWN_VARIANT` if triggered). 02 §E names `E_UNKNOWN_RAMP` in prose
+   but leaves it out of §J's list (spec drift, recorded; implemented anyway).
 5. §J lists `E_DUPLICATE_ID` as project-wide; without the project file only
    per-file uniqueness can be enforced now.
 6. 02 §H `contrast_min`/`silhouette_distinct` presuppose the project file

@@ -20,6 +20,20 @@
       }
     },
     "metadata": { "type": "object", "description": "Free-form notes. Ignored by the compiler.", "additionalProperties": true },
+    "extends": { "type": "string", "description": "2.1: asset file this document derives from; RFC-7386 merge, path relative to this file, at most 3 links, no cycles." },
+    "palette_swap": { "type": "object", "description": "2.1: ramp-name map applied when fills resolve (both ends must exist in the style pack).",
+      "propertyNames": { "pattern": "^[a-z0-9_]+$" },
+      "additionalProperties": { "type": "string", "pattern": "^[a-z0-9_]+$" } },
+    "variants": { "type": "array", "description": "2.1: derived assets from one file; each entry composes the base (or an earlier entry) with an RFC-7386 override.",
+      "items": { "type": "object", "additionalProperties": false, "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$" },
+          "from": { "type": "string", "description": "Base document id or an earlier variant id." },
+          "override": { "type": "object", "description": "RFC 7386 JSON Merge Patch over the source document (arrays replace whole)." },
+          "palette_swap": { "type": "object",
+            "propertyNames": { "pattern": "^[a-z0-9_]+$" },
+            "additionalProperties": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+        } } },
     "target": {
       "type": "object",
       "additionalProperties": false,

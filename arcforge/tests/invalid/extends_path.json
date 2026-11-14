@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.1",
+  "extends": "../../../../outside.json",
+  "asset": {
+    "id": "t_ext_path",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: the extends target escapes the repo root (E_EXTENDS_PATH)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" }
+}

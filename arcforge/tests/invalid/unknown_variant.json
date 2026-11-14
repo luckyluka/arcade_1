@@ -1,0 +1,15 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "t_unk_var",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: a variant builds `from` an id that is not the base nor an earlier entry (E_UNKNOWN_VARIANT)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "variants": [
+    { "id": "t_unk_var.a", "from": "t_unk_var.ghost", "override": {} }
+  ]
+}

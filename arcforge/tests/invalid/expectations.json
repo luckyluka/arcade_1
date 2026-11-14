@@ -46,5 +46,11 @@
   "keyed_geometry": { "run": "validate", "errors": ["E_RECIPE_GEOMETRY"], "warnings": [] },
   "repeat_bound": { "run": "sweep", "errors": ["E_REPEAT_BOUND"], "warnings": [] },
   "line_even_thickness": { "run": "sweep", "errors": ["E_SHAPE_PARAM"], "warnings": [] },
-  "mirror_rotate": { "run": "sweep", "errors": ["E_SHAPE_PARAM"], "warnings": [] }
+  "mirror_rotate": { "run": "sweep", "errors": ["E_SHAPE_PARAM"], "warnings": [] },
+  "extends_cycle": { "run": "validate", "errors": ["E_EXTENDS_CYCLE"], "warnings": [] },
+  "extends_path": { "run": "validate", "errors": ["E_EXTENDS_PATH"], "warnings": [] },
+  "extends_depth": { "run": "validate", "errors": ["E_EXTENDS_DEPTH"], "warnings": [] },
+  "duplicate_id": { "run": "validate", "errors": ["E_DUPLICATE_ID"], "warnings": [] },
+  "unknown_variant": { "run": "validate", "errors": ["E_UNKNOWN_VARIANT"], "warnings": [] },
+  "palette_swap_ramp": { "run": "validate", "errors": ["E_UNKNOWN_RAMP"], "warnings": [] }
 }

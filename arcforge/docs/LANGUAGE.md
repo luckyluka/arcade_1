@@ -21,6 +21,17 @@ documents cannot use the 2.1 fields (`arcforge` unknown value or unknown key →
 ```
 Only `description` and `metadata` are free-form, and neither affects output. Any other unknown key is `E_UNKNOWN_FIELD`.
 
+### Derived assets (2.1, X1)
+| field | meaning |
+|---|---|
+| `extends: "<file>"` | derive this document from another asset file: RFC 7386 JSON Merge Patch (objects merge recursively, arrays/null replace whole), path relative to *this* file, target must stay inside the repo root, chain at most 3 links, no file twice. Violations are `E_EXTENDS_PATH` (missing/escaping/non-asset/invalid target), `E_EXTENDS_DEPTH`, `E_EXTENDS_CYCLE`, all reported at `/extends` of the file the command was given |
+| `variants: [{id, from?, override?, palette_swap?}]` | several assets from one file: each entry is an id plus an RFC-7386 `override` over the base document, or over the **earlier** entry named by `from` (base id or earlier variant id; anything else → `E_UNKNOWN_VARIANT`). Ids are unique within the file (`E_DUPLICATE_ID`) — project-wide uniqueness waits for the X4 project file |
+| `palette_swap: {<ramp>: <ramp>}` | ramp-name map applied **when fills resolve** (on base and per variant); both ends must exist in the style pack (`E_UNKNOWN_RAMP` at `/palette_swap/<k>`). Assertions (`palette_size`) see the swapped palette |
+
+- A document that has `extends` is a **patch**: its required fields come from the target, so the raw schema check runs only on documents without one; types and unknown keys of a patch are checked on the merged document (`E_UNKNOWN_FIELD` lands where the merged document holds the key). Nested `override` objects merge the same way, so `{"archetype": {"params": {"armor_ramp": "gold"}}}` restates only what changes.
+- `test`, `golden` and `render` compile the base **and every variant**: golden files are named per id (`tests/golden/<id>.json`), renders go to `out/<id>/`, and the report carries `stats.ids`. A variant's diagnostics are reported under its file pointer `/variants/<i>` plus the pointer inside the merged document.
+- `variants`/`extends` replace, never merge with, the other side's arrays — RFC 7386, no special cases.
+
 ## Resolution order (what wins, what draws on top)
 1. Archetype body parts (skeleton, anchors, default shapes).
 2. Features in listed order. A string is shorthand for the recipe with default parameters.
