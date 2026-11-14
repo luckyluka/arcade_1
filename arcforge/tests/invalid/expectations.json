@@ -53,5 +53,7 @@
   "duplicate_id": { "run": "validate", "errors": ["E_DUPLICATE_ID"], "warnings": [] },
   "unknown_variant": { "run": "validate", "errors": ["E_UNKNOWN_VARIANT"], "warnings": [] },
   "palette_swap_ramp": { "run": "validate", "errors": ["E_UNKNOWN_RAMP"], "warnings": [] },
-  "px_frames": { "run": "validate", "errors": ["E_PX_FRAMES"], "warnings": [] }
+  "px_frames": { "run": "validate", "errors": ["E_PX_FRAMES"], "warnings": [] },
+  "track_param": { "run": "sweep", "errors": ["E_TRACK_PARAM"], "warnings": [] },
+  "swap_set": { "run": "sweep", "errors": ["E_UNKNOWN_SWAP_SET"], "warnings": [] }
 }

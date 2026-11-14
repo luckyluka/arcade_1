@@ -95,7 +95,19 @@ Rasterization: a pixel is filled if its **centre** lies inside the shape (even-o
 - A **slot** (e.g. `head_gear`, `weapon_main`) holds one recipe unless the recipe is `stackable`. Two recipes in one slot → `E_SLOT_CONFLICT`.
 
 ## Animation
-Archetype templates give per-frame integer offsets per part (`root` moves everything). No rotation or squash in v2.0 (rigid translation only). The asset binds names `idle|walk|attack|hurt|death` to templates. Recipes follow their anchor's part automatically.
+Archetype templates give per-frame integer offsets per part (`root` moves everything). v2.0 frames move parts rigidly — no rotation or scale transform anywhere. The asset binds names `idle|walk|attack|hurt|death` to templates. Recipes follow their anchor's part automatically.
+
+### Frames: tracks, swap, hold (2.1, X1)
+| field | meaning |
+|---|---|
+| `params: {<param>: value}` | **parameter track** (02 §F): override parameters for that frame — archetype size parameters (silently **clamped** to range) and archetype/recipe parameters of kinds `int`, `bool`, `enum`, `percent` (`ramp` is not trackable). A key the archetype cannot override, or a non-integer size track, is `E_TRACK_PARAM` at `/archetype/animations/<t>/frames/<i>/params/<k>`; archetype/recipe track values are otherwise validated exactly like supplied values (`E_PARAM_TYPE`/`E_PARAM_RANGE`/`E_PARAM_ENUM`, and `E_UNKNOWN_SIZE_PARAM` when a percent's `of` is unavailable — a track counts as supplying it). Percent tracks resolve with the same `of` rules against the frame's size. Recipe tracks apply only to recipes **this asset uses** |
+| `swap: {<part>: <set>}` | **variant frame** (02 §F): for this frame the part draws `parts.<part>.variants.<set>` instead of `parts.<part>.shapes` (anchors and offsets unchanged). Unknown part → `E_UNKNOWN_PART`, unknown set → `E_UNKNOWN_SWAP_SET`, both at `/archetype/animations/<t>/frames/<i>/swap/<part>` |
+| `hold: n` | per-frame duration in ticks at the template's `fps`; integer ≥ 1, default 1. `atlas.json` exports `durations: [hold per frame]` while `frames` keeps counting rendered frames (02 §F timing). Structure is schema-enforced with the archetype, like `fps` |
+
+- Track and swap validation runs for the templates **the asset binds** — a template nothing names is never compiled (documented scope limit). Each distinct `(params, swap)` combination compiles to its own geometry at validate time, so failures report there, before any render.
+- A frame state re-derives size, class/proportions, parameters and metrics at the track's values and rebuilds archetype **and** feature shapes in that env (the mirror axis too). **Anchors, hitboxes and part offsets stay at their base values** — the atlas exports them once — and a recipe's `sizes` span is checked once at the asset's chosen size, not per frame.
+- `atlas.json` carries `facing: "right"` (02 §F): art is authored facing right; a game flips left at runtime, no duplicated art.
+- A fixed canvas clips a frame state like any frame (`E_CLIPPED`/`W_CLIPPED` per `clip_policy`); an auto canvas unions every state's pixels into its bbox.
 
 ## Assertions (`tests`)
 `dimensions`, `palette_size`, `feature_present`, `silhouette_area`, `bbox_margin`, `anchor_inside_canvas`, `root_stable`, `frame_count`. Evaluated on the compiled result, not by a vision model. Always on, independently of `tests`: palette budget (`E_PALETTE_BUDGET`), clipping (`E_CLIPPED`/`W_CLIPPED` per `clip_policy`), minimum feature size (`W_FEATURE_TOO_SMALL`: any compiled shape whose smaller extent is below the style pack's `min_feature_px`, which defaults to unconstrained) and occlusion (`W_OCCLUDED`: a feature not one of whose pixels survives in any frame). The size sweep adds body mirror symmetry (`E_BODY_ASYMMETRY`, see below).

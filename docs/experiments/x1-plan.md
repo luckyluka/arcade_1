@@ -44,8 +44,8 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
 4. `arcforge/schema/archetype.schema.json` (frame `params`/`swap`/`hold`,
    `parts.*.variants`); `arcforge/tools/arcforge_ref.py` (per-frame env override,
    part shape-set swap, hold → exported durations, atlas `facing`);
-   `arcforge/tests/invalid/{track_param, swap_set}.json` + `expectations.json`;
-   `arcforge/docs/LANGUAGE.md`.
+   `arcforge/tests/invalid/{track_param, swap_set}.archetype.json` (sweep form)
+   + `expectations.json`; `arcforge/docs/LANGUAGE.md`.
 5. `arcforge/tools/arcforge_ref.py` (§H assertion arms in `run_tests`);
    `arcforge/schema/asset.schema.json` (tests enum + arg fields);
    `arcforge/examples/x1_showcase.json` (new) + `arcforge/tests/golden/
@@ -108,19 +108,30 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
   name templates). At compile, each declared param must be (a) an archetype size
   param (clamped to range, silently, per spec), (b) an archetype param of kind
   int/bool/enum/percent, or (c) a recipe param **of a feature this asset uses**
-  of an allowed kind → else `E_TRACK_PARAM`. Track values participate in the
-  expression env for that frame; percent values are percents (resolved with the
-  same `of` rules); unresolved/unavailable percent-of in a track → the same
-  `E_UNKNOWN_SIZE_PARAM` rule as supplied params. Auto-canvas stays correct
-  because the union bbox already covers all frames.
+  whose kind is allowed in *every* used recipe declaring it → else `E_TRACK_PARAM`.
+  Track values participate in the expression env for that frame; percent values
+  are percents (resolved with the same `of` rules); unresolved/unavailable
+  percent-of in a track → the same `E_UNKNOWN_SIZE_PARAM` rule as supplied
+  params. Non-integer size track → `E_TRACK_PARAM` (§J names no better code);
+  archetype/recipe track values otherwise validate exactly like supplied values
+  (`E_PARAM_TYPE`/`E_PARAM_RANGE`/`E_PARAM_ENUM`). Auto-canvas stays correct
+  because the union bbox already covers all frames. A state re-derives
+  size/class/parameters/metrics and rebuilds archetype **and** feature shapes;
+  anchors, hitboxes and part offsets stay at their base values, and recipe
+  `sizes` spans are not re-checked per frame (documented in LANGUAGE.md).
 - **D11 swap.** Archetype parts gain `"variants": {"<set>": [shapes...]}`; a
   frame's `swap: {"<part>": "<set>"}` replaces that part's shape list for that
   frame (anchors/offsets unchanged). Unknown part → `E_UNKNOWN_PART`, unknown
-  set → `E_UNKNOWN_SWAP_SET` (beyond §J). Swap interacts with tracks by
-  composing in the same frame.
+  set → `E_UNKNOWN_SWAP_SET` (beyond §J), both at
+  `/archetype/animations/<t>/frames/<i>/swap/<part>`. Swap interacts with tracks
+  by composing in the same frame state (one drawable set per distinct
+  `(params, swap)` pair, built at compile).
 - **D12 hold.** Frame `hold: n` (int ≥ 1, default 1) repeats the frame's
-  duration: exported atlas/spritesheet durations multiply; `frame_count` counts
-  frames, not holds (existing semantics preserved).
+  duration: `atlas.json` gains `durations: [hold per frame]` **in ticks at the
+  template's fps** (exact, no rounding; `fps` alongside converts), while
+  `frame_count`/`frames` count frames, not holds (existing semantics
+  preserved). Structure is schema-enforced with the archetype — same contract
+  as `fps` — so no separate compile-time code.
 - **D13 assertions.** IN: `baseline_stable`, `pivot_stable`, `min_feature`,
   `cell_fill`, `seamless`, `jitter_max`, `orphan_pixels` (all per-asset).
   OUT: `contrast_min` (needs project `backgrounds`), `silhouette_distinct`

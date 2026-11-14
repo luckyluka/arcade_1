@@ -740,6 +740,17 @@ def compile_shapes(shapes, env, g, path, depth=0):
     return out
 
 
+def frame_state_key(fr):
+    """Content key of a frame's 02 §F geometry state (`params` tracks +
+    `swap`), or None when the frame draws the base geometry. sort_keys makes
+    the key byte-deterministic; compile builds one drawable set per distinct
+    key, render picks it back up."""
+    track, smap = fr.get("params") or {}, fr.get("swap") or {}
+    if not track and not smap:
+        return None
+    return json.dumps({"params": track, "swap": smap}, sort_keys=True, separators=(",", ":"))
+
+
 def compile_asset(asset, reg, base_dir):
     """Validate and compile. Returns (diagnostics, ir or None)."""
     diags = schema_diags(asset, "asset.schema.json")
@@ -906,6 +917,7 @@ def compile_asset(asset, reg, base_dir):
              "base_dir": base_dir, "diags": diags, "anchors": anchors}
     used_slots = {}
     feature_names = []
+    used_recs = []
     hitboxes = []
     for i, f in enumerate(asset.get("features", [])):
         fp = ptr("features", i)
@@ -959,6 +971,7 @@ def compile_asset(asset, reg, base_dir):
                                      "value": max(lo, min(hi, sv))}]))
                 continue
         feature_names.append(name)
+        used_recs.append((fp, name, rec, given))
         pdiags_before = len(diags)
         params = check_params(rec["parameters"], given, fp + "/params", style, diags, f"recipe '{name}'", env=env)
         if len(diags) > pdiags_before:
@@ -989,7 +1002,8 @@ def compile_asset(asset, reg, base_dir):
         except ExprError as e:
             diags.append(D("E_RECIPE_EXPR", fp, f"recipe '{name}' failed to evaluate: {e}"))
 
-    # custom px fragments
+    # custom px fragments (env-independent: a frame state copies them whole)
+    custom_start = len(drawables)
     for i, c in enumerate(asset.get("custom", [])):
         cp = ptr("custom", i)
         if c["anchor"] not in anchors:
@@ -1039,6 +1053,7 @@ def compile_asset(asset, reg, base_dir):
 
     # animations
     anims = {}
+    bound = {}
     for name, a in asset.get("animations", {}).items():
         tpl = arch["animations"].get(a["template"])
         if not tpl:
@@ -1047,14 +1062,194 @@ def compile_asset(asset, reg, base_dir):
                            expected=sorted(arch["animations"]), suggestions=close(a["template"], arch["animations"])))
             continue
         anims[name] = tpl
+        bound.setdefault(a["template"], tpl)
 
+    # ---- 02 §F: tracks/swap validated on the templates this asset binds ---
+    # (a template nothing names is never compiled — plan gap 8)
+    TRACK_KINDS = ("int", "bool", "enum", "percent")
+    overridable = set(size_specs)
+    overridable |= {k for k, s in arch.get("params", {}).items() if s.get("type") in TRACK_KINDS}
+    rec_kinds = {}
+    for _, rname, rec, _ in used_recs:
+        for k, s in rec["parameters"].items():
+            rec_kinds.setdefault(k, []).append((rname, s.get("type")))
+    for k, who in sorted(rec_kinds.items()):
+        if all(t in TRACK_KINDS for _, t in who):
+            overridable.add(k)
+    for tname, tpl in bound.items():
+        for fi, fr in enumerate(tpl["frames"]):
+            tpath = ptr("archetype", "animations", tname, "frames", fi)
+            for k in sorted(fr.get("params") or {}):
+                if k not in overridable:
+                    diags.append(D("E_TRACK_PARAM", tpath + ptr("params", k),
+                                   f"frame track '{k}' is not an overridable parameter of this archetype",
+                                   observed=k, expected=sorted(overridable),
+                                   suggestions=close(k, overridable),
+                                   fix=[{"op": "remove", "path": tpath + ptr("params", k)}]))
+            for part in sorted(fr.get("swap") or {}):
+                sset = fr["swap"][part]
+                spath = tpath + ptr("swap", part)
+                if part not in arch["parts"]:
+                    diags.append(D("E_UNKNOWN_PART", spath, f"archetype has no part '{part}'",
+                                   observed=part, expected=sorted(arch["parts"]),
+                                   suggestions=close(part, arch["parts"]),
+                                   fix=[{"op": "remove", "path": spath}]))
+                    continue
+                vs = sorted(arch["parts"][part].get("variants", {}))
+                if sset not in vs:
+                    sug = close(sset, vs)
+                    diags.append(D("E_UNKNOWN_SWAP_SET", spath,
+                                   f"part '{part}' has no variant set '{sset}'",
+                                   observed=sset, expected=vs, suggestions=sug,
+                                   fix=([{"op": "replace", "path": spath, "value": sug[0]}] if len(sug) == 1
+                                        else [{"op": "remove", "path": spath}])))
+
+    if any(d["severity"] == "error" for d in diags):
+        return diags, None
+
+    # ---- 02 §F: per-frame geometry states ---------------------------------
+    # A frame with `params`/`swap` draws its own geometry: the env (size,
+    # class/proportions, parameters, metrics) is re-derived at the track's
+    # values and part shape lists are swapped; feature geometry is rebuilt in
+    # that env. Anchors, hitboxes and part offsets stay at their base values
+    # (the atlas exports them once), and recipe `sizes` spans are an
+    # asset-level contract checked once at the chosen size. States build here,
+    # at compile time, so every failure reports with a path.
+    custom_drawables = drawables[custom_start:]
+
+    def track_env(track, tpath):
+        """Re-derive the expression env at a frame's track values. Size tracks
+        clamp silently (02 §F); archetype track values validate like supplied
+        values; recipe track values are applied per feature by make_state.
+        Returns (fenv, recipe_track)."""
+        fsize = dict(size_env)
+        arch_track, rec_track = {}, {}
+        for k in sorted(track):
+            v = track[k]
+            if k in size_specs:
+                if isinstance(v, bool) or not isinstance(v, int):
+                    diags.append(D("E_TRACK_PARAM", tpath + ptr("params", k),
+                                   f"size track '{k}' must be an integer",
+                                   observed=v, expected="integer"))
+                    continue
+                spec = size_specs[k]
+                fsize[k] = max(spec["min"], min(spec["max"], v))     # clamped silently
+            elif k in arch["params"]:
+                arch_track[k] = v
+            else:
+                rec_track[k] = v
+        fmenv = {"W": W, "H": H}
+        fmenv.update(fsize)
+        classes = arch.get("classes", [])
+        cls_name, cls_idx = "default", 0
+        if size_specs and classes:
+            primary = next(iter(size_specs))
+            sv = fsize[primary]
+            cands = [c for c in classes if sv <= c["max"]]
+            pick = min(cands, key=lambda c: c["max"]) if cands else max(classes, key=lambda c: c["max"])
+            cls_name, cls_idx = pick["name"], classes.index(pick)
+        fmenv["class"], fmenv["class_idx"] = cls_name, cls_idx
+        row = arch.get("proportions", {}).get(cls_name)
+        if isinstance(row, dict):
+            fmenv.update(row)
+        given = dict(asset["archetype"].get("params", {}))
+        given.update(arch_track)
+        fparams = check_params(arch["params"], given, tpath + ptr("params"), style, diags,
+                               "frame track", env=fmenv)
+        fenv = dict(fmenv)
+        fenv.update(fparams)
+        for mname, mexpr in arch.get("metrics", []):
+            try:
+                fenv[mname] = to_int(ev(mexpr, fenv))
+            except (ExprError, ValueError) as e:
+                diags.append(D("E_ARCHETYPE_EXPR", tpath + ptr("params"),
+                               f"metric '{mname}' failed to evaluate in the frame state: {e}"))
+                fenv[mname] = 0
+        return fenv, rec_track
+
+    def make_state(track, smap, tpath):
+        """The drawable set for one (params, swap) frame state."""
+        fenv, frec = track_env(track, tpath)
+        # mirror axis re-derived at this state's env (the name was validated
+        # at base; integer by construction, silent fallback otherwise)
+        axis_name = arch.get("mirror_axis", "cx")
+        av = fenv.get(axis_name)
+        faxis = av if isinstance(av, int) and not isinstance(av, bool) else W // 2
+        out = []
+
+        def sadd(d, src):
+            d.update({"seq": len(out), "src": src})
+            out.append(d)
+
+        g = {"mode": "archetype", "ramps": ramps, "swap": swap, "axis": faxis,
+             "layers": layers, "base_dir": base_dir, "diags": diags,
+             "anchors": anchors, "part": None}
+        for part, pdef in arch["parts"].items():
+            if part in smap:
+                shapes = pdef["variants"][smap[part]]
+                gpath = ptr("archetype", "parts", part, "variants", smap[part])
+            else:
+                shapes = pdef["shapes"]
+                gpath = ptr("archetype", "parts", part, "shapes")
+            g["part"] = part
+            try:
+                for d in compile_shapes(shapes, fenv, g, gpath):
+                    sadd(d, f"archetype:{part}")
+            except (ExprError, ValueError) as e:
+                diags.append(D("E_ARCHETYPE_EXPR", tpath,
+                               f"archetype geometry failed in the frame state: {e}"))
+        g2 = {"mode": "recipe", "ramps": ramps, "swap": swap, "axis": faxis,
+              "layers": layers, "base_dir": base_dir, "diags": diags,
+              "anchors": anchors}
+        for fp, rname, rec, given in used_recs:
+            rgiven = dict(given)
+            rgiven.update({k: v for k, v in frec.items() if k in rec["parameters"]})
+            before = len(diags)
+            rparams = check_params(rec["parameters"], rgiven, tpath + ptr("params"),
+                                   style, diags, f"frame track of recipe '{rname}'", env=fenv)
+            if len(diags) > before:
+                continue
+            renv = dict(fenv)
+            renv.update(rparams)
+            geo = rec["geometry"]
+            if isinstance(geo, dict):
+                geo = geo.get(arch["archetype"])
+            gpath = fp + "/geometry" + (ptr(arch["archetype"]) if isinstance(rec["geometry"], dict) else "")
+            try:
+                for lname, lexpr in rec.get("locals", []):
+                    renv[lname] = to_int(ev(lexpr, renv))
+            except (ExprError, ValueError) as e:
+                diags.append(D("E_RECIPE_EXPR", tpath,
+                               f"recipe '{rname}' local failed in the frame state: {e}"))
+                continue
+            try:
+                for d in compile_shapes(geo, renv, g2, gpath):
+                    sadd(d, f"feature:{rname}")
+            except (ExprError, ValueError) as e:
+                diags.append(D("E_RECIPE_EXPR", tpath,
+                               f"recipe '{rname}' failed to evaluate in the frame state: {e}"))
+        # custom fragments are env-independent; renumber so (li, seq) keeps
+        # the base painter order (archetype, features, custom)
+        out.extend(dict(d) for d in custom_drawables)
+        for i, d in enumerate(out):
+            d["seq"] = i
+        return out
+
+    states = {}
+    for tname, tpl in bound.items():
+        for fi, fr in enumerate(tpl["frames"]):
+            key = frame_state_key(fr)
+            if key is None or key in states:
+                continue
+            states[key] = make_state(fr.get("params") or {}, fr.get("swap") or {},
+                                     ptr("archetype", "animations", tname, "frames", fi))
     if any(d["severity"] == "error" for d in diags):
         return diags, None
     return diags, {
         "asset": asset, "arch": arch, "style": style, "W": W, "H": H, "drawables": drawables,
         "anchors": anchors, "parts": parts, "features": feature_names, "animations": anims, "hitboxes": hitboxes,
         "auto": auto, "min_cell": mc, "clip_policy": asset["target"].get("clip_policy", "error"),
-        "env": env,
+        "env": env, "states": states,
     }
 
 
@@ -1067,9 +1262,10 @@ def part_offset(offsets, part):
     return rx + px, ry + py
 
 
-def render_frame(ir, offsets, clip=True):
+def render_frame(ir, offsets, clip=True, drawables=None):
     """Rasterize one frame. clip=False renders on an unbounded plane (auto
-    canvas pass 1): nothing is dropped, `clipped` stays 0."""
+    canvas pass 1): nothing is dropped, `clipped` stays 0. `drawables`
+    overrides the base set with a 02 §F frame state's geometry."""
     W, H = ir["W"], ir["H"]
     grid = {}   # (x, y) -> (li, seq, part, ramp, tone): seq orders pixels within
                 # a layer and part identity feeds the inner-outline pass;
@@ -1083,7 +1279,8 @@ def render_frame(ir, offsets, clip=True):
         else:
             grid[(x, y)] = (li, seq, part, fill[0], fill[1])
 
-    for d in sorted(ir["drawables"], key=lambda d: (d["li"], d["seq"])):
+    ds = ir["drawables"] if drawables is None else drawables
+    for d in sorted(ds, key=lambda d: (d["li"], d["seq"])):
         ox, oy = part_offset(offsets, d["part"])
         if d["kind"] == "px":
             for dx, dy, fill in d["px"]:
@@ -1226,15 +1423,18 @@ def render_all(ir):
     For an auto canvas the cell is derived here, before rgba is produced."""
     res = {}
     auto = bool(ir.get("auto"))
+    states = ir.get("states") or {}
 
-    def mk(offsets):
-        grid, clipped = render_frame(ir, offsets, clip=not auto)
+    def mk(offsets, ds=None):
+        grid, clipped = render_frame(ir, offsets, clip=not auto, drawables=ds)
         return {"grid": grid, "rgba": None, "clipped": clipped, "offsets": offsets}
 
     entries = [("base", 0, mk({}))]
     for name, tpl in ir["animations"].items():
         for i, fr in enumerate(tpl["frames"]):
-            entries.append((name, i, mk({k: tuple(v) for k, v in fr["offsets"].items()})))
+            key = frame_state_key(fr)
+            ds = states[key] if key is not None else None
+            entries.append((name, i, mk({k: tuple(v) for k, v in fr["offsets"].items()}, ds)))
     if auto:
         resolve_auto_cell(ir, entries)
     for _, _, f in entries:
@@ -1925,6 +2125,8 @@ def cmd_render(args):
         W, H, s = ir["W"], ir["H"], args.scale
         (out / "base.png").write_bytes(png_bytes(W, H, renders["base"][0]["rgba"]))
         atlas = {"cell": [W, H],
+                 # 02 §F: art is authored facing right; a game flips left at runtime
+                 "facing": "right",
                  "pivot": list(ir["anchors"].get("origin", {}).get("at", [0, 0])),
                  "animations": {}}
         rows = [(n, fs) for n, fs in renders.items() if n != "base"]
@@ -1933,6 +2135,9 @@ def cmd_render(args):
         for ri, (n, fs) in enumerate(rows):
             tpl = ir["animations"][n]
             atlas["animations"][n] = {"row": ri, "frames": len(fs), "fps": tpl["fps"], "loop": tpl["loop"],
+                                      # per-frame duration in ticks at fps: hold multiplies the
+                                      # base tick; `frames` counts rendered frames, not ticks
+                                      "durations": [fr.get("hold", 1) for fr in tpl["frames"]],
                                       "hit_frames": tpl.get("hit_frames", [])}
             for ci, f in enumerate(fs):
                 (out / f"{n}_{ci}.png").write_bytes(png_bytes(W, H, f["rgba"]))
