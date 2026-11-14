@@ -1,0 +1,99 @@
+{
+  "recipe": "helmet_open",
+  "version": "1.0.0",
+  "category": "humanoid/head",
+  "description": "Open helmet framing the face with a raised brow shell and side guards.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "head_gear",
+  "requires_anchors": [
+    "head_center",
+    "head_top"
+  ],
+  "parameters": {
+    "visor": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    },
+    "crest": {
+      "type": "bool",
+      "default": false
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "head_center",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -7,
+      "y": -4,
+      "w": 14,
+      "h": 3,
+      "fill": "$armor_ramp.base"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -7,
+      "y": -1,
+      "w": 2,
+      "h": 6,
+      "fill": "$armor_ramp.shadow"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "armor",
+      "shape": "rect",
+      "x": 5,
+      "y": -1,
+      "w": 2,
+      "h": 6,
+      "fill": "$armor_ramp.shadow"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -5,
+      "y": -4,
+      "w": 4,
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -5,
+      "y": -1,
+      "w": 10,
+      "h": 1,
+      "fill": "$visor.light"
+    },
+    {
+      "anchor": "head_top",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -1,
+      "y": -2,
+      "w": 2,
+      "h": 2,
+      "fill": "$visor.base",
+      "when": "$crest"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "visor": "gold",
+      "crest": true
+    }
+  ]
+}

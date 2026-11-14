@@ -1,0 +1,184 @@
+{
+  "archetype": "slime_walker",
+  "version": "1.0.0",
+  "description": "Small symmetric blob enemy, about 16x12, with idle and walk motion.",
+  "view": "front",
+  "canvas": {
+    "default": [
+      20,
+      16
+    ],
+    "supported": [
+      [
+        20,
+        16
+      ]
+    ]
+  },
+  "params": {
+    "body_ramp": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "blue",
+        "red",
+        "gold"
+      ]
+    },
+    "eye_ramp": {
+      "type": "ramp",
+      "default": "gold",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    }
+  },
+  "layers": [
+    "back",
+    "body",
+    "foreground",
+    "fx"
+  ],
+  "symmetric": true,
+  "parts": {
+    "root": {
+      "shapes": []
+    },
+    "body": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 2,
+          "y": 5,
+          "w": 16,
+          "h": 9,
+          "fill": "$body_ramp.base"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 4,
+          "y": 3,
+          "w": 12,
+          "h": 7,
+          "fill": "$body_ramp.base"
+        },
+        {
+          "shape": "rect",
+          "layer": "body",
+          "x": 4,
+          "y": 11,
+          "w": 12,
+          "h": 2,
+          "fill": "$body_ramp.shadow"
+        },
+        {
+          "shape": "rect",
+          "layer": "body",
+          "x": 6,
+          "y": 5,
+          "w": 3,
+          "h": 2,
+          "fill": "$body_ramp.light"
+        }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": {
+      "part": "root",
+      "at": [
+        10,
+        14
+      ]
+    },
+    "top": {
+      "part": "body",
+      "at": [
+        10,
+        4
+      ]
+    },
+    "back": {
+      "part": "body",
+      "at": [
+        10,
+        9
+      ]
+    },
+    "eye_l": {
+      "part": "body",
+      "at": [
+        7,
+        7
+      ]
+    },
+    "eye_r": {
+      "part": "body",
+      "at": [
+        13,
+        7
+      ]
+    }
+  },
+  "animations": {
+    "idle": {
+      "fps": 4,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "body": [
+              0,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    "walk": {
+      "fps": 8,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "body": [
+              -1,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "body": [
+              1,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "collision": {
+    "hurtbox": {
+      "rect": [
+        2,
+        4,
+        16,
+        10
+      ]
+    }
+  }
+}

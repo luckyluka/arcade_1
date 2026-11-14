@@ -1,0 +1,71 @@
+{
+  "recipe": "bat_fangs",
+  "version": "1.0.0",
+  "category": "enemy/mouth",
+  "description": "Two tiny fangs hanging from the bat mouth when enabled.",
+  "applies_to": [
+    "bat_flyer"
+  ],
+  "slot": "mouth_detail",
+  "requires_anchors": [
+    "mouth"
+  ],
+  "parameters": {
+    "enabled": {
+      "type": "bool",
+      "default": true
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "mouth",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          -2,
+          0
+        ],
+        [
+          -1,
+          3
+        ],
+        [
+          0,
+          0
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$enabled"
+    },
+    {
+      "anchor": "mouth",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$enabled"
+    }
+  ],
+  "examples": [
+    {
+      "enabled": false
+    },
+    {
+      "enabled": true
+    }
+  ]
+}

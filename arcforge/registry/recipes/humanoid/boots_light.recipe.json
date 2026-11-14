@@ -1,0 +1,70 @@
+{
+  "recipe": "boots_light",
+  "version": "1.0.0",
+  "category": "humanoid/feet",
+  "description": "Narrow boots with a short light cuff.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "feet_gear",
+  "requires_anchors": [
+    "foot_l",
+    "foot_r"
+  ],
+  "parameters": {
+    "height": {
+      "type": "int",
+      "min": 2,
+      "max": 4,
+      "default": 3
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "foot_l",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -2,
+      "y": "- $height",
+      "w": 5,
+      "h": "$height",
+      "fill": "$armor_ramp.base"
+    },
+    {
+      "anchor": "foot_l",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -2,
+      "y": "- $height",
+      "w": 5,
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    },
+    {
+      "anchor": "foot_r",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -2,
+      "y": "- $height",
+      "w": 5,
+      "h": "$height",
+      "fill": "$armor_ramp.base"
+    },
+    {
+      "anchor": "foot_r",
+      "layer": "armor",
+      "shape": "rect",
+      "x": -2,
+      "y": "- $height",
+      "w": 5,
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "height": 4
+    }
+  ]
+}

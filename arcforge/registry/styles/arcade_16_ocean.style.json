@@ -1,0 +1,119 @@
+{
+  "style_pack": "arcade_16_ocean",
+  "version": "1.0.0",
+  "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps. (ocean palette variant)",
+  "max_colors": 16,
+  "min_feature_px": 1,
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": [
+      "back"
+    ],
+    "inner": {
+      "mode": "part",
+      "parts": [
+        "head",
+        "torso",
+        "arm_l",
+        "arm_r",
+        "leg_l",
+        "leg_r"
+      ]
+    }
+  },
+  "ramps": {
+    "outline": {
+      "base": [
+        24,
+        20,
+        28
+      ]
+    },
+    "steel": {
+      "shadow": [
+        55,
+        70,
+        59
+      ],
+      "base": [
+        106,
+        133,
+        112
+      ],
+      "light": [
+        180,
+        203,
+        184
+      ]
+    },
+    "red": {
+      "shadow": [
+        55,
+        19,
+        114
+      ],
+      "base": [
+        126,
+        46,
+        218
+      ],
+      "light": [
+        197,
+        114,
+        242
+      ]
+    },
+    "blue": {
+      "shadow": [
+        23,
+        114,
+        44
+      ],
+      "base": [
+        46,
+        218,
+        73
+      ],
+      "light": [
+        133,
+        242,
+        140
+      ]
+    },
+    "gold": {
+      "shadow": [
+        133,
+        19,
+        118
+      ],
+      "base": [
+        218,
+        38,
+        185
+      ],
+      "light": [
+        242,
+        123,
+        207
+      ]
+    },
+    "skin": {
+      "shadow": [
+        150,
+        90,
+        70
+      ],
+      "base": [
+        220,
+        160,
+        120
+      ],
+      "light": [
+        245,
+        200,
+        160
+      ]
+    }
+  }
+}

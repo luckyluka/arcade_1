@@ -1,0 +1,91 @@
+{
+  "recipe": "cape_short",
+  "version": "1.0.0",
+  "category": "humanoid/back",
+  "description": "Short cape with a straight hem, tucked behind the torso.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "back_gear",
+  "requires_anchors": [
+    "back"
+  ],
+  "parameters": {
+    "color": {
+      "type": "ramp",
+      "default": "red",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    },
+    "length": {
+      "type": "int",
+      "min": 6,
+      "max": 10,
+      "default": 8
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "poly",
+      "points": [
+        [
+          -11,
+          -1
+        ],
+        [
+          11,
+          -1
+        ],
+        [
+          12,
+          3
+        ],
+        [
+          12,
+          "$length"
+        ],
+        [
+          -12,
+          "$length"
+        ],
+        [
+          -12,
+          3
+        ]
+      ],
+      "fill": "$color.base"
+    },
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "rect",
+      "x": -11,
+      "y": 2,
+      "w": 2,
+      "h": "$length-2",
+      "fill": "$color.shadow"
+    },
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "rect",
+      "x": 9,
+      "y": 0,
+      "w": 2,
+      "h": 2,
+      "fill": "$color.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "color": "blue",
+      "length": 10
+    }
+  ]
+}

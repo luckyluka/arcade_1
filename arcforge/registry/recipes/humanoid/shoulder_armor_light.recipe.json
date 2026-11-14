@@ -1,0 +1,70 @@
+{
+  "recipe": "shoulder_armor_light",
+  "version": "1.0.0",
+  "category": "humanoid/torso",
+  "description": "Slim rounded pauldrons that leave more of the arms exposed than heavy shoulder armor.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "shoulder_gear",
+  "requires_anchors": [
+    "shoulder_l",
+    "shoulder_r"
+  ],
+  "parameters": {
+    "width": {
+      "type": "int",
+      "min": 5,
+      "max": 8,
+      "default": 6
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "shoulder_l",
+      "layer": "armor",
+      "shape": "ellipse",
+      "x": "-half($width)-1",
+      "y": -1,
+      "w": "$width",
+      "h": 4,
+      "fill": "$armor_ramp.base"
+    },
+    {
+      "anchor": "shoulder_l",
+      "layer": "armor",
+      "shape": "rect",
+      "x": "-half($width)",
+      "y": -1,
+      "w": "$width-1",
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    },
+    {
+      "anchor": "shoulder_r",
+      "layer": "armor",
+      "shape": "ellipse",
+      "x": 1,
+      "y": -1,
+      "w": "$width",
+      "h": 4,
+      "fill": "$armor_ramp.base"
+    },
+    {
+      "anchor": "shoulder_r",
+      "layer": "armor",
+      "shape": "rect",
+      "x": 1,
+      "y": -1,
+      "w": "$width-1",
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "width": 8
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "recipe": "axe_simple",
+  "version": "1.0.0",
+  "category": "humanoid/weapon",
+  "description": "Compact one-handed axe with a steel head and wooden-gold haft.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "weapon_main",
+  "requires_anchors": [
+    "hand_r"
+  ],
+  "parameters": {
+    "head_w": {
+      "type": "int",
+      "min": 4,
+      "max": 8,
+      "default": 6
+    },
+    "handle": {
+      "type": "int",
+      "min": 5,
+      "max": 9,
+      "default": 7
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "x": -1,
+      "y": "- $handle",
+      "w": 2,
+      "h": "$handle",
+      "fill": "gold.base"
+    },
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "poly",
+      "points": [
+        [
+          "- $head_w",
+          "- $handle"
+        ],
+        [
+          2,
+          "- $handle"
+        ],
+        [
+          2,
+          "- $handle+3"
+        ],
+        [
+          "- $head_w+2",
+          "- $handle+3"
+        ]
+      ],
+      "fill": "steel.base"
+    },
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "x": "- $head_w",
+      "y": "- $handle",
+      "w": 2,
+      "h": 3,
+      "fill": "steel.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "head_w": 8,
+      "handle": 9
+    }
+  ]
+}

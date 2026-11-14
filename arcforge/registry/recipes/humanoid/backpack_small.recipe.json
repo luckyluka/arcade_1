@@ -1,0 +1,66 @@
+{
+  "recipe": "backpack_small",
+  "version": "1.0.0",
+  "category": "humanoid/back",
+  "description": "Small square backpack mounted behind the torso with a top flap.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "back_gear",
+  "requires_anchors": [
+    "back"
+  ],
+  "parameters": {
+    "width": {
+      "type": "int",
+      "min": 4,
+      "max": 8,
+      "default": 6
+    },
+    "height": {
+      "type": "int",
+      "min": 5,
+      "max": 9,
+      "default": 7
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "rect",
+      "x": "- $width - 5",
+      "y": -2,
+      "w": "$width",
+      "h": "$height",
+      "fill": "$armor_ramp.shadow"
+    },
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "rect",
+      "x": "- $width - 4",
+      "y": -1,
+      "w": "$width-2",
+      "h": 1,
+      "fill": "$armor_ramp.light"
+    },
+    {
+      "anchor": "back",
+      "layer": "back",
+      "shape": "rect",
+      "x": "- $width - 5",
+      "y": -2,
+      "w": "$width",
+      "h": 2,
+      "fill": "$armor_ramp.base"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "width": 8,
+      "height": 9
+    }
+  ]
+}

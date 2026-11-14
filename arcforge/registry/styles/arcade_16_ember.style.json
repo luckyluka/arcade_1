@@ -1,0 +1,119 @@
+{
+  "style_pack": "arcade_16_ember",
+  "version": "1.0.0",
+  "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps. (ember palette variant)",
+  "max_colors": 16,
+  "min_feature_px": 1,
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": [
+      "back"
+    ],
+    "inner": {
+      "mode": "part",
+      "parts": [
+        "head",
+        "torso",
+        "arm_l",
+        "arm_r",
+        "leg_l",
+        "leg_r"
+      ]
+    }
+  },
+  "ramps": {
+    "outline": {
+      "base": [
+        24,
+        20,
+        28
+      ]
+    },
+    "steel": {
+      "shadow": [
+        58,
+        56,
+        74
+      ],
+      "base": [
+        111,
+        109,
+        140
+      ],
+      "light": [
+        188,
+        188,
+        214
+      ]
+    },
+    "red": {
+      "shadow": [
+        120,
+        33,
+        10
+      ],
+      "base": [
+        230,
+        90,
+        30
+      ],
+      "light": [
+        255,
+        178,
+        106
+      ]
+    },
+    "blue": {
+      "shadow": [
+        21,
+        14,
+        120
+      ],
+      "base": [
+        30,
+        31,
+        230
+      ],
+      "light": [
+        128,
+        141,
+        255
+      ]
+    },
+    "gold": {
+      "shadow": [
+        140,
+        136,
+        8
+      ],
+      "base": [
+        226,
+        230,
+        21
+      ],
+      "light": [
+        237,
+        255,
+        117
+      ]
+    },
+    "skin": {
+      "shadow": [
+        150,
+        90,
+        70
+      ],
+      "base": [
+        220,
+        160,
+        120
+      ],
+      "light": [
+        245,
+        200,
+        160
+      ]
+    }
+  }
+}

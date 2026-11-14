@@ -1,0 +1,79 @@
+{
+  "recipe": "hair_short",
+  "version": "1.0.0",
+  "category": "humanoid/head",
+  "description": "Short hair cap and side locks occupying the head gear slot.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "head_gear",
+  "requires_anchors": [
+    "head_center"
+  ],
+  "parameters": {
+    "color": {
+      "type": "ramp",
+      "default": "gold",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    },
+    "length": {
+      "type": "int",
+      "min": 2,
+      "max": 5,
+      "default": 3
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "head_center",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -6,
+      "y": -4,
+      "w": 12,
+      "h": 3,
+      "fill": "$color.base"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -6,
+      "y": -1,
+      "w": 2,
+      "h": "$length",
+      "fill": "$color.shadow"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": 4,
+      "y": -1,
+      "w": 2,
+      "h": "$length",
+      "fill": "$color.shadow"
+    },
+    {
+      "anchor": "head_center",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -4,
+      "y": -4,
+      "w": 3,
+      "h": 1,
+      "fill": "$color.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "color": "red",
+      "length": 5
+    }
+  ]
+}

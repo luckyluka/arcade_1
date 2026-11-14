@@ -1,0 +1,199 @@
+{
+  "archetype": "bat_flyer",
+  "version": "1.0.0",
+  "description": "Small flying bat enemy with a compact body and two flapping wings.",
+  "view": "front",
+  "canvas": {
+    "default": [
+      24,
+      16
+    ],
+    "supported": [
+      [
+        24,
+        16
+      ]
+    ]
+  },
+  "params": {
+    "body_ramp": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "blue",
+        "red",
+        "gold"
+      ]
+    }
+  },
+  "layers": [
+    "back",
+    "body",
+    "foreground",
+    "fx"
+  ],
+  "parts": {
+    "root": {
+      "shapes": []
+    },
+    "body": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 9,
+          "y": 5,
+          "w": 6,
+          "h": 8,
+          "fill": "$body_ramp.base"
+        },
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 11,
+          "y": 7,
+          "w": 1,
+          "h": 2,
+          "fill": "outline"
+        }
+      ]
+    },
+    "wing_l": {
+      "shapes": [
+        {
+          "shape": "poly",
+          "layer": "back",
+          "points": [
+            [
+              9,
+              7
+            ],
+            [
+              3,
+              3
+            ],
+            [
+              1,
+              6
+            ],
+            [
+              4,
+              10
+            ],
+            [
+              8,
+              11
+            ]
+          ],
+          "fill": "$body_ramp.shadow"
+        }
+      ]
+    },
+    "wing_r": {
+      "shapes": [
+        {
+          "shape": "poly",
+          "layer": "back",
+          "points": [
+            [
+              15,
+              7
+            ],
+            [
+              21,
+              3
+            ],
+            [
+              23,
+              6
+            ],
+            [
+              20,
+              10
+            ],
+            [
+              16,
+              11
+            ]
+          ],
+          "fill": "$body_ramp.shadow"
+        }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": {
+      "part": "root",
+      "at": [
+        12,
+        13
+      ]
+    },
+    "wing_l": {
+      "part": "wing_l",
+      "at": [
+        8,
+        8
+      ]
+    },
+    "wing_r": {
+      "part": "wing_r",
+      "at": [
+        16,
+        8
+      ]
+    },
+    "mouth": {
+      "part": "body",
+      "at": [
+        12,
+        12
+      ]
+    }
+  },
+  "animations": {
+    "idle": {
+      "fps": 10,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "wing_l": [
+              0,
+              -2
+            ],
+            "wing_r": [
+              0,
+              -2
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "wing_l": [
+              0,
+              1
+            ],
+            "wing_r": [
+              0,
+              1
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "collision": {
+    "hurtbox": {
+      "rect": [
+        4,
+        4,
+        16,
+        9
+      ]
+    }
+  }
+}

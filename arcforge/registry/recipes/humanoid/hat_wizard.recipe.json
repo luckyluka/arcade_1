@@ -1,0 +1,80 @@
+{
+  "recipe": "hat_wizard",
+  "version": "1.0.0",
+  "category": "humanoid/head",
+  "description": "Pointed wizard hat with a broad brim and selectable cloth ramp.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "head_gear",
+  "requires_anchors": [
+    "head_center",
+    "head_top"
+  ],
+  "parameters": {
+    "color": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    },
+    "height": {
+      "type": "int",
+      "min": 3,
+      "max": 6,
+      "default": 5
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "head_top",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -8,
+      "y": 0,
+      "w": 16,
+      "h": 2,
+      "fill": "$color.shadow"
+    },
+    {
+      "anchor": "head_top",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          -5,
+          1
+        ],
+        [
+          0,
+          "-$height+4"
+        ],
+        [
+          5,
+          1
+        ]
+      ],
+      "fill": "$color.base"
+    },
+    {
+      "anchor": "head_top",
+      "layer": "foreground",
+      "shape": "rect",
+      "x": -2,
+      "y": 0,
+      "w": 4,
+      "h": 1,
+      "fill": "$color.light"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "color": "red",
+      "height": 6
+    }
+  ]
+}

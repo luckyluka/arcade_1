@@ -1,0 +1,119 @@
+{
+  "style_pack": "arcade_16_mint",
+  "version": "1.0.0",
+  "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps. (mint palette variant)",
+  "max_colors": 16,
+  "min_feature_px": 1,
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": [
+      "back"
+    ],
+    "inner": {
+      "mode": "part",
+      "parts": [
+        "head",
+        "torso",
+        "arm_l",
+        "arm_r",
+        "leg_l",
+        "leg_r"
+      ]
+    }
+  },
+  "ramps": {
+    "outline": {
+      "base": [
+        24,
+        20,
+        28
+      ]
+    },
+    "steel": {
+      "shadow": [
+        74,
+        60,
+        66
+      ],
+      "base": [
+        140,
+        115,
+        126
+      ],
+      "light": [
+        214,
+        192,
+        203
+      ]
+    },
+    "red": {
+      "shadow": [
+        56,
+        120,
+        30
+      ],
+      "base": [
+        99,
+        230,
+        66
+      ],
+      "light": [
+        136,
+        255,
+        133
+      ]
+    },
+    "blue": {
+      "shadow": [
+        120,
+        34,
+        71
+      ],
+      "base": [
+        230,
+        66,
+        149
+      ],
+      "light": [
+        255,
+        152,
+        214
+      ]
+    },
+    "gold": {
+      "shadow": [
+        32,
+        140,
+        82
+      ],
+      "base": [
+        59,
+        230,
+        147
+      ],
+      "light": [
+        142,
+        255,
+        214
+      ]
+    },
+    "skin": {
+      "shadow": [
+        150,
+        90,
+        70
+      ],
+      "base": [
+        220,
+        160,
+        120
+      ],
+      "light": [
+        245,
+        200,
+        160
+      ]
+    }
+  }
+}

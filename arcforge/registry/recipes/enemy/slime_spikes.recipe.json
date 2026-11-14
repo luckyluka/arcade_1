@@ -1,0 +1,113 @@
+{
+  "recipe": "slime_spikes",
+  "version": "1.0.0",
+  "category": "enemy/back",
+  "description": "Back spikes whose count directly controls how many teeth are emitted.",
+  "applies_to": [
+    "slime_walker"
+  ],
+  "slot": "back_gear",
+  "requires_anchors": [
+    "back"
+  ],
+  "parameters": {
+    "count": {
+      "type": "int",
+      "min": 1,
+      "max": 4,
+      "default": 2
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "back",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          -7,
+          -1
+        ],
+        [
+          -6,
+          -4
+        ],
+        [
+          -5,
+          -1
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$count >= 1"
+    },
+    {
+      "anchor": "back",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          -3,
+          -1
+        ],
+        [
+          -2,
+          -5
+        ],
+        [
+          -1,
+          -1
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$count >= 2"
+    },
+    {
+      "anchor": "back",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          1,
+          -1
+        ],
+        [
+          2,
+          -5
+        ],
+        [
+          3,
+          -1
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$count >= 3"
+    },
+    {
+      "anchor": "back",
+      "layer": "foreground",
+      "shape": "poly",
+      "points": [
+        [
+          5,
+          -1
+        ],
+        [
+          6,
+          -4
+        ],
+        [
+          7,
+          -1
+        ]
+      ],
+      "fill": "$body_ramp.light",
+      "when": "$count >= 4"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "count": 4
+    }
+  ]
+}

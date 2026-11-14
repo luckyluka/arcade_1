@@ -1,0 +1,119 @@
+{
+  "style_pack": "arcade_16_dusk",
+  "version": "1.0.0",
+  "description": "16-colour chunky arcade look: one outline colour plus five 3-tone ramps. (dusk palette variant)",
+  "max_colors": 16,
+  "min_feature_px": 1,
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": [
+      "back"
+    ],
+    "inner": {
+      "mode": "part",
+      "parts": [
+        "head",
+        "torso",
+        "arm_l",
+        "arm_r",
+        "leg_l",
+        "leg_r"
+      ]
+    }
+  },
+  "ramps": {
+    "outline": {
+      "base": [
+        24,
+        20,
+        28
+      ]
+    },
+    "steel": {
+      "shadow": [
+        54,
+        63,
+        67
+      ],
+      "base": [
+        103,
+        121,
+        126
+      ],
+      "light": [
+        173,
+        189,
+        193
+      ]
+    },
+    "red": {
+      "shadow": [
+        108,
+        27,
+        77
+      ],
+      "base": [
+        207,
+        60,
+        138
+      ],
+      "light": [
+        230,
+        120,
+        159
+      ]
+    },
+    "blue": {
+      "shadow": [
+        30,
+        90,
+        108
+      ],
+      "base": [
+        60,
+        184,
+        207
+      ],
+      "light": [
+        136,
+        223,
+        230
+      ]
+    },
+    "gold": {
+      "shadow": [
+        126,
+        42,
+        29
+      ],
+      "base": [
+        207,
+        81,
+        53
+      ],
+      "light": [
+        230,
+        159,
+        128
+      ]
+    },
+    "skin": {
+      "shadow": [
+        150,
+        90,
+        70
+      ],
+      "base": [
+        220,
+        160,
+        120
+      ],
+      "light": [
+        245,
+        200,
+        160
+      ]
+    }
+  }
+}

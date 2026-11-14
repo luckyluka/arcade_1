@@ -1,0 +1,87 @@
+{
+  "recipe": "sword_plain",
+  "version": "1.0.0",
+  "category": "humanoid/weapon",
+  "description": "Simple steel sword with a straight blade, guard and grip; no glow.",
+  "applies_to": [
+    "humanoid_hero"
+  ],
+  "slot": "weapon_main",
+  "requires_anchors": [
+    "hand_r"
+  ],
+  "parameters": {
+    "length": {
+      "type": "int",
+      "min": 7,
+      "max": 16,
+      "default": 11
+    },
+    "thickness": {
+      "type": "int",
+      "min": 1,
+      "max": 3,
+      "default": 2
+    },
+    "angle": {
+      "type": "int",
+      "min": -15,
+      "max": 15,
+      "default": 0
+    }
+  },
+  "geometry": [
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "rotate": "$angle",
+      "x": "-floor($thickness/2)",
+      "y": "-4-$length",
+      "w": "$thickness",
+      "h": "$length",
+      "fill": "steel.base"
+    },
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "rotate": "$angle",
+      "x": "0",
+      "y": "-4-$length",
+      "w": 1,
+      "h": "$length",
+      "fill": "steel.light",
+      "when": "$thickness >= 2"
+    },
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "rotate": "$angle",
+      "x": -4,
+      "y": -4,
+      "w": 8,
+      "h": 2,
+      "fill": "gold.base"
+    },
+    {
+      "anchor": "hand_r",
+      "layer": "held",
+      "shape": "rect",
+      "x": -1,
+      "y": -2,
+      "w": 3,
+      "h": 3,
+      "fill": "steel.shadow"
+    }
+  ],
+  "examples": [
+    {},
+    {
+      "length": 16,
+      "thickness": 3,
+      "angle": 15
+    }
+  ]
+}

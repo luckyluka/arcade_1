@@ -1,0 +1,180 @@
+{
+  "archetype": "beetle_walker",
+  "version": "1.0.0",
+  "description": "Armoured beetle enemy with a domed shell, legs and a simple walk cycle.",
+  "view": "front",
+  "canvas": {
+    "default": [
+      24,
+      16
+    ],
+    "supported": [
+      [
+        24,
+        16
+      ]
+    ]
+  },
+  "params": {
+    "shell_ramp": {
+      "type": "ramp",
+      "default": "red",
+      "allow": [
+        "red",
+        "blue",
+        "gold"
+      ]
+    }
+  },
+  "layers": [
+    "back",
+    "body",
+    "foreground",
+    "fx"
+  ],
+  "symmetric": true,
+  "parts": {
+    "root": {
+      "shapes": []
+    },
+    "body": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 5,
+          "y": 5,
+          "w": 14,
+          "h": 8,
+          "fill": "$shell_ramp.base"
+        },
+        {
+          "shape": "rect",
+          "layer": "body",
+          "x": 7,
+          "y": 10,
+          "w": 10,
+          "h": 2,
+          "fill": "$shell_ramp.shadow"
+        },
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 11,
+          "y": 6,
+          "w": 2,
+          "h": 4,
+          "fill": "$shell_ramp.light"
+        }
+      ]
+    },
+    "legs_l": {
+      "shapes": [
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 3,
+          "y": 10,
+          "w": 3,
+          "h": 2,
+          "fill": "outline"
+        },
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 4,
+          "y": 13,
+          "w": 3,
+          "h": 1,
+          "fill": "outline"
+        }
+      ]
+    },
+    "legs_r": {
+      "shapes": [
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 18,
+          "y": 10,
+          "w": 3,
+          "h": 2,
+          "fill": "outline"
+        },
+        {
+          "shape": "rect",
+          "layer": "foreground",
+          "x": 17,
+          "y": 13,
+          "w": 3,
+          "h": 1,
+          "fill": "outline"
+        }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": {
+      "part": "root",
+      "at": [
+        12,
+        13
+      ]
+    },
+    "top": {
+      "part": "body",
+      "at": [
+        12,
+        5
+      ]
+    }
+  },
+  "animations": {
+    "walk": {
+      "fps": 8,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "legs_l": [
+              0,
+              -1
+            ],
+            "legs_r": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "offsets": {}
+        },
+        {
+          "offsets": {
+            "legs_l": [
+              0,
+              1
+            ],
+            "legs_r": [
+              0,
+              -1
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "collision": {
+    "hurtbox": {
+      "rect": [
+        5,
+        5,
+        14,
+        8
+      ]
+    }
+  }
+}
