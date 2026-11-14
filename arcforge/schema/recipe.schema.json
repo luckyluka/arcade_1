@@ -90,7 +90,8 @@
         "max": { "type": ["number", "string"] },
         "shapes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/child_shape" } },
         "file": { "type": "string" },
-        "flip": { "enum": ["x", "y"] }
+        "flip": { "enum": ["x", "y"] },
+        "frame": { "type": "integer", "minimum": 0, "description": "2.1: px-2 frame to draw (default 0)." }
       },
       "allOf": [
         { "if": { "required": ["shape"], "properties": { "shape": { "enum": ["rect", "ellipse"] } } },
@@ -131,7 +132,8 @@
         "max": { "type": ["number", "string"] },
         "shapes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/child_shape" } },
         "file": { "type": "string" },
-        "flip": { "enum": ["x", "y"] }
+        "flip": { "enum": ["x", "y"] },
+        "frame": { "type": "integer", "minimum": 0, "description": "2.1: px-2 frame to draw (default 0)." }
       },
       "allOf": [
         { "if": { "required": ["shape"], "properties": { "shape": { "enum": ["rect", "ellipse"] } } },

@@ -1,0 +1,15 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "t_px_frames",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: the fragment declares frames 3 but ships only frame blocks 0 and 1 (E_PX_FRAMES)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_hero" },
+  "custom": [
+    { "id": "badf", "type": "px_fragment", "file": "fragments/bad_frames.px", "anchor": "hand_l", "layer": "foreground" }
+  ]
+}

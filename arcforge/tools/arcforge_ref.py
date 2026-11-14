@@ -222,16 +222,29 @@ def point_in_poly(pts, cx, cy):
 # .px fragments
 # --------------------------------------------------------------------------
 class PxError(Exception):
-    def __init__(self, line, msg):
+    def __init__(self, line, msg, code="E_PX_PARSE"):
         super().__init__(msg)
         self.line = line
         self.msg = msg
+        self.code = code
 
 
 def parse_px(text):
-    out = {"name": None, "size": None, "anchors": {}, "legend": {}, "rows": []}
+    """Parse a `.px` fragment (v1 or v2, spec-next 02 §G).
+
+    v1: `rows` block after the shared header. v2: `px 2`, a declared
+    `frames N`, and `frame i` blocks; size, legend and anchor are shared by
+    every frame. File-grammar violations raise PxError with e.code —
+    E_PX_FRAMES for the frame protocol, E_PX_PARSE otherwise. Whether a
+    *consumer* may select a given frame is checked by the caller, against
+    the shape's path, after this returns."""
+    out = {"name": None, "size": None, "anchors": {}, "legend": {}, "rows": [],
+           "version": 1, "frames": None, "frame_count": 1, "fps": None}
     block = None
+    frame_idx = None
     seen_header = False
+    declared = None
+    raw_frames = {}
     for ln, raw in enumerate(text.splitlines(), 1):
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
@@ -240,18 +253,37 @@ def parse_px(text):
             parts = raw.split()
             kw = parts[0]
             if kw == "px":
-                if parts[1:] != ["1"]:
-                    raise PxError(ln, "unsupported px version (expected 'px 1')")
+                if parts[1:] not in (["1"], ["2"]):
+                    raise PxError(ln, "unsupported px version (expected 'px 1' or 'px 2')")
+                out["version"] = int(parts[1])
                 seen_header = True
             elif not seen_header:
-                raise PxError(ln, "first statement must be 'px 1'")
+                raise PxError(ln, "first statement must be 'px 1' or 'px 2'")
             elif kw == "name" and len(parts) == 2:
                 out["name"] = parts[1]
             elif kw == "size" and len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
                 out["size"] = (int(parts[1]), int(parts[2]))
             elif kw == "anchor" and len(parts) == 4 and parts[2].lstrip("-").isdigit() and parts[3].lstrip("-").isdigit():
                 out["anchors"][parts[1]] = (int(parts[2]), int(parts[3]))
+            elif kw == "frames" and len(parts) == 2 and parts[1].isdigit():
+                if out["version"] == 1:
+                    raise PxError(ln, "'frames N' requires 'px 2'", code="E_PX_FRAMES")
+                declared = int(parts[1])
+            elif kw == "fps" and len(parts) == 2 and parts[1].isdigit():
+                if out["version"] == 1:
+                    raise PxError(ln, "'fps' requires 'px 2'", code="E_PX_FRAMES")
+                out["fps"] = int(parts[1])
+            elif kw == "frame" and len(parts) == 2 and parts[1].isdigit():
+                if out["version"] == 1:
+                    raise PxError(ln, "'frame i' blocks require 'px 2'", code="E_PX_FRAMES")
+                frame_idx = int(parts[1])
+                if frame_idx in raw_frames:
+                    raise PxError(ln, f"duplicate 'frame {frame_idx}' block", code="E_PX_FRAMES")
+                raw_frames[frame_idx] = []
+                block = "frame"
             elif kw in ("legend", "rows") and len(parts) == 1:
+                if kw == "rows" and out["version"] == 2:
+                    raise PxError(ln, "'px 2' uses 'frame i' blocks, not 'rows'", code="E_PX_FRAMES")
                 block = kw
             else:
                 raise PxError(ln, f"unknown or malformed statement {raw.strip()!r}")
@@ -264,21 +296,38 @@ def parse_px(text):
                 out["legend"][p[0]] = p[1]
             elif block == "rows":
                 out["rows"].append((ln, body))
+            elif block == "frame":
+                raw_frames[frame_idx].append((ln, body))
             else:
                 raise PxError(ln, "indented line outside a block")
     if not seen_header:
-        raise PxError(1, "missing 'px 1' header")
+        raise PxError(1, "missing 'px 1' or 'px 2' header")
     if out["size"] is None:
         raise PxError(1, "missing 'size W H'")
+    if out["version"] == 2:
+        if declared is None:
+            raise PxError(1, "px 2 requires 'frames N'", code="E_PX_FRAMES")
+        if declared < 1:
+            raise PxError(1, f"'frames {declared}' must be at least 1", code="E_PX_FRAMES")
+        if sorted(raw_frames) != list(range(declared)):
+            raise PxError(1, f"'frames {declared}' but frame blocks found for {sorted(raw_frames)} "
+                             f"(need one each for 0..{declared - 1})", code="E_PX_FRAMES")
+        out["frames"] = [raw_frames[i] for i in range(declared)]
+        out["frame_count"] = declared
+        frame_sets = out["frames"]
+    else:
+        frame_sets = [out["rows"]]
     w, h = out["size"]
-    if len(out["rows"]) != h:
-        raise PxError(out["rows"][0][0] if out["rows"] else 1, f"expected {h} rows, found {len(out['rows'])}")
-    for ln, row in out["rows"]:
-        if len(row) != w:
-            raise PxError(ln, f"row has {len(row)} pixels, expected {w}")
-        for ch in row:
-            if ch not in out["legend"]:
-                raise PxError(ln, f"pixel {ch!r} not in legend")
+    for fi, rows in enumerate(frame_sets):
+        if len(rows) != h:
+            raise PxError(rows[0][0] if rows else 1,
+                          f"frame {fi}: expected {h} rows, found {len(rows)}")
+        for ln, row in rows:
+            if len(row) != w:
+                raise PxError(ln, f"frame {fi}: row has {len(row)} pixels, expected {w}")
+            for ch in row:
+                if ch not in out["legend"]:
+                    raise PxError(ln, f"pixel {ch!r} not in legend")
     if "attach" not in out["anchors"]:
         raise PxError(1, "missing 'anchor attach X Y'")
     ax, ay = out["anchors"]["attach"]
@@ -534,9 +583,11 @@ def build_line(sh, env, at, li, fill_str, ramps, swap=None):
 
 
 def build_px(sh, g, at, li, path):
-    """`px {file, flip?}` (spec 02 §C): a fixed .px fragment inside a shape
-    list; `flip` mirrors the pixel offsets about the fragment's attach pixel.
-    File and legend failures reuse the custom-fragment codes."""
+    """`px {file, frame?, flip?}` (spec 02 §C + §G): a fixed .px fragment
+    inside a shape list; `frame` (default 0) selects a px-2 frame, `flip`
+    mirrors the pixel offsets about the fragment's attach pixel. File and
+    legend failures reuse the custom-fragment codes; an unselectable frame
+    is E_PX_FRAMES at the shape's /frame."""
     fpath = Path(g["base_dir"]) / sh["file"]
     if not fpath.exists():
         g["diags"].append(D("E_PX_NOT_FOUND", path + "/file", f"fragment file not found: {sh['file']}"))
@@ -544,7 +595,13 @@ def build_px(sh, g, at, li, path):
     try:
         px = parse_px(fpath.read_text())
     except PxError as e:
-        g["diags"].append(D("E_PX_PARSE", path + "/file", f"{sh['file']} line {e.line}: {e.msg}"))
+        g["diags"].append(D(e.code, path + "/file", f"{sh['file']} line {e.line}: {e.msg}"))
+        return []
+    frame = sh.get("frame", 0)
+    if not 0 <= frame < px["frame_count"]:
+        g["diags"].append(D("E_PX_FRAMES", path + "/frame",
+                            f"fragment '{sh['file']}' has {px['frame_count']} frame(s), requested frame {frame}",
+                            observed=frame, expected=f"0..{px['frame_count'] - 1}"))
         return []
     legend = {}
     bad = False
@@ -558,9 +615,10 @@ def build_px(sh, g, at, li, path):
             bad = True
     if bad:
         return []
+    rows = px["rows"] if px["version"] == 1 else px["frames"][frame]
     pxs = []
     fax, fay = px["anchors"]["attach"]
-    for r, (_, row) in enumerate(px["rows"]):
+    for r, (_, row) in enumerate(rows):
         for col, ch in enumerate(row):
             if ch in legend:
                 pxs.append((col - fax, r - fay, legend[ch]))
@@ -949,7 +1007,13 @@ def compile_asset(asset, reg, base_dir):
         try:
             px = parse_px(fpath.read_text())
         except PxError as e:
-            diags.append(D("E_PX_PARSE", cp + "/file", f"{c['file']} line {e.line}: {e.msg}"))
+            diags.append(D(e.code, cp + "/file", f"{c['file']} line {e.line}: {e.msg}"))
+            continue
+        frame = c.get("frame", 0)
+        if not 0 <= frame < px["frame_count"]:
+            diags.append(D("E_PX_FRAMES", cp + "/frame",
+                           f"fragment '{c['file']}' has {px['frame_count']} frame(s), requested frame {frame}",
+                           observed=frame, expected=f"0..{px['frame_count'] - 1}"))
             continue
         legend = {}
         bad = False
@@ -966,7 +1030,8 @@ def compile_asset(asset, reg, base_dir):
         a = anchors[c["anchor"]]
         pxs = []
         fax, fay = px["anchors"]["attach"]
-        for r, (_, row) in enumerate(px["rows"]):
+        rows = px["rows"] if px["version"] == 1 else px["frames"][frame]
+        for r, (_, row) in enumerate(rows):
             for col, ch in enumerate(row):
                 if ch in legend:
                     pxs.append((col - fax, r - fay, legend[ch]))

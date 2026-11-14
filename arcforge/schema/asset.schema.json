@@ -93,6 +93,7 @@
           "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
           "type": { "const": "px_fragment" },
           "file": { "type": "string" },
+          "frame": { "type": "integer", "minimum": 0, "description": "2.1: px-2 frame to draw (default 0)." },
           "anchor": { "type": "string", "pattern": "^[a-z0-9_]+$" },
           "layer": { "type": "string", "pattern": "^[a-z0-9_]+$" }
         }

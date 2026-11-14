@@ -36,10 +36,11 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
    iteration over ids); `arcforge/tests/invalid/{extends_cycle, extends_path,
    extends_depth, extends_depth2..4, duplicate_id, unknown_variant,
    palette_swap_ramp}.json` + `expectations.json`; `arcforge/docs/LANGUAGE.md`.
-3. `arcforge/tools/arcforge_ref.py` (`parse_px` px-2, `px` shape `frame`);
-   `arcforge/schema/{asset,recipe}.schema.json` (`frame` fields); fixture
-   `tests/invalid/px_frames.v2` + `.px` file + `expectations.json`;
-   `arcforge/docs/{LANGUAGE, PX_FORMAT}.md`.
+3. `arcforge/tools/arcforge_ref.py` (`parse_px` px-2, `px` shape + `custom`
+   `frame`); `arcforge/schema/{asset,recipe,archetype}.schema.json` (`frame`
+   fields); fixture `tests/invalid/px_frames.json` +
+   `tests/invalid/fragments/bad_frames.px` + `expectations.json`;
+   `arcforge/docs/{LANGUAGE,PX_FORMAT}.md`.
 4. `arcforge/schema/archetype.schema.json` (frame `params`/`swap`/`hold`,
    `parts.*.variants`); `arcforge/tools/arcforge_ref.py` (per-frame env override,
    part shape-set swap, hold → exported durations, atlas `facing`);

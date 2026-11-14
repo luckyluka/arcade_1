@@ -1,0 +1,16 @@
+px 2
+name bad_frames
+size 4 3
+frames 3
+anchor attach 0 0
+legend
+  . transparent
+  r red.base
+frame 0
+  rrrr
+  r..r
+  rrrr
+frame 1
+  ....
+  .rr.
+  ....
