@@ -15,6 +15,9 @@
 | 11 | Image models only as optional `.px` producers | Keeps the core deterministic |
 | 12 | Go port replaced by a standalone C compiler (M4) | Embedding in the arcade1 toolchain, dependency-free binary |
 | 13 | Keyed recipe geometry: one array = shared, object keyed by archetype name | One recipe file serves fixed-art and size-parametric bodies; a key missing from `applies_to` or vice versa is `E_RECIPE_GEOMETRY`, never a silent drop |
+| 14 | §H quality assertions are structural and per asset (7 of 9 in X1) | Same principle as #10: the compiler knows what it placed. `contrast_min`/`silhouette_distinct` need project data (backgrounds, peer assets) and wait for the X4 project file |
+| 15 | `min_feature` counts every compiled shape | `affects: ["detail"]` (02 §D) is documentation-only — no runtime marker exists — so the conservative reading fails loudly instead of silently skipping art |
+| 16 | The X1 showcase is `extends` + one variant, not a new base example | Exercises §E (extends, variants, palette_swap) on real files while every shipped example and golden stays byte-identical; the variant re-points the document at an inventory archetype |
 
 ## v1 spec → v2 fate
 | v1 element | fate |

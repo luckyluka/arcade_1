@@ -1,0 +1,59 @@
+{
+  "archetype": "x1_showcase",
+  "version": "1.0.0",
+  "description": "X1 showcase tile: a full-bleed 26x28 cell carrying the 2.1 shape vocabulary (mirror, line, repeat) and frame tracks/swap/hold. Inventory asset for examples/x1_showcase.json, not a game archetype; its full-bleed cells are what the seamless/cell_fill assertions can assert.",
+  "view": "front",
+  "canvas": { "default": [26, 28], "supported": [[26, 28]] },
+  "params": {
+    "accent": { "type": "enum", "values": ["red", "gold", "blue"], "default": "red" },
+    "dot_w": { "type": "int", "min": 2, "max": 6, "default": 3 },
+    "band_pct": { "type": "percent", "of": "height", "default": 40, "min": 10, "max": 70 }
+  },
+  "layers": ["body"],
+  "parts": {
+    "root": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": 0, "y": 0, "w": "$W", "h": "$H", "fill": "steel.base" },
+        { "shape": "rect", "layer": "body", "x": 0, "y": "$H - $band_pct", "w": "$W", "h": "$band_pct",
+          "fill": "steel.shadow" },
+        { "shape": "line", "layer": "body", "x1": 1, "y1": 6, "x2": 24, "y2": 6,
+          "thickness": 3, "fill": "steel.light" },
+        { "shape": "rect", "layer": "body", "x": 4, "y": 18, "w": "$dot_w", "h": 3, "fill": "$accent.base",
+          "mirror": "x" },
+        { "shape": "repeat", "var": "k", "count": 4, "max": 8, "step_x": 5, "step_y": 0,
+          "shapes": [
+            { "shape": "rect", "layer": "body", "x": 3, "y": 11, "w": 3, "h": 3, "fill": "steel.light" }
+          ] }
+      ],
+      "variants": {
+        "alt": [
+          { "shape": "rect", "layer": "body", "x": 0, "y": 0, "w": "$W", "h": "$H", "fill": "steel.base" },
+          { "shape": "rect", "layer": "body", "x": 0, "y": 0, "w": "$W", "h": 3, "fill": "gold.base" },
+          { "shape": "line", "layer": "body", "x1": 1, "y1": 21, "x2": 24, "y2": 21,
+            "thickness": 3, "fill": "steel.shadow" },
+          { "shape": "repeat", "var": "k", "count": 6, "max": 8, "step_x": 4, "step_y": 0,
+            "shapes": [
+              { "shape": "rect", "layer": "body", "x": 2, "y": 8, "w": 2, "h": 2, "fill": "red.base" }
+            ] }
+        ]
+      }
+    }
+  },
+  "anchors": {
+    "origin": { "part": "root", "at": [13, 27] },
+    "badge": { "part": "root", "at": [6, 6] },
+    "badge0": { "part": "root", "at": [6, 24] }
+  },
+  "animations": {
+    "idle": { "fps": 8, "loop": true, "frames": [
+      { "offsets": {}, "hold": 3 },
+      { "offsets": {}, "params": { "height": 99, "dot_w": 6, "accent": "blue", "band_pct": 70 } },
+      { "offsets": {}, "swap": { "root": "alt" } }
+    ] },
+    "walk": { "fps": 8, "loop": true, "frames": [ { "offsets": {} }, { "offsets": {} } ] },
+    "attack": { "fps": 8, "loop": true, "frames": [ { "offsets": {} }, { "offsets": {} } ] }
+  },
+  "size": { "height": { "min": 20, "max": 40, "default": 28 } },
+  "metrics": [["cx", "floor($W/2)"]],
+  "min_cell": [26, 28]
+}

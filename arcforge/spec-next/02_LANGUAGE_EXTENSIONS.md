@@ -2,13 +2,20 @@
 
 > PROPOSED (v2.1). Document version `"arcforge": "2.1"`; `"2.0"` documents compile unchanged.
 
-> **Status (X0)**: implemented — A (variables, size parameters, metrics, recipe `locals`,
-> functions `odd/even/half`; not `sign`, not repeat variables), B, D (`percent`; not
-> `affects`), I (per-archetype layer sets), and J's implemented subset: `E_CELL_TOO_SMALL`,
-> `E_SIZE_RANGE`, `E_UNKNOWN_SIZE_PARAM`, `E_CLIPPED`, `E_RECIPE_SIZE_RANGE`,
-> `W_FEATURE_TOO_SMALL`, `W_OCCLUDED` — plus `E_RECIPE_GEOMETRY` and `E_BODY_ASYMMETRY`,
-> which are not in this list. Not implemented: C (`mirror`, `line`, `repeat`, recipe `px`),
-> E, F, G, H. The document stays PROPOSED until every section is.
+> **Status (X0, X1)**: implemented — A (variables, size parameters, metrics, recipe `locals`,
+> functions `odd/even/half`; not `sign`), B, C, D (`percent`, repeat variables; not `affects`),
+> E (ids unique **per file** until the X4 project file makes them project-wide), F (parameter
+> tracks, variant frames, `hold`, atlas `facing`; not the required-template
+> list), G (the `frame` binding for px-2 is an addition beyond this prose), H except
+> `contrast_min`/`silhouette_distinct` (they need the project file → X4), I (per-archetype
+> layer sets), and J's implemented subset: `E_CELL_TOO_SMALL`, `E_SIZE_RANGE`,
+> `E_UNKNOWN_SIZE_PARAM`, `E_CLIPPED`, `E_RECIPE_SIZE_RANGE`, `E_REPEAT_BOUND`,
+> `E_EXTENDS_CYCLE`, `E_DUPLICATE_ID`, `E_PX_FRAMES`, `E_TRACK_PARAM`, `W_FEATURE_TOO_SMALL`,
+> `W_OCCLUDED` — plus codes this document does not list (reported as such): `E_RECIPE_GEOMETRY`,
+> `E_BODY_ASYMMETRY`, `E_SHAPE_PARAM`, `E_EXTENDS_PATH`, `E_EXTENDS_DEPTH`,
+> `E_UNKNOWN_VARIANT`, `E_UNKNOWN_RAMP`, `E_UNKNOWN_SWAP_SET`. The document stays PROPOSED
+> until every section is (remaining gaps: `affects`, `sign`, the required-template list,
+> `contrast_min`, `silhouette_distinct`).
 
 ## A. Expressions
 Additions to the v2.0 language: variables `$W $H $class $class_idx`, size parameters, metrics, recipe `locals`, repeat variables; functions `odd even half sign`; string `in` is **not** added (keep the language small). Still total, no loops, no user functions. Locals: recipe `"locals": [["boot_h","max(2, floor($leg_h/3)+1)"]]`, ordered, integer-floored, visible only inside the recipe.

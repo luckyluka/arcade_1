@@ -1495,6 +1495,90 @@ def run_tests(ir, renders):
         elif a == "frame_count":
             n = sum(len(fs) for k, fs in renders.items() if k != "base")
             res(i, t, n <= t["max"], n, f"<= {t['max']}")
+        # ---- spec-next 02 §H (X1) ----------------------------------------
+        elif a == "baseline_stable":
+            an = ir["anchors"].get(t.get("anchor"))
+            if an is None:
+                res(i, t, False, t.get("anchor"), sorted(ir["anchors"]), "unknown anchor")
+                continue
+            ys = [an["at"][1] + part_offset(f["offsets"], an["part"])[1] for f in frames]
+            spread = max(ys) - min(ys)
+            res(i, t, spread <= t["max"], spread, f"<= {t['max']}",
+                f"anchor '{t.get('anchor')}' floats {spread}px between frames (feet must not float)")
+        elif a == "pivot_stable":
+            org = ir["anchors"].get("origin")
+            if org is None:
+                res(i, t, False, "origin", sorted(ir["anchors"]), "no 'origin' anchor")
+                continue
+            bx, by = org["at"]
+            disp = 0
+            for f in frames:
+                ox, oy = part_offset(f["offsets"], org["part"])
+                disp = max(disp, abs(org["at"][0] + ox - bx), abs(org["at"][1] + oy - by))
+            res(i, t, disp <= t["max"], disp, f"<= {t['max']}",
+                "the origin anchor drifts from its base-frame position")
+        elif a == "min_feature":
+            # `detail` (02 §E `affects: ["detail"]`) is documentation-only — no
+            # runtime marker exists — so every compiled shape counts (base
+            # geometry plus every frame state).
+            dims = []
+            for pool in [ir["drawables"]] + list((ir.get("states") or {}).values()):
+                for d in pool:
+                    w, h = shape_extent(d)
+                    if w and h:
+                        dims.append(min(w, h))
+            obs = min(dims) if dims else 0
+            res(i, t, obs >= t["min"], obs, f">= {t['min']}",
+                "a compiled shape is thinner than the minimum (all shapes count: the 'detail' marker is documentation-only)")
+        elif a == "cell_fill":
+            ratios = [len(f["grid"]) / (W * H) for f in frames]
+            lo, hi = round(min(ratios), 4), round(max(ratios), 4)
+            res(i, t, lo >= t.get("min", 0) and hi <= t.get("max", 1), [lo, hi],
+                f"{t.get('min', 0)}..{t.get('max', 1)}", "cell opacity ratio outside the declared band")
+        elif a == "seamless":
+            # tileable borders must be opaque and free of outline pixels,
+            # in every rendered frame (02 §H)
+            olr = ir["style"]["outline"]["ramp"]
+            violations = 0
+            for f in frames:
+                g = f["grid"]
+                cells = []
+                if "x" in t["axes"]:
+                    cells += [(0, y) for y in range(H)] + [(W - 1, y) for y in range(H)]
+                if "y" in t["axes"]:
+                    cells += [(x, 0) for x in range(W)] + [(x, H - 1) for x in range(W)]
+                for c in cells:
+                    v = g.get(c)
+                    if v is None or v[3] == olr:
+                        violations += 1
+            res(i, t, violations == 0, violations, "0",
+                "tileable borders carry transparent or outline pixels")
+        elif a == "jitter_max":
+            # centre-of-mass step between consecutive frames, per animation
+            worst = 0
+            for name, fs in renders.items():
+                if name == "base":
+                    continue
+                coms = []
+                for f in fs:
+                    n = len(f["grid"])
+                    if n:
+                        coms.append((sum(x for x, _ in f["grid"]) // n, sum(y for _, y in f["grid"]) // n))
+                for pa, pb in zip(coms, coms[1:]):
+                    worst = max(worst, abs(pb[0] - pa[0]), abs(pb[1] - pa[1]))
+            res(i, t, worst <= t["max"], worst, f"<= {t['max']}",
+                "centre of mass jumps between consecutive frames")
+        elif a == "orphan_pixels":
+            worst, where = 0, None
+            for name, fs in renders.items():
+                for fi, f in enumerate(fs):
+                    g = f["grid"]
+                    c = sum(1 for x, y in g
+                            if all((x + dx, y + dy) not in g for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))))
+                    if c > worst:
+                        worst, where = c, (name, fi)
+            res(i, t, worst <= t["max"], worst, f"<= {t['max']}",
+                f"isolated single pixel(s) in frame {where}")
 
     # implicit checks, always on
     cols = {(v[3], v[4]) for f in frames for v in f["grid"].values()}

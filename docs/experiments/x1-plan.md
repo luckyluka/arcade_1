@@ -48,11 +48,14 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
    + `expectations.json`; `arcforge/docs/LANGUAGE.md`.
 5. `arcforge/tools/arcforge_ref.py` (§H assertion arms in `run_tests`);
    `arcforge/schema/asset.schema.json` (tests enum + arg fields);
-   `arcforge/examples/x1_showcase.json` (new) + `arcforge/tests/golden/
-   x1_showcase*.json` (**new files only!**); `arcforge/tests/invalid/
-   assert_baseline.json` (E_TEST_FAILED fixture) + `expectations.json`;
-   `arcforge/spec-next/02_LANGUAGE_EXTENSIONS.md` (status line: §C/E/F/G/H marked,
-   PROPOSED banner stays); `arcforge/docs/{LANGUAGE,RECIPES,DECISIONS}.md`.
+   `arcforge/registry/archetypes/x1_showcase.archetype.json` (new inventory
+   archetype) + `arcforge/examples/fragments/x1_showcase.px` (new px-2
+   fragment); `arcforge/examples/x1_showcase.json` (new) +
+   `arcforge/tests/golden/x1_showcase*.json` (**new files only!**);
+   `arcforge/tests/invalid/assert_baseline.json` (E_TEST_FAILED fixture) +
+   `expectations.json`; `arcforge/spec-next/02_LANGUAGE_EXTENSIONS.md`
+   (status line: §C/E/F/G/H marked, PROPOSED banner stays);
+   `arcforge/docs/{LANGUAGE,RECIPES,DECISIONS}.md`.
 
 ## Design decisions (D1–D15)
 
@@ -137,12 +140,33 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
   OUT: `contrast_min` (needs project `backgrounds`), `silhouette_distinct`
   (needs peer assets) — both deferred to X4 with the project file (reported).
   Fixture: failing assertion → `E_TEST_FAILED` via `run=test`.
-- **D14 exercise asset + exit.** `examples/x1_showcase.json` compiles an X1
-  feature inventory on existing archetypes (humanoid_front_scalable + a small
-  fixture archetype carrying `mirror`/`line`/`repeat` where the body needs them,
-  variants+extends+palette_swap, a px-2 fragment, tracks+swap+hold, the seven
-  assertions) with its own new goldens. NO existing archetype/recipe/example is
-  modified for exercises — knight/seraph/scalable goldens stay byte-identical.
+  Semantics pinned while implementing: every assertion sees **all** rendered
+  frames (base + animations); `baseline_stable`/`pivot_stable` use anchor
+  positions incl. part offsets (pivot = Chebyshev displacement vs the base
+  frame); `min_feature` = min over base drawables **and** every frame state,
+  with **every shape counting** (`affects: ["detail"]` is documentation-only,
+  no runtime marker exists — the conservative reading, recorded as a gap);
+  `cell_fill` = per-frame opaque ratio, observed band must sit inside the
+  declared one; `seamless` = per frame, each border cell present in the grid
+  AND not outline-ramp, `axes` is an array of `x`/`y` (02 §H example +
+  proposed schema); `jitter_max` = per animation, Chebyshev step between
+  floored COM means of consecutive frames; `orphan_pixels` = max per-frame
+  count of pixels with no 4-neighbour.
+- **D14 exercise asset + exit.** `examples/x1_showcase.json` **extends
+  `hero.scalable_small.json`** (exercising §E on a real file) and carries one
+  variant that re-points the merged document at the new registry inventory
+  archetype `x1_showcase` (archetype `params`/`size` deleted via RFC-7386
+  nulls, `features` emptied, `tests` replaced) with entry-level
+  `palette_swap` (steel→gold). Base doc = humanoid_front_scalable plus the
+  six §H assertions that can pass on a character (all but `seamless`);
+  variant = the tile archetype plus all seven (full-bleed cells make
+  `seamless`/`cell_fill` meaningful) with both px-2 frames bound via `custom`
+  (`frame` 0 and 1). NO existing archetype/recipe/example is modified —
+  knight/seraph/scalable goldens stay byte-identical; only the two
+  `x1_showcase*.json` goldens are new. Recipe tracks and a px **shape** are
+  not showcased (a new recipe is out of scope; a px shape in a registry
+  archetype cannot survive the lint sweep, see gap 10) — both stay ad-hoc
+  verified from commits 3–4 instead.
 - **D15 spec-next.** Proposed schemas stay untouched (X0 precedent): the
   incomplete frame schema (no `swap`/`params`/`hold`) is recorded as a gap
   rather than repaired, since 02/03 prose is the source X1 implements.
@@ -170,6 +194,14 @@ X3 project/tileset/level formats. X1's exit is therefore reinterpreted as below
    the runtime flip lives in the game.
 8. Track validation scope: templates the asset does not bind are not compiled —
    `E_TRACK_PARAM` can only fire for bound templates (documented).
+9. `min_feature`'s non-`detail` exclusion has no runtime marker (`affects` is
+   documentation-only, 02 §D) → every shape counts; recorded in LANGUAGE.md
+   and DECISIONS #15.
+10. Showcase coverage limits: a px **shape** (vs a `custom` entry) inside a
+    registry archetype cannot be linted — the size sweep compiles with
+    `base_dir=ROOT` while assets resolve fragments against their own
+    directory, and one fragment path cannot serve both — and a recipe-track
+    showcase would need a new recipe; both stay ad-hoc verified (commits 3–4).
 
 ## Risks & mitigations
 

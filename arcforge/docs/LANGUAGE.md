@@ -112,6 +112,19 @@ Archetype templates give per-frame integer offsets per part (`root` moves everyt
 ## Assertions (`tests`)
 `dimensions`, `palette_size`, `feature_present`, `silhouette_area`, `bbox_margin`, `anchor_inside_canvas`, `root_stable`, `frame_count`. Evaluated on the compiled result, not by a vision model. Always on, independently of `tests`: palette budget (`E_PALETTE_BUDGET`), clipping (`E_CLIPPED`/`W_CLIPPED` per `clip_policy`), minimum feature size (`W_FEATURE_TOO_SMALL`: any compiled shape whose smaller extent is below the style pack's `min_feature_px`, which defaults to unconstrained) and occlusion (`W_OCCLUDED`: a feature not one of whose pixels survives in any frame). The size sweep adds body mirror symmetry (`E_BODY_ASYMMETRY`, see below).
 
+### Quality assertions (2.1, X1 — spec-next 02 §H)
+| assert | args | meaning |
+|---|---|---|
+| `baseline_stable` | `anchor`, `max` | y spread of the anchor over every rendered frame (base + all animations) ≤ `max` — feet don't float. Unknown anchor → FAIL listing the known anchors |
+| `pivot_stable` | `max` | `origin` anchor's Chebyshev displacement from its base-frame position ≤ `max` |
+| `min_feature` | `min` | smallest filled bbox dimension over every compiled shape — base geometry **and** every frame state — ≥ `min`. The `affects: ["detail"]` marker (02 §D) is documentation-only, so no shape can be excluded yet: **every shape counts** (the conservative reading; recorded as a gap) |
+| `cell_fill` | `min`, `max` | per-frame opaque-pixel ratio of the cell: the observed band over all frames must sit inside the declared one |
+| `seamless` | `axes` (`["x"]` / `["y"]` / `["x","y"]`) | every rendered frame: each border cell named by `axes` is present in the grid **and** is not outline-ramp — tileable borders carry no transparent and no outline pixels |
+| `jitter_max` | `max` | largest Chebyshev step between floored centre-of-mass means of consecutive frames, per animation, ≤ `max` |
+| `orphan_pixels` | `max` | per-frame count of pixels with no 4-neighbour ≤ `max` |
+
+A failing assertion is `E_TEST_FAILED` at `/tests/<i>` with observed/expected. Out of X1 (they need the project file): `contrast_min` (backgrounds) and `silhouette_distinct` (peer assets) — 02 §H names both; they arrive with X4, so the schema does not accept them yet.
+
 ## v2.1 size model (implemented in X0)
 Three sizes are never conflated: **cell** (the canvas), **body size** (archetype
 size parameters) and derived **metrics**.

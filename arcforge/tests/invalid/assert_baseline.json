@@ -1,0 +1,61 @@
+{
+  "arcforge": "2.1",
+  "asset": {
+    "id": "x1.assert_baseline",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: baseline_stable max 0 on geometry whose origin floats 2px between frames (E_TEST_FAILED via run: test)."
+  },
+  "target": {
+    "profile": "arcade1-draft",
+    "canvas": [
+      26,
+      28
+    ]
+  },
+  "style_pack": "arcade_16",
+  "archetype": {
+    "name": "humanoid_front_scalable",
+    "params": {
+      "armor_ramp": "steel"
+    },
+    "size": {
+      "height": 16
+    }
+  },
+  "features": [
+    {
+      "recipe": "helmet_closed",
+      "params": {
+        "visor": "blue",
+        "crest": true
+      }
+    },
+    "boots_heavy",
+    {
+      "recipe": "energy_sword",
+      "params": {
+        "color": "red",
+        "glow": "strong"
+      }
+    }
+  ],
+  "animations": {
+    "idle": {
+      "template": "idle"
+    },
+    "walk": {
+      "template": "walk"
+    },
+    "attack": {
+      "template": "attack"
+    }
+  },
+  "tests": [
+    {
+      "assert": "baseline_stable",
+      "anchor": "origin",
+      "max": 0
+    }
+  ]
+}

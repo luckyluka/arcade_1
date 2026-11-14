@@ -1,0 +1,13 @@
+{
+  "asset": "x1_showcase.tile",
+  "frames": {
+    "base/0": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd",
+    "idle/0": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd",
+    "idle/1": "3099d2fdedf6eb7e8651f62d86d1a6e46bc68a074f51f747e0ba52cdaae994f6",
+    "idle/2": "d40da0691cdcb764c4421e4d62ef19fdacf1d2f1b72ca6d5bd69c427e57a339f",
+    "walk/0": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd",
+    "walk/1": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd",
+    "attack/0": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd",
+    "attack/1": "02b6d232b3e7634e37df29781cd49caee8c5a35e75cd15d40a58df3a0993b2fd"
+  }
+}

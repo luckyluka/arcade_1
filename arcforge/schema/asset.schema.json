@@ -116,12 +116,15 @@
         "additionalProperties": false,
         "required": ["assert"],
         "properties": {
-          "assert": { "enum": ["dimensions", "palette_size", "feature_present", "silhouette_area", "bbox_margin", "anchor_inside_canvas", "root_stable", "frame_count"] },
+          "assert": { "enum": ["dimensions", "palette_size", "feature_present", "silhouette_area", "bbox_margin", "anchor_inside_canvas", "root_stable", "frame_count",
+                               "baseline_stable", "pivot_stable", "min_feature", "cell_fill", "seamless", "jitter_max", "orphan_pixels"] },
           "expected": { "type": "array", "items": { "type": "integer" } },
           "recipe": { "type": "string" },
           "anchor": { "type": "string" },
           "min": { "type": "number" },
-          "max": { "type": "number" }
+          "max": { "type": "number" },
+          "axes": { "type": "array", "items": { "enum": ["x", "y"] }, "minItems": 1, "uniqueItems": true,
+                    "description": "seamless only: which tileable borders are asserted (02 §H)." }
         }
       }
     },

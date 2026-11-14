@@ -1,0 +1,22 @@
+px 2
+name showcase
+size 6 6
+frames 2
+anchor attach 3 3
+legend
+  . transparent
+  r red.base
+frame 0
+  r.....
+  .rr...
+  ..rr..
+  ...rr.
+  ....rr
+  ......
+frame 1
+  rrrr..
+  r..r..
+  r..r..
+  r..r..
+  rrrr..
+  ......

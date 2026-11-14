@@ -1,0 +1,54 @@
+{
+  "arcforge": "2.1",
+  "extends": "hero.scalable_small.json",
+  "asset": {
+    "id": "x1_showcase",
+    "description": "X1 showcase (base): hero.scalable_small re-hosted with the 2.1 §H quality assertions. The variant x1_showcase.tile re-points the same document at the x1_showcase tile archetype, which carries the shape vocabulary (mirror/line/repeat), frame tracks/swap/hold, a px-2 fragment and palette_swap."
+  },
+  "tests": [
+    { "assert": "dimensions", "expected": [26, 28] },
+    { "assert": "palette_size", "max": 16 },
+    { "assert": "feature_present", "recipe": "helmet_closed" },
+    { "assert": "feature_present", "recipe": "energy_sword" },
+    { "assert": "feature_present", "recipe": "boots_heavy" },
+    { "assert": "bbox_margin", "min": 0 },
+    { "assert": "anchor_inside_canvas", "anchor": "hand_r" },
+    { "assert": "root_stable", "max": 1 },
+    { "assert": "frame_count", "max": 16 },
+    { "assert": "baseline_stable", "anchor": "origin", "max": 2 },
+    { "assert": "pivot_stable", "max": 1 },
+    { "assert": "min_feature", "min": 1 },
+    { "assert": "cell_fill", "min": 0.3, "max": 0.33 },
+    { "assert": "jitter_max", "max": 1 },
+    { "assert": "orphan_pixels", "max": 0 }
+  ],
+  "variants": [
+    {
+      "id": "x1_showcase.tile",
+      "override": {
+        "asset": {
+          "type": "tile",
+          "description": "X1 showcase (tile variant): the same document on the x1_showcase inventory archetype — full-bleed cells for seamless/cell_fill, frame tracks/swap/hold, and both frames of the px-2 fragment bound to custom entries (frames 0 and 1). Offsets stay empty because a seamless tile cannot move without breaking its borders."
+        },
+        "archetype": { "name": "x1_showcase", "params": null, "size": null },
+        "features": [],
+        "custom": [
+          { "id": "x1_badge", "type": "px_fragment", "file": "fragments/x1_showcase.px",
+            "anchor": "badge", "layer": "body", "frame": 1 },
+          { "id": "x1_badge0", "type": "px_fragment", "file": "fragments/x1_showcase.px",
+            "anchor": "badge0", "layer": "body", "frame": 0 }
+        ],
+        "tests": [
+          { "assert": "baseline_stable", "anchor": "origin", "max": 0 },
+          { "assert": "pivot_stable", "max": 0 },
+          { "assert": "min_feature", "min": 2 },
+          { "assert": "cell_fill", "min": 1, "max": 1 },
+          { "assert": "seamless", "axes": ["x", "y"] },
+          { "assert": "jitter_max", "max": 0 },
+          { "assert": "orphan_pixels", "max": 0 }
+        ]
+      },
+      "palette_swap": { "steel": "gold" }
+    }
+  ]
+}

@@ -44,7 +44,7 @@ A recipe is an engine capability: deterministic geometry with typed parameters, 
 3. Use ramp tones for light/shadow instead of literal colours so style packs can restyle it.
 4. Include at least one example at each extreme (min/max) and one with all booleans flipped.
 5. Render, look at it at 10×, tune. Only then update goldens.
-6. Add the recipe to an example asset and an assertion (`feature_present`).
+6. Add the recipe to an example asset and an assertion (`feature_present`). An asset can also carry the 2.1 §H quality assertions (`min_feature`, `orphan_pixels`, `jitter_max`, …) that guard the picture the recipe contributes to.
 7. Keep names descriptive and finite: `helmet_closed`, not `cool_helmet`. If two recipes differ only in a parameter, they are one recipe.
 
 ## Naming and discovery

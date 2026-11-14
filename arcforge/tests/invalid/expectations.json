@@ -55,5 +55,6 @@
   "palette_swap_ramp": { "run": "validate", "errors": ["E_UNKNOWN_RAMP"], "warnings": [] },
   "px_frames": { "run": "validate", "errors": ["E_PX_FRAMES"], "warnings": [] },
   "track_param": { "run": "sweep", "errors": ["E_TRACK_PARAM"], "warnings": [] },
-  "swap_set": { "run": "sweep", "errors": ["E_UNKNOWN_SWAP_SET"], "warnings": [] }
+  "swap_set": { "run": "sweep", "errors": ["E_UNKNOWN_SWAP_SET"], "warnings": [] },
+  "assert_baseline": { "run": "test", "errors": ["E_TEST_FAILED"], "warnings": [] }
 }
