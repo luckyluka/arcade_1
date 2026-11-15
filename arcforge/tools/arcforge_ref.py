@@ -31,7 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 REG = ROOT / "registry"
 SCHEMA_DIR = ROOT / "schema"
-TONES = ("shadow", "base", "light")
+TONES = ("deep", "shadow", "base", "light", "high")   # a ramp has 3..5 of these; "ramp.*" = shaded
 
 
 def load_json(p):
@@ -428,7 +428,7 @@ def check_params(specs, given, path, style, diags, label, env=None):
 def resolve_fill(fill, env, ramps, swap=None):
     if fill == "outline":
         return ("outline", "base")
-    m = re.fullmatch(r"(\$?[A-Za-z_][A-Za-z0-9_]*)\.(shadow|base|light)", fill)
+    m = re.fullmatch(r"(\$?[A-Za-z_][A-Za-z0-9_]*)\.(deep|shadow|base|light|high|\*)", fill)
     if not m:
         raise ExprError(f"bad fill {fill!r}")
     ramp = m.group(1)
@@ -438,7 +438,7 @@ def resolve_fill(fill, env, ramps, swap=None):
         ramp = env[ramp[1:]]
     if swap and ramp in swap:
         ramp = swap[ramp]   # palette_swap (02 §E): applied when fills resolve
-    if ramp not in ramps or m.group(2) not in ramps[ramp]:
+    if ramp not in ramps or (m.group(2) != "*" and m.group(2) not in ramps[ramp]):
         raise ExprError(f"ramp/tone '{ramp}.{m.group(2)}' does not exist in the style pack")
     return (ramp, m.group(2))
 
@@ -453,6 +453,16 @@ def build_shape(sh, env, anchor_at, layer_idx, ramps, swap=None):
     if not -180 <= deg <= 180:
         raise ExprError("rotate must be within -180..180 degrees")
     kind = sh["shape"]
+    if fill[1] == "*" and kind not in ("ellipse", "capsule"):
+        raise ExprError("only ellipse and capsule shapes can be shaded (fill 'ramp.*')")
+    if kind == "capsule":
+        # thick line segment (round caps, or caps "flat"); x1,y1,x2,y2 are the cap centres, w the width in px
+        x1, y1, x2, y2, w = (to_int(ev(sh[k], env)) for k in ("x1", "y1", "x2", "y2", "w"))
+        if w <= 0:
+            return None
+        a, b = rot_fixed(x1, y1, deg), rot_fixed(x2, y2, deg)
+        return {"kind": "capsule", "p": (ax * 64 + a[0], ay * 64 + a[1], ax * 64 + b[0], ay * 64 + b[1]),
+                "hw": w * 32, "flat": sh.get("caps") == "flat", "fill": fill, "li": layer_idx}
     if kind == "ellipse":
         if deg:
             raise ExprError("ellipse cannot be rotated")
@@ -522,6 +532,9 @@ def reflect_shape(d, a):
     elif d["kind"] == "px":
         ax = d["at"][0]
         d["px"] = sorted((2 * a - 2 * ax - dx, dy, fill) for dx, dy, fill in d["px"])
+    elif d["kind"] == "capsule":
+        x0, y0, x1, y1 = d["p"]
+        d["p"] = ((2 * a + 1) * 64 - x0, y0, (2 * a + 1) * 64 - x1, y1)
     else:
         d["pts"] = [((2 * a + 1) * 64 - X, Y) for X, Y in d["pts"]]
     return d
@@ -535,6 +548,9 @@ def shift_shape(d, dx, dy):
     elif d["kind"] == "px":
         ax, ay = d["at"]
         d["at"] = (ax + dx, ay + dy)
+    elif d["kind"] == "capsule":
+        x0, y0, x1, y1 = d["p"]
+        d["p"] = (x0 + dx * 64, y0 + dy * 64, x1 + dx * 64, y1 + dy * 64)
     else:
         d["pts"] = [(X + dx * 64, Y + dy * 64) for X, Y in d["pts"]]
     return d
@@ -1262,11 +1278,48 @@ def part_offset(offsets, part):
     return rx + px, ry + py
 
 
-def render_frame(ir, offsets, clip=True, drawables=None):
+def rotf(x, y, deg):
+    """Rotate a 1/64-px vector by whole degrees. Integer only; floor division."""
+    c, s = COS[deg], SIN[deg]
+    return (x * c - y * s + 500000) // 1000000, (x * s + y * c + 500000) // 1000000
+
+
+def part_rot(rots, part):
+    r = (rots or {}).get(part)
+    return r if r and r[0] else None
+
+
+def rot_pt(X, Y, r):
+    """Rotate fixed-point (1/64 px) point about whole-pixel pivot r = (deg, px, py)."""
+    dx, dy = rotf(X - r[1] * 64, Y - r[2] * 64, r[0])
+    return r[1] * 64 + dx, r[2] * 64 + dy
+
+
+# Volume shading (style pack "shading"). All integer: normals are scaled by 1024,
+# the light vector is ~unit*1024, tone position t is in 1/1000. Floor division.
+LIGHT = (-606, -660, 496)
+DITH = (-45, 15, 45, -15)          # 2x2 Bayer, indexed (y&1)*2+(x&1)
+
+
+def shade_pick(style, tones, nx, ny, x, y):
+    nz = math.isqrt(max(0, 1024 * 1024 - nx * nx - ny * ny))
+    sh = style.get("shading", {})
+    lx, ly, lz = sh.get("light", LIGHT)
+    dot = (nx * lx + ny * ly + nz * lz) // 1024
+    t = ((dot + 460) * 1000) // 1485
+    if sh.get("dither") == "bayer2":
+        t += DITH[(y & 1) * 2 + (x & 1)]
+    n = len(tones)
+    return tones[max(0, min(n - 1, (t * n) // 1000))]
+
+
+def render_frame(ir, offsets, clip=True, drawables=None, rots=None):
     """Rasterize one frame. clip=False renders on an unbounded plane (auto
     canvas pass 1): nothing is dropped, `clipped` stays 0. `drawables`
     overrides the base set with a 02 §F frame state's geometry."""
     W, H = ir["W"], ir["H"]
+    ramps = ir["style"]["ramps"]
+    tl = {r: [t for t in TONES if t in v] for r, v in ramps.items()}
     grid = {}   # (x, y) -> (li, seq, part, ramp, tone): seq orders pixels within
                 # a layer and part identity feeds the inner-outline pass;
                 # outer-outline pixels carry part None
@@ -1282,20 +1335,54 @@ def render_frame(ir, offsets, clip=True, drawables=None):
     ds = ir["drawables"] if drawables is None else drawables
     for d in sorted(ds, key=lambda d: (d["li"], d["seq"])):
         ox, oy = part_offset(offsets, d["part"])
+        rot = part_rot(rots, d["part"])      # joint rotation about a pivot, applied before the offset
+        fill = d.get("fill")
+        shaded = fill is not None and fill[1] == "*"
         if d["kind"] == "px":
-            for dx, dy, fill in d["px"]:
-                put(d["at"][0] + ox + dx, d["at"][1] + oy + dy, d["li"], d["seq"], d["part"], fill)
+            ax, ay = d["at"]
+            if rot:
+                X, Y = rot_pt(ax * 64, ay * 64, rot)
+                ax, ay = (X + 32) // 64, (Y + 32) // 64
+            for dx, dy, f in d["px"]:
+                put(ax + ox + dx, ay + oy + dy, d["li"], d["seq"], d["part"], f)
         elif d["kind"] == "ellipse":
             x, y, w, h = d["box"]
+            if rot:                          # the centre rotates, the (axis aligned) shape does not
+                X, Y = rot_pt((2 * x + w) * 32, (2 * y + h) * 32, rot)
+                x, y = ((X + 16) // 32 - w) // 2, ((Y + 16) // 32 - h) // 2
             x, y = x + ox, y + oy
             for py in range(y, y + h):
                 for px in range(x, x + w):
                     dx = (2 * px + 1) - (2 * x + w)
                     dy = (2 * py + 1) - (2 * y + h)
                     if dx * dx * h * h + dy * dy * w * w <= w * w * h * h:
-                        put(px, py, d["li"], d["seq"], d["part"], d["fill"])
+                        f = (fill[0], shade_pick(ir["style"], tl[fill[0]], dx * 1024 // w, dy * 1024 // h, px, py)) if shaded else fill
+                        put(px, py, d["li"], d["seq"], d["part"], f)
+        elif d["kind"] == "capsule":
+            x0, y0, x1, y1 = d["p"]
+            if rot:
+                x0, y0 = rot_pt(x0, y0, rot)
+                x1, y1 = rot_pt(x1, y1, rot)
+            x0, x1, y0, y1 = x0 + ox * 64, x1 + ox * 64, y0 + oy * 64, y1 + oy * 64
+            hw = d["hw"]
+            sx, sy = x1 - x0, y1 - y0
+            l2 = sx * sx + sy * sy
+            for py in range((min(y0, y1) - hw) // 64, (max(y0, y1) + hw) // 64 + 2):
+                for px in range((min(x0, x1) - hw) // 64, (max(x0, x1) + hw) // 64 + 2):
+                    cx, cy = px * 64 + 32, py * 64 + 32
+                    t = 0 if l2 == 0 else (cx - x0) * sx + (cy - y0) * sy
+                    if d["flat"] and not 0 <= t <= l2:      # caps "flat": no round end beyond the cap centres
+                        continue
+                    t = 0 if l2 == 0 else max(0, min(l2, t))
+                    qx, qy = (x0, y0) if l2 == 0 else (x0 + (sx * t) // l2, y0 + (sy * t) // l2)
+                    ex, ey = cx - qx, cy - qy
+                    if ex * ex + ey * ey <= hw * hw:
+                        f = (fill[0], shade_pick(ir["style"], tl[fill[0]], ex * 1024 // hw, ey * 1024 // hw, px, py)) if shaded else fill
+                        put(px, py, d["li"], d["seq"], d["part"], f)
         else:
             pts = [(fx + ox * 64, fy + oy * 64) for fx, fy in d["pts"]]
+            if rot:
+                pts = [rot_pt(px_, py_, rot) for px_, py_ in pts]
             x0 = min(p[0] for p in pts) // 64
             x1 = max(p[0] for p in pts) // 64 + 1
             y0 = min(p[1] for p in pts) // 64
@@ -1425,16 +1512,17 @@ def render_all(ir):
     auto = bool(ir.get("auto"))
     states = ir.get("states") or {}
 
-    def mk(offsets, ds=None):
-        grid, clipped = render_frame(ir, offsets, clip=not auto, drawables=ds)
-        return {"grid": grid, "rgba": None, "clipped": clipped, "offsets": offsets}
+    def mk(offsets, ds=None, rots=None):
+        grid, clipped = render_frame(ir, offsets, clip=not auto, drawables=ds, rots=rots)
+        return {"grid": grid, "rgba": None, "clipped": clipped, "offsets": offsets, "rots": rots or {}}
 
     entries = [("base", 0, mk({}))]
     for name, tpl in ir["animations"].items():
         for i, fr in enumerate(tpl["frames"]):
             key = frame_state_key(fr)
             ds = states[key] if key is not None else None
-            entries.append((name, i, mk({k: tuple(v) for k, v in fr["offsets"].items()}, ds)))
+            entries.append((name, i, mk({k: tuple(v) for k, v in fr["offsets"].items()}, ds,
+                                        {k: tuple(v) for k, v in fr.get("rotate", {}).items()})))
     if auto:
         resolve_auto_cell(ir, entries)
     for _, _, f in entries:
@@ -1643,6 +1731,9 @@ def shape_extent(d):
         xs = [p[0] for p in d["px"]]
         ys = [p[1] for p in d["px"]]
         return max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
+    if d["kind"] == "capsule":      # bounding box of the swept disc (an upper bound for flat caps)
+        x0, y0, x1, y1 = d["p"]
+        return (abs(x1 - x0) + 2 * d["hw"]) // 64, (abs(y1 - y0) + 2 * d["hw"]) // 64
     pts = d["pts"]
     xs = [p[0] for p in pts]
     ys = [p[1] for p in pts]

@@ -1,0 +1,67 @@
+{
+  "arcforge": "2.0",
+  "asset": {
+    "id": "hero.knight_blue",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Shaded 96px knight; look-test port."
+  },
+  "target": {
+    "profile": "arcade1-draft",
+    "canvas": [
+      96,
+      96
+    ]
+  },
+  "style_pack": "shaded_15",
+  "archetype": {
+    "name": "knight_front",
+    "params": {
+      "team_ramp": "blue"
+    }
+  },
+  "features": [],
+  "animations": {
+    "idle": {
+      "template": "idle_breathe"
+    },
+    "walk": {
+      "template": "walk_cycle"
+    },
+    "attack": {
+      "template": "attack_slash"
+    }
+  },
+  "tests": [
+    {
+      "assert": "dimensions",
+      "expected": [
+        96,
+        96
+      ]
+    },
+    {
+      "assert": "palette_size",
+      "max": 15
+    },
+    {
+      "assert": "silhouette_area",
+      "min": 0.1,
+      "max": 0.5
+    },
+    {
+      "assert": "bbox_margin",
+      "min": 0
+    },
+    {
+      "assert": "frame_count",
+      "max": 18
+    }
+  ],
+  "export": {
+    "formats": [
+      "png",
+      "spritesheet"
+    ]
+  }
+}

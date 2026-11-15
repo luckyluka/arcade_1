@@ -1,0 +1,202 @@
+{
+  "style_pack": "shaded_15",
+  "version": "1.0.0",
+  "description": "15-colour bank for SPRITE4: one outline colour, two 5-tone ramps (steel + one team colour) and a 4-tone skin ramp, volume shaded from the upper left with 2x2 Bayer dither.",
+  "max_colors": 15,
+  "shading": {
+    "light": [
+      -606,
+      -660,
+      496
+    ],
+    "dither": "bayer2"
+  },
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": [
+      "back"
+    ],
+    "inner": {
+      "mode": "part",
+      "parts": [
+        "head",
+        "helmet",
+        "torso",
+        "arm_l",
+        "arm_r",
+        "leg_l",
+        "leg_r",
+        "pauldron_l",
+        "pauldron_r",
+        "plume"
+      ]
+    }
+  },
+  "ramps": {
+    "outline": {
+      "base": [
+        18,
+        19,
+        28
+      ]
+    },
+    "steel": {
+      "deep": [
+        43,
+        52,
+        71
+      ],
+      "shadow": [
+        70,
+        83,
+        107
+      ],
+      "base": [
+        111,
+        127,
+        154
+      ],
+      "light": [
+        164,
+        179,
+        201
+      ],
+      "high": [
+        225,
+        233,
+        245
+      ]
+    },
+    "blue": {
+      "deep": [
+        22,
+        41,
+        94
+      ],
+      "shadow": [
+        33,
+        80,
+        168
+      ],
+      "base": [
+        59,
+        123,
+        224
+      ],
+      "light": [
+        125,
+        176,
+        255
+      ],
+      "high": [
+        207,
+        228,
+        255
+      ]
+    },
+    "red": {
+      "deep": [
+        77,
+        15,
+        20
+      ],
+      "shadow": [
+        142,
+        29,
+        34
+      ],
+      "base": [
+        212,
+        69,
+        59
+      ],
+      "light": [
+        255,
+        138,
+        115
+      ],
+      "high": [
+        255,
+        214,
+        200
+      ]
+    },
+    "green": {
+      "deep": [
+        18,
+        61,
+        31
+      ],
+      "shadow": [
+        31,
+        122,
+        53
+      ],
+      "base": [
+        63,
+        179,
+        79
+      ],
+      "light": [
+        139,
+        224,
+        122
+      ],
+      "high": [
+        224,
+        255,
+        200
+      ]
+    },
+    "gold": {
+      "deep": [
+        74,
+        50,
+        7
+      ],
+      "shadow": [
+        140,
+        95,
+        13
+      ],
+      "base": [
+        224,
+        168,
+        42
+      ],
+      "light": [
+        255,
+        217,
+        106
+      ],
+      "high": [
+        255,
+        244,
+        196
+      ]
+    },
+    "skin": {
+      "shadow": [
+        122,
+        74,
+        58
+      ],
+      "base": [
+        192,
+        122,
+        90
+      ],
+      "light": [
+        232,
+        160,
+        124
+      ],
+      "high": [
+        255,
+        208,
+        170
+      ]
+    }
+  }
+}

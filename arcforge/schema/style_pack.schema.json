@@ -12,6 +12,15 @@
     "max_colors": { "type": "integer", "minimum": 2, "maximum": 256 },
     "min_feature_px": { "type": "integer", "minimum": 1, "maximum": 64,
                         "description": "Smallest filled dimension any compiled shape may have before the size sweep and every test run report W_FEATURE_TOO_SMALL. 1 = no constraint." },
+    "shading": {
+      "type": "object",
+      "description": "Volume shading for shapes filled 'ramp.*': integer light vector (~unit*1024) and optional 2x2 Bayer dither.",
+      "additionalProperties": false,
+      "properties": {
+        "light": { "type": "array", "items": { "type": "integer", "minimum": -1024, "maximum": 1024 }, "minItems": 3, "maxItems": 3 },
+        "dither": { "enum": ["none", "bayer2"] }
+      }
+    },
     "outline": { "type": "object", "additionalProperties": false, "required": ["mode", "ramp"],
       "properties": {
         "mode": { "enum": ["none", "outer"] },
@@ -29,7 +38,7 @@
           } }
       } },
     "ramps": { "type": "object", "additionalProperties": { "type": "object",
-      "propertyNames": { "enum": ["shadow", "base", "light"] },
+      "propertyNames": { "enum": ["deep", "shadow", "base", "light", "high"] },
       "additionalProperties": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 }, "minItems": 3, "maxItems": 3 },
       "required": ["base"] } }
   }

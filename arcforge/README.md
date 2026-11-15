@@ -15,6 +15,8 @@ M0 done: spec + executable reference implementation (Python) rendering a 32×32 
 
 `spec-next/` holds the **PROPOSED** v2.1 extended spec (variable size, language extensions, level-1 slice). X0 implemented the size model subset marked in `spec-next/01_VARIABLE_SIZE.md` and `02_LANGUAGE_EXTENSIONS.md`; the rest is not implemented. Run `make spec-check` to check its internal consistency.
 
+**Shaded look (implemented, outside the X roadmap):** 5-tone ramps, shaded fills (`"fill": "$ramp.*"`), the `capsule` shape, per-frame joint `rotate`, the `shaded_15` style pack (15-colour bank: outline + steel + team + skin) and the 96×96 `knight_front` archetype with `examples/knight.blue.json`. Reference: `docs/LANGUAGE.md`. Not done: weapon recipes for `knight_front`, the other heroes, and a check of the 15-colour banks against the ARCADE-1 asset compiler.
+
 ## Quickstart
 ```bash
 pip install jsonschema

@@ -190,3 +190,18 @@ declares `size`) executes spec 01 §9:
 
 ## What the language refuses to do
 Describe appearance in prose, reference things the compiler cannot build, or silently ignore input. If the vocabulary cannot express an idea, the answer is "NO RECIPE EXISTS" plus alternatives, and the author may supply a `.px` fragment.
+
+## Shaded volumes, capsules and joint rotation (HD look, 5-tone ramps)
+
+- **Ramps** may have 3 to 5 tones, named `deep`, `shadow`, `base`, `light`, `high` (`base` is required).
+- **Shaded fill**: `"fill": "$team_ramp.*"` on an `ellipse` or `capsule` shades the shape as a volume from the
+  style pack's light (`shading.light`, an integer vector of length ~1024; `shading.dither` = `none` or `bayer2`).
+  The pixel's tone is picked from the ramp's tones in order; the whole computation is integer-only (normals scaled by
+  1024, `math.isqrt`, floor division) so a C port can match it byte for byte. Rects and polygons stay flat.
+- **`capsule`**: `{"shape":"capsule","x1","y1","x2","y2","w","layer","fill"}` is a thick segment between two cap centres.
+  Round caps by default; `"caps":"flat"` ends exactly at the cap centres (use it for torsos and belts).
+- **Joint rotation**: an animation frame may carry `"rotate": {"<part>": [degrees, pivot_x, pivot_y]}`: whole degrees
+  -180..180, positive = clockwise, pivot in cell pixels. It is applied before `offsets`. Polygons and capsules rotate
+  exactly; an ellipse or `.px` fragment only moves its centre (it keeps its orientation).
+- Budget: a SPRITE4 bank is 15 colours + transparent, so a style like `shaded_15` allows one outline colour, one
+  5-tone steel ramp, one 5-tone team ramp and a 4-tone skin ramp per asset (`palette_size max 15`).
