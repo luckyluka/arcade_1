@@ -156,7 +156,7 @@ rc=0
 [ "$rc" -eq 0 ] || fail "the world preview failed"
 [ -s "$OUT/world.png" ] || fail "the world preview is empty"
 rc=0
-"$ART" preview "$ROOT/round7/assets.json" --out "$OUT/world7.png" --maps > /dev/null 2>&1 || rc=$?
+"$ART" preview "$ROOT/docs/archive/rounds/round7/assets.json" --out "$OUT/world7.png" --maps > /dev/null 2>&1 || rc=$?
 [ "$rc" -eq 0 ] || fail "the world preview of the round-7 manifest failed"
 CHECKS=$((CHECKS + 1))
 echo "  ok: the pipeline can compose the world"

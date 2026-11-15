@@ -149,9 +149,9 @@ grep -q "relative to the .assets.json" "$ROOT/art/README.md" || \
     fail "art/README.md does not state the path convention"
 
 # 7. an observable global must be read by the game, or it is optimised away
-grep -q "must READ it" "$ROOT/GAME_DEV_GUIDE.md" || \
+grep -q "must READ it" "$ROOT/docs/GAME_DEV_GUIDE.md" || \
     fail "GAME_DEV_GUIDE.md does not say the game must read the variable"
-grep -q "must READ it" "$ROOT/SDK.md" || \
+grep -q "must READ it" "$ROOT/docs/SDK.md" || \
     fail "SDK.md does not say the game must read the variable"
 grep -q "optimised away" "$ROOT/tools/arcade1.c" || \
     fail "the CLI does not hint at the optimiser when a symbol is missing"
@@ -169,17 +169,17 @@ grep -q "grow_outline" "$ROOT/tools/arc1_art/canvas.py" || \
     fail "there is no grow_outline (the name that says what it does)"
 
 # an odd 4-bit width draws NOTHING, silently: say the consequence
-grep -q "draws NOTHING" "$ROOT/CHEATSHEET.md" || \
+grep -q "draws NOTHING" "$ROOT/docs/CHEATSHEET.md" || \
     fail "the cheat sheet does not say that an odd width draws nothing"
 grep -q "draws NOTHING" "$ROOT/programs/gfx.h" || \
     fail "gfx.h does not say that an odd width draws nothing"
 
 # the machine's shape: pixel-bound, and the tilemap is windowed
-grep -q "pixel-bound" "$ROOT/CHEATSHEET.md" || \
+grep -q "pixel-bound" "$ROOT/docs/CHEATSHEET.md" || \
     fail "the cheat sheet does not say the device is pixel-bound"
-grep -q "windowed" "$ROOT/CHEATSHEET.md" || \
+grep -q "windowed" "$ROOT/docs/CHEATSHEET.md" || \
     fail "the cheat sheet does not say the tilemap is windowed"
-grep -q "pixel-bound" "$ROOT/SPEC.md" || \
+grep -q "pixel-bound" "$ROOT/docs/SPEC.md" || \
     fail "SPEC.md does not say the device is pixel-bound"
 
 # the checks' numbers are in the docs, not only in the source
@@ -201,9 +201,9 @@ grep -q "skip-outline" "$ROOT/tools/arc1-art" || \
     fail "there is no --skip-outline for a tileset"
 
 # the brief and the documentation must not contradict each other
-grep -q "asset_demo.c" "$ROOT/round6/BRIEF.md" || \
+grep -q "asset_demo.c" "$ROOT/docs/archive/rounds/round6/BRIEF.md" || \
     fail "round 6's brief forbids the example the documentation points at"
-grep -q "asset_demo.c" "$ROOT/round7/BRIEF.md" || \
+grep -q "asset_demo.c" "$ROOT/docs/archive/rounds/round7/BRIEF.md" || \
     fail "round 7's brief forbids the example the documentation points at"
 CHECKS=$((CHECKS + 1))
 echo "  ok: the round 7 system-level gaps are closed and pinned"

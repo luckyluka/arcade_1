@@ -25,13 +25,13 @@ __pycache__/
 # with `arcade1 run ... --capture frame.png` (compressed now, ~100x
 # smaller) or `make capture-*`.
 captures/
-round*/smoke.png
-round*/final*.png
-round*/out.png
+docs/archive/rounds/round*/smoke.png
+docs/archive/rounds/round*/final*.png
+docs/archive/rounds/round*/out.png
 
 # Art reference sheets: the owner's image-model output, kept OUT of the
 # repository (licence and visibility are the owner's decision — see
 # docs/art/REFERENCES.md). The files live outside the working tree; they
 # remain in the git history.
-round*/Firefly_*.jpg
+docs/archive/rounds/round*/Firefly_*.jpg
 Firefly_*.jpg

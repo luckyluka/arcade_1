@@ -292,7 +292,7 @@ from arc1_art import canvas as C
 ```
 
 That is the shape every generator in the repository uses (see
-`programs/petalblade_art/gen_round6.py` and `round4/gen_art.py`). **It
+`programs/petalblade_art/gen_round6.py` and `docs/archive/rounds/round4/gen_art.py`). **It
 assumes the generator lives in a folder whose parent's parent is the
 repository root** — `<repo>/<folder>/<script>.py`, where `<folder>` is
 the art's own folder (`<repo>/round6/art/gen_round6.py` is three levels

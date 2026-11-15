@@ -1,5 +1,5 @@
 #!/bin/sh
-# experiments/hd/measure.sh — HD_EXPERIMENT.md card H2, step 1.
+# docs/experiments/hd/measure.sh — HD_EXPERIMENT.md card H2, step 1.
 #
 # Runs every game that has a committed input script at k = 1, 2 and 4, FRAMES
 # frames each, and writes one CSV row per (game, k).
@@ -23,18 +23,18 @@
 # EXACT, not sampled: `run --bench` accumulates one entry per frame, so the
 # avg/max cover all FRAMES frames. Therefore re-running this script changes
 # ONLY the bench_ms_* columns (and nothing else — the machine is
-# deterministic); experiments/hd/verify_h2.sh check A proves that.
+# deterministic); docs/experiments/hd/verify_h2.sh check A proves that.
 #
 # k = 1 uses build/arcade1-hd1 — the same sources with the scale pinned to 1
 # — so all three rows are one code path, and H1 proved that binary identical
 # to the default build.
 #
-# usage: experiments/hd/measure.sh [rom-dir] [out-csv]
+# usage: docs/experiments/hd/measure.sh [rom-dir] [out-csv]
 #   defaults: tests/roms  docs/experiments/hd-measurements.csv
 #   env:      FRAMES (default 600), GAMES
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 ROMDIR=${1:-$ROOT/tests/roms}
 OUT=${2:-$ROOT/docs/experiments/hd-measurements.csv}
 INPUTS="$ROOT/tests/inputs"

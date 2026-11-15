@@ -12,7 +12,7 @@ deterministic) as palette-index PNG strips, then writes:
 
 Compile the header with the documented pipeline:
 
-    python3 tools/arc1_assetc.py --assets round5/assets.json --out-dir round5 --report
+    python3 tools/arc1_assetc.py --assets programs/petalblade_art/petalblade_assets.json --out-dir programs --report
 
 Options:
     --dir PATH         output directory (default: this script's directory)

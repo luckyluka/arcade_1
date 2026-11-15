@@ -1,5 +1,5 @@
 #!/bin/sh
-# experiments/hd/verify_h3.sh — HD_EXPERIMENT.md card H3's acceptance, made
+# docs/experiments/hd/verify_h3.sh — HD_EXPERIMENT.md card H3's acceptance, made
 # mechanical so it can be re-run instead of believed.
 #
 #   A. DETERMINISM.  Regenerate both art sets and require them byte-identical
@@ -29,12 +29,12 @@
 #      and HD_EXPERIMENT.md itself still untracked (the card file is the
 #      owner's, never staged).
 #
-# usage: experiments/hd/verify_h3.sh
+# usage: docs/experiments/hd/verify_h3.sh
 #   needs build/arcade1, build/arcade1-geo960, the scene ROMs and captures
 #   (make hd-scene produces all of them)
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 DOC="$ROOT/docs/experiments/hd-art.md"
 CAP480="$ROOT/docs/experiments/hd-art_480.png"
 CAP960="$ROOT/docs/experiments/hd-art_960.png"
@@ -56,9 +56,9 @@ trap 'rm -rf "$TMP"' EXIT
 echo "verify_h3: A — determinism (art, ROMs and captures reproduce exactly)"
 
 for s in 1 2; do
-    dir="$ROOT/experiments/hd/scene$([ "$s" = 1 ] && echo 480 || echo 960)_art"
+    dir="$ROOT/docs/experiments/hd/scene$([ "$s" = 1 ] && echo 480 || echo 960)_art"
     cp -r "$dir" "$TMP/save$s"
-    python3 "$ROOT/experiments/hd/build_scene_art.py" --scale "$s" >/dev/null
+    python3 "$ROOT/docs/experiments/hd/build_scene_art.py" --scale "$s" >/dev/null
     if ! diff -r "$dir" "$TMP/save$s" >"$TMP/diff$s" 2>&1; then
         echo "verify_h3: A FAILED — regenerating the $s x art changed it:" >&2
         cat "$TMP/diff$s" >&2
@@ -67,9 +67,9 @@ for s in 1 2; do
     echo "  ok: scene${s}x art regenerates byte-identical"
 done
 
-"$CLI" build "$ROOT/experiments/hd/scene_480.c" "$TMP/scene_480.arc1" \
+"$CLI" build "$ROOT/docs/experiments/hd/scene_480.c" "$TMP/scene_480.arc1" \
     >/dev/null
-"$CLI" build "$ROOT/experiments/hd/scene_960.c" "$TMP/scene_960.arc1" \
+"$CLI" build "$ROOT/docs/experiments/hd/scene_960.c" "$TMP/scene_960.arc1" \
     >/dev/null
 if ! cmp -s "$TMP/scene_480.arc1" "$ROOT/build/scene_480.arc1"
 then
@@ -165,7 +165,7 @@ fi
 echo "  ok: the hero's colour count is stated"
 
 echo "verify_h3: D — compiled bytes vs H2's W*H*4/8, within 10%"
-METRICS=$(python3 "$ROOT/experiments/hd/art_metrics.py")
+METRICS=$(python3 "$ROOT/docs/experiments/hd/art_metrics.py")
 echo "$METRICS" | sed -n '/^worst row deviation/p'
 worst=$(echo "$METRICS" \
     | sed -n 's/^worst row deviation: +\{0,1\}\([-0-9.]*\)%.*/\1/p')
@@ -195,7 +195,7 @@ if [ -n "$(git -C "$ROOT" status --porcelain -- src/)" ]; then
     exit 1
 fi
 echo "  ok: src/ untouched by this card"
-if git -C "$ROOT" ls-files --error-unmatch HD_EXPERIMENT.md >/dev/null 2>&1
+if git -C "$ROOT" ls-files --error-unmatch docs/experiments/HD_EXPERIMENT.md >/dev/null 2>&1
 then
     echo "verify_h3: E FAILED — HD_EXPERIMENT.md is tracked; it is the" \
          "owner's file and is never staged" >&2

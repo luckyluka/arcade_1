@@ -1,7 +1,7 @@
 #!/bin/sh
 # HD_EXPERIMENT.md card H1 — acceptance for the scaled-rendering harness.
 #
-# usage: experiments/hd/test_scale.sh <default-cli> <hd-k1> <hd-k2> <hd-k4> <rom-dir>
+# usage: docs/experiments/hd/test_scale.sh <default-cli> <hd-k1> <hd-k2> <hd-k4> <rom-dir>
 #        (make hd-experiment passes build/arcade1, build/arcade1-hd1,
 #         build/arcade1-hd2, build/arcade1-hd4 and tests/roms)
 #
@@ -28,11 +28,11 @@ HD2=${3:?}
 HD4=${4:?}
 ROMDIR=${5:?}
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 INPUTS="$ROOT/tests/inputs"
 GOLDEN="$ROOT/tests/golden"
-NN="$ROOT/experiments/hd/nn_compare.py"
-PX="$ROOT/experiments/hd/px_check.py"
+NN="$ROOT/docs/experiments/hd/nn_compare.py"
+PX="$ROOT/docs/experiments/hd/px_check.py"
 OUT="$ROOT/build/hd-experiment"
 
 GAMES="petalblade asteroid_run flappy"

@@ -6,15 +6,15 @@ This file is the map: what to read, what to trust, and the rules.
 
 ## Reading order
 
-1. **[GAME_DEV_GUIDE.md](GAME_DEV_GUIDE.md)** — the workflow: build, run, test,
-   golden-lock. Start here.
-2. **[CHEATSHEET.md](CHEATSHEET.md)** — the guest API: commands, formats,
+1. **[GAME_DEV_GUIDE.md](docs/GAME_DEV_GUIDE.md)** — the workflow: build, run,
+   test, golden-lock. Start here.
+2. **[CHEATSHEET.md](docs/CHEATSHEET.md)** — the guest API: commands, formats,
    coordinate spaces, the traps.
-3. **[SDK.md](SDK.md)** — the `arcade1` CLI: run, build, test, golden,
+3. **[SDK.md](docs/SDK.md)** — the `arcade1` CLI: run, build, test, golden,
    inspect, info; the input-script and golden formats.
-4. **[SPEC.md](SPEC.md)** — the machine contract: memory map, devices,
+4. **[SPEC.md](docs/SPEC.md)** — the machine contract: memory map, devices,
    determinism, the frame protocol.
-5. **[PROGRESS.md](PROGRESS.md)** — what is done; **[ROADMAP_V4.md](ROADMAP_V4.md)**
+5. **[PROGRESS.md](docs/PROGRESS.md)** — what is done; **[ROADMAP.md](docs/ROADMAP.md)**
    — the work that is next (§0 binds).
 
 ## The trust rule
@@ -34,12 +34,12 @@ headers. Documents drift; the CLI does not.
 | `programs/` | the guests (games, demos) + the guest SDK headers |
 | `tools/` | the `arcade1` CLI, the asset compiler, the art generators |
 | `tests/` | the suite, the goldens (`tests/golden/`), the ROMs (`tests/roms/`) |
-| `docs/experiments/` | findings: what a round measured or retracted |
+| `arcforge/` | the asset language: spec, reference compiler, registry, docs |
+| `docs/` | current docs; `docs/experiments/` findings; `docs/archive/` history |
 
-**Goldens and ROMs are the regression.** `tests/golden/<game>.txt` holds a
-scripted session's per-frame hashes, `tests/roms/<game>.arc1` the image it
-came from. They change only when a game's behaviour changes — deliberately, in
-the commit that says why.
+**Goldens and ROMs are the regression.** `tests/golden/<game>.txt` = a
+scripted session's per-frame hashes; `tests/roms/<game>.arc1` = the image.
+They change only when a game's behaviour changes, in the commit that says why.
 
 ## The rules
 
@@ -54,10 +54,10 @@ the commit that says why.
    new game adds only its own files.
 5. **Dependencies:** host `cc` and `python3` **stdlib only** for anything
    `make check` builds or tests — except the optional offline tool in
-   ROADMAP_V4 card 7.5 (Pillow; skipped with exit 77 when absent).
+   `docs/archive/ROADMAP_V4.md` card 7.5 (Pillow; exit 77 if absent).
 6. **No machine behaviour changes.** `src/` may gain host-side diagnostics
-   only (ROADMAP_V4 cards 4.4, 8.1), with zero effect on any hash. If a
-   card needs more, stop and report.
+   only (archive ROADMAP_V4 cards 4.4, 8.1), with zero effect on any hash.
+   If a card needs more, stop and report.
 7. **A card's premise may be wrong.** If a measurement contradicts it, stop,
    write `docs/experiments/<topic>.md`, report. (The V3 min-geometry
    retraction and the V4 stale-header finding are the precedents.)
@@ -65,7 +65,7 @@ the commit that says why.
    same commit as the fix.
 9. **Stop after each wave** and report: cards done, acceptance output,
    surprises, not-done items.  10. **Scope guard.** New ideas go to
-   `FUTURE_IDEAS.md`, not the card.
+   `docs/FUTURE_IDEAS.md`, not the card.
 11. **Determinism.** Every generator, converter and encoder is
     byte-deterministic: no wall-clock, no unseeded randomness, no
     dict-order dependence, sorted iteration.
@@ -74,7 +74,7 @@ the commit that says why.
 
 `make check` — the whole regression (every test + the goldens); `make
 test-<name>` — one target. `make check` must stay under **500 s** (last
-measurement in PROGRESS.md); if a new test would push it over, report first.
+measurement in `docs/PROGRESS.md`); if a new test would push it over, report.
 
 A game's observable state must be a **file-scope global** (the tools read it
 by name) and everything **deterministic**.

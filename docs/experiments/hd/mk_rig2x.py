@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""experiments/hd/mk_rig2x.py — the hero's rig preset at twice the height.
+"""docs/experiments/hd/mk_rig2x.py — the hero's rig preset at twice the height.
 
 H3 wants the Petal Blade hero "via the rig animator at twice the height".
 The animator (tools/arc1-art rig) takes the preset FILE as its size
@@ -7,7 +7,7 @@ parameter and rasterises analytically — "rotation is exact at any angle, no
 resampling" (tools/arc1_art/rig.py) — so a doubled preset renders crisply
 at 2x with no generator change. This script writes that preset:
 
-    art/rigs/samurai.json  ->  experiments/hd/rig/samurai_2x.json
+    art/rigs/samurai.json  ->  docs/experiments/hd/rig/samurai_2x.json
 
 What doubles, and why, taken from how tools/arc1_art/rig.py actually reads
 each field:
@@ -33,14 +33,14 @@ than to paper over.
 
 Deterministic: no clock, no randomness, key order preserved from the source.
 
-    python3 experiments/hd/mk_rig2x.py [src.json] [dst.json]
+    python3 docs/experiments/hd/mk_rig2x.py [src.json] [dst.json]
 """
 
 import json
 import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 SRC = os.path.join(ROOT, "art", "rigs", "samurai.json")
 DST = os.path.join(ROOT, "experiments", "hd", "rig", "samurai_2x.json")
 

@@ -1,4 +1,4 @@
-/* experiments/hd/scene_body.h — H3's scene, shared by both guests.
+/* docs/experiments/hd/scene_body.h — H3's scene, shared by both guests.
  *
  * ONE body, two instantiations. scene_480.c and scene_960.c each define
  * SCREEN_W, SCREEN_H, SCENE_SCALE and SCENE_ASSETS and then include this

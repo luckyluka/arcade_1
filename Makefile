@@ -717,7 +717,7 @@ $(HD_GEO960): $(CLI_SRC) tools/sdk_data.h $(SDK_DATA) tests/state_hash.h | $(TES
 # Build all three and run the H1 acceptance script.
 .PHONY: hd-experiment
 hd-experiment: $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
-	sh experiments/hd/test_scale.sh $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) \
+	sh docs/experiments/hd/test_scale.sh $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) \
 	    $(HD_BIN4) $(GOLDEN_ROMDIR)
 
 # H2: measure every guest with a committed input script at k = 1, 2 and 4,
@@ -727,13 +727,13 @@ hd-experiment: $(CLI_BIN) $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
 # Also NOT part of `check` (§0 rule 3): it reads no golden and writes no ROM.
 .PHONY: hd-measure
 hd-measure: $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
-	sh experiments/hd/measure.sh $(GOLDEN_ROMDIR)
-	python3 experiments/hd/fpga_estimates.py >/dev/null
+	sh docs/experiments/hd/measure.sh $(GOLDEN_ROMDIR)
+	python3 docs/experiments/hd/fpga_estimates.py >/dev/null
 	@echo "hd-measure: docs/experiments/hd-measurements.csv"
 	@echo "hd-measure: docs/experiments/hd-fpga-estimates.md"
 
 # H3: the two scenes and their captures. Both guests through `arcade1 build`
-# (the CLI's own toolchain), art from experiments/hd/build_scene_art.py at
+# (the CLI's own toolchain), art from docs/experiments/hd/build_scene_art.py at
 # --scale 1 and --scale 2, and both captured at the SAME on-screen size —
 # 1920x1080, by --scale 4 on the 480 scene and --scale 2 on the 960 scene —
 # with the PNG writer's real deflate. The 960 guest runs on the k-free
@@ -741,10 +741,10 @@ hd-measure: $(HD_BIN1) $(HD_BIN2) $(HD_BIN4)
 # and reads no golden.
 .PHONY: hd-scene
 hd-scene: $(CLI_BIN) $(HD_GEO960)
-	python3 experiments/hd/build_scene_art.py --scale 1
-	python3 experiments/hd/build_scene_art.py --scale 2
-	$(CLI_BIN) build experiments/hd/scene_480.c $(TESTDIR)/scene_480.arc1
-	$(CLI_BIN) build experiments/hd/scene_960.c $(TESTDIR)/scene_960.arc1
+	python3 docs/experiments/hd/build_scene_art.py --scale 1
+	python3 docs/experiments/hd/build_scene_art.py --scale 2
+	$(CLI_BIN) build docs/experiments/hd/scene_480.c $(TESTDIR)/scene_480.arc1
+	$(CLI_BIN) build docs/experiments/hd/scene_960.c $(TESTDIR)/scene_960.arc1
 	$(CLI_BIN) run $(TESTDIR)/scene_480.arc1 --frames 5 --scale 4 \
 	    --capture docs/experiments/hd-art_480.png
 	$(HD_GEO960) run $(TESTDIR)/scene_960.arc1 --frames 5 --scale 2 \
@@ -1346,9 +1346,10 @@ test-brickstorm: $(CLI_BIN) $(ARC1_ROM_DIR)/brickstorm.arc1 | $(TESTDIR)
 	sh tests/test_brickstorm.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)
 
 # --- SKY DESCENT (Game #6) --------------------------------------------------
-# The owner's shmup/ prototype (a libretro core) redone as an ARCADE-1
-# guest ROM: a 12,000 m descent through five named layers on the 480x270
-# screen, the tap-cadence gun, the A/B charge beam, formations and a boss
+# The owner's shmup/ prototype (docs/archive/shmup/, a libretro core) redone
+# as an ARCADE-1 guest ROM: a 12,000 m descent through five named layers on
+# the 480x270 screen, the tap-cadence gun, the A/B charge beam, formations
+# and a boss
 # waiting on the ground.
 test-skydescent: $(CLI_BIN) $(ARC1_ROM_DIR)/skydescent.arc1 | $(TESTDIR)
 	sh tests/test_skydescent.sh $(CLI_BIN) $(ARC1_ROM_DIR) $(GOLDEN_DIR)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""experiments/hd/art_metrics.py — H3's measurements, from the artifacts.
+"""docs/experiments/hd/art_metrics.py — H3's measurements, from the artifacts.
 
 Prints the numbers docs/experiments/hd-art.md quotes, straight out of the
 generated headers and the captures, so nothing in the report is typed by
@@ -20,7 +20,7 @@ hand:
 
 Deterministic: sorted iteration, no clock, no randomness.
 
-    python3 experiments/hd/art_metrics.py
+    python3 docs/experiments/hd/art_metrics.py
 """
 
 import json
@@ -28,7 +28,7 @@ import os
 import re
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 sys.path.insert(0, os.path.join(ROOT, "tools", "arc1_art"))
 

@@ -30,8 +30,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))          # round6/art
-ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
-    os.path.dirname(HERE))                                   # the repo root
+ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(HERE)))))
+                                                          # the repo root
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 from arc1_art import canvas as C                            # noqa: E402

@@ -1,5 +1,5 @@
 #!/bin/sh
-# experiments/hd/verify_h2.sh — HD_EXPERIMENT.md card H2's acceptance, made
+# docs/experiments/hd/verify_h2.sh — HD_EXPERIMENT.md card H2's acceptance, made
 # mechanical so it can be re-run instead of believed.
 #
 #   A. DETERMINISM.  Re-run measure.sh into a temporary CSV and compare it to
@@ -18,11 +18,11 @@
 #      and require it byte-identical to the committed file. The FPGA and
 #      asset tables therefore cannot have been hand-edited.
 #
-# usage: experiments/hd/verify_h2.sh
+# usage: docs/experiments/hd/verify_h2.sh
 #   needs build/arcade1-hd{1,2,4} (make hd-measure builds them)
 set -eu
 
-ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 CSV="$ROOT/docs/experiments/hd-measurements.csv"
 MD="$ROOT/docs/experiments/hd-fpga-estimates.md"
 INPUTS="$ROOT/tests/inputs"
@@ -53,7 +53,7 @@ drop_timing() {
 }
 
 echo "verify_h2: A — determinism (re-running measure.sh changes timing only)"
-FRAMES=600 sh "$ROOT/experiments/hd/measure.sh" "$ROMDIR" "$TMP/again.csv" \
+FRAMES=600 sh "$ROOT/docs/experiments/hd/measure.sh" "$ROMDIR" "$TMP/again.csv" \
     >/dev/null
 drop_timing "$CSV"  > "$TMP/was.txt"
 drop_timing "$TMP/again.csv" > "$TMP/is.txt"
@@ -105,7 +105,7 @@ check_row shmup 4
 check_row brickstorm 2
 
 echo "verify_h2: C — the FPGA/asset tables are generated, not typed"
-python3 "$ROOT/experiments/hd/fpga_estimates.py" "$CSV" "$TMP/regen.md" \
+python3 "$ROOT/docs/experiments/hd/fpga_estimates.py" "$CSV" "$TMP/regen.md" \
     >/dev/null
 if ! cmp -s "$MD" "$TMP/regen.md"; then
     echo "verify_h2: C FAILED — $MD differs from what fpga_estimates.py" \

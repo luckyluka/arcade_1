@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""experiments/hd/build_scene_art.py — art for H3's two scenes.
+"""docs/experiments/hd/build_scene_art.py — art for H3's two scenes.
 
 One builder, two outputs, so the scenes differ ONLY in pixel density:
 
-    --scale 1 -> experiments/hd/scene480_art/assets.h   (480x270 scene)
-    --scale 2 -> experiments/hd/scene960_art/assets.h   (960x540 scene)
+    --scale 1 -> docs/experiments/hd/scene480_art/assets.h   (480x270 scene)
+    --scale 2 -> docs/experiments/hd/scene960_art/assets.h   (960x540 scene)
 
 Both manifests carry the same four sprites (the rig hero's idle state, the
 terrain tileset, the parallax ridge, the coin), the same level map and the
@@ -12,7 +12,7 @@ same palettes at the SAME explicit banks — so both guests make literally the
 same gfx_pal_upload() calls and draw the same elements. What differs:
 
   hero    scale 1: art/rigs/samurai.json        -> 28x40
-          scale 2: experiments/hd/rig/samurai_2x.json -> 56x80, from
+          scale 2: docs/experiments/hd/rig/samurai_2x.json -> 56x80, from
                   mk_rig2x.py (the rig animator at twice the height)
   ridge   scale 1: programs/petalblade_art/art/bg_ridge.png (the committed
                   art, referenced not regenerated)
@@ -33,8 +33,8 @@ rather than pretending the tiles were compared.
 
 Deterministic: sorted iteration, no clock, no randomness.
 
-    python3 experiments/hd/build_scene_art.py --scale 1
-    python3 experiments/hd/build_scene_art.py --scale 2
+    python3 docs/experiments/hd/build_scene_art.py --scale 1
+    python3 docs/experiments/hd/build_scene_art.py --scale 2
 """
 
 import argparse
@@ -45,7 +45,7 @@ import shutil
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 ART_TOOL = os.path.join(ROOT, "tools", "arc1-art")
 ASSETC = os.path.join(ROOT, "tools", "arc1_assetc.py")
 WORLD_MANIFEST = os.path.join(ROOT, "programs", "petalblade_rig", "assets.json")

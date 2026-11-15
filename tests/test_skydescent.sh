@@ -1,6 +1,7 @@
 #!/bin/sh
 # ARCADE-1 — skydescent test (the descending shoot-'em-up, the owner's
-# shmup/ prototype redone as a guest ROM): a scripted session that plays
+# shmup/ prototype — docs/archive/shmup/ — redone as a guest ROM): a
+# scripted session that plays
 # the title, starts, and descends the whole 12,000 m — through all five
 # altitude palettes, the terrain fading in below 2,200 m, the ground map,
 # and into the boss fight waiting on it.

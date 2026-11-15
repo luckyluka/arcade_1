@@ -171,11 +171,19 @@ def read_log(round_dir):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    round_dir = args[0] if args else os.path.join(ROOT, "round6")
+    default_round = os.path.join(ROOT, "docs", "archive", "rounds", "round6")
+    round_dir = args[0] if args else default_round
     round_dir = os.path.abspath(round_dir)
     if not os.path.isdir(round_dir):
-        sys.stderr.write("measure_round: no such folder: %s\n" % round_dir)
-        return 2
+        # the rounds moved to docs/archive/rounds/ — accept their old
+        # bare names ("round6") and their historical root paths too.
+        alt = os.path.join(ROOT, "docs", "archive", "rounds",
+                           os.path.basename(os.path.normpath(round_dir)))
+        if os.path.isdir(alt):
+            round_dir = alt
+        else:
+            sys.stderr.write("measure_round: no such folder: %s\n" % round_dir)
+            return 2
     if not os.path.isfile(CLI):
         sys.stderr.write("measure_round: no CLI at %s (make build/arcade1)\n"
                          % CLI)

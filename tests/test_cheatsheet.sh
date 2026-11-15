@@ -21,7 +21,7 @@ trap 'rm -rf "$OUT"' EXIT
 fail() { echo "test-cheatsheet: FAILED — $1" >&2; exit 1; }
 note() { echo "  $1"; }
 
-CHEAT=$(dirname "$0")/../CHEATSHEET.md
+CHEAT=$(dirname "$0")/../docs/CHEATSHEET.md
 [ -f "$CHEAT" ] || fail "missing $CHEAT"
 
 # --- extract the C snippets -------------------------------------------------

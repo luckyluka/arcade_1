@@ -1,4 +1,4 @@
-/* experiments/hd/scene_960.c — H3, the HD scene.
+/* docs/experiments/hd/scene_960.c — H3, the HD scene.
  *
  * The SAME composition as scene_480 — one shared body, scene_body.h, with
  * SCENE_SCALE 2 — but at 960x540 with the art regenerated at 2x native

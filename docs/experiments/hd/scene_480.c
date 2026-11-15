@@ -1,4 +1,4 @@
-/* experiments/hd/scene_480.c — H3, the control scene.
+/* docs/experiments/hd/scene_480.c — H3, the control scene.
  *
  * The Petal Blade valley at the machine's own geometry: 480x270, art at its
  * native density (the rig hero at 28x40, the committed 240x60 ridge, four

@@ -24,10 +24,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKS = [
     # (the round's generator, the pack name, the manifest fragment, a
     #  description)
-    ("round6/art/gen_round6.py", "village", "village.json",
+    ("docs/archive/rounds/round6/art/gen_round6.py", "village",
+     "village.json",
      "A village's cast and ground: a farmer, a slime, four harvests and a "
      "three-tile ground (grass, a paved square, a pond)."),
-    ("round7/art/gen_round7.py", "lighthouse", "lighthouse.json",
+    ("docs/archive/rounds/round7/art/gen_round7.py", "lighthouse",
+     "lighthouse.json",
      "A lighthouse's cast and tiles: the keeper (three states), the tower "
      "lamp, and four tilesets (a dusk sky, the tower, the cliff, the sea)."),
 ]
@@ -45,11 +47,17 @@ def patch(source, pack, fragment, description):
 
     # --- the paths --------------------------------------------------------
     s = s.replace('ROUND = os.path.dirname(HERE)', 'ROUND = HERE')
-    s = s.replace('''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
-    os.path.dirname(HERE))''',
+    # The rounds' generators moved to docs/archive/rounds/, so their ROOT
+    # blocks are depth 5; a pack lives at art/library/<pack> (depth 3).
+    # round6's block carries the repo-root comment on its own line,
+    # round7's has none — match the comment-bearing one first.
+    s = s.replace('''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(HERE)))))
+                                                          # the repo root''',
                   '''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
-    os.path.dirname(os.path.dirname(HERE)))''')
-    s = s.replace('''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(os.path.dirname(HERE))''',
+    os.path.dirname(os.path.dirname(HERE)))                                   # the repo root''')
+    s = s.replace('''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(HERE)))))''',
                   '''ROOT = os.environ.get("ARCADE1_ROOT") or os.path.dirname(
     os.path.dirname(os.path.dirname(HERE)))''')
     # the pack's output directory: --out-dir, or the pack itself
