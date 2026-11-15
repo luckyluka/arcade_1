@@ -27,10 +27,12 @@ Metrics, expression anchors, `odd/even/half`, `percent`, size classes + proporti
 `mirror`, `line`, `repeat` (+ `%`), `px` shape, `locals`, `variants`/`extends`/`palette_swap`, `px 2`, parameter tracks, swap frames, new assertions. **Exit:** every example in `spec-next/examples` compiles; negative fixtures per new `E_*` code.
 
 ## X2 Hero archetypes — from `spec-next/07_MILESTONES.md`, before Gate G1x
-`humanoid_side` (side view, `height` 12–64, four classes, `min_cell` contract, the five bindable animation templates), the `platformer_24` style pack, six hero recipes (`cap_round`, `overalls`, `gloves`, `boots_round`, `moustache_block`, `belt_buckle`) and the one-file hero `examples/hero.knight.json` whose `small`/`big`/`fire` ids derive through `variants` (fire costs only a `palette_swap`). **Exit:** the sweep passes on `humanoid_side` at every size and parameter extreme; hero assertions and the three new goldens are green. **Status:** exit criteria green; Gate G1x's blind rubric remains the owner's judgment.
+`humanoid_side` (side view, `height` 12–64, four classes, `min_cell` contract, the five bindable animation templates), the `platformer_24` style pack, six hero recipes (`cap_round`, `overalls`, `gloves`, `boots_round`, `moustache_block`, `belt_buckle`) and the one-file hero `examples/hero.knight.json` whose `small`/`big`/`fire` ids derive through `variants` (fire costs only a `palette_swap`). **Exit:** the sweep passes on `humanoid_side` at every size and parameter extreme; hero assertions and the three new goldens are green. **Status:** exit criteria green. Gate G1x's blind rubric was scored: big passes, small fails — see below.
 
 ## Gate G1x — the v2.1 freeze gate (before M4)
 Hero small + big compile from one file with `variants`, the sweep passes across its declared range, blind rubric ≥ 3.5, and `fire` costs only a `palette_swap`. **If it fails:** stop and fall back to hand-drawn `.px` for the hero; keep ArcForge for tiles, atlas, palette, level preview and quality tooling. Only after G1x passes is v2.1 frozen and M4.1 allowed to start.
+
+**Status (2026-11-15): FAILED on the rubric.** Mechanical criteria all green; the blind rubric passed big (height 32) and failed small (height 16) — `art/reviews/001-g1x.md` records the verdict and the sheets. The fallback is in force: the hero goes to hand-drawn `.px`, ArcForge keeps tiles/atlas/palette/level preview/quality tooling, v2.1 stays unfrozen and M4.1 stays blocked.
 
 ## M4 The C compiler (whole tool in C) (90–130 h incl. P0) — start only after Gate G3 (a game consumes assets)
 
