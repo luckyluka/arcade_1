@@ -1,0 +1,21 @@
+{
+  "style_pack": "platformer_24",
+  "version": "1.0.0",
+  "description": "24-colour platformer look for the level-1 cast: outline + six 3-tone ramps (steel, red, blue, gold, skin). Same ramp names as arcade_16 so recipes restyle across both packs.",
+  "max_colors": 24,
+  "min_feature_px": 1,
+  "outline": {
+    "mode": "outer",
+    "ramp": "outline",
+    "separate_layers": ["back"],
+    "inner": { "mode": "part", "parts": ["head", "torso", "arm_f", "arm_b", "leg_f", "leg_b"] }
+  },
+  "ramps": {
+    "outline": { "base": [26, 22, 34] },
+    "steel": { "shadow": [62, 66, 80], "base": [118, 126, 148], "light": [198, 206, 222] },
+    "red": { "shadow": [140, 24, 36], "base": [232, 60, 56], "light": [255, 150, 130] },
+    "blue": { "shadow": [30, 54, 130], "base": [54, 116, 235], "light": [150, 196, 255] },
+    "gold": { "shadow": [148, 100, 22], "base": [236, 176, 44], "light": [255, 234, 140] },
+    "skin": { "shadow": [156, 96, 72], "base": [226, 166, 124], "light": [250, 206, 166] }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "recipe": "boots_round",
+  "version": "1.0.0",
+  "category": "humanoid/feet",
+  "description": "Round-toe boots: a foot-wide body with a light toe cap and an optional dark sole on each foot.",
+  "applies_to": ["humanoid_side"],
+  "slot": "feet_gear",
+  "requires_anchors": ["foot_b", "foot_f"],
+  "parameters": {
+    "boot": { "type": "percent", "of": "height", "min": 8, "max": 26, "default": 16, "min_px": 3 },
+    "sole": { "type": "bool", "default": true },
+    "boot_ramp": { "type": "ramp", "default": "steel", "allow": ["steel", "blue", "red"] }
+  },
+  "geometry": [
+    { "anchor": "foot_b", "layer": "armor", "shape": "rect", "x": "-half($leg_w) - 1", "y": "1 - $boot", "w": "$leg_w + 2", "h": "$boot", "fill": "$boot_ramp.base" },
+    { "anchor": "foot_b", "layer": "armor", "shape": "ellipse", "x": "half($leg_w)", "y": "1 - max(2, $boot // 2)", "w": "max(2, $leg_w // 2)", "h": "max(2, $boot // 2)", "fill": "$boot_ramp.light" },
+    { "anchor": "foot_b", "layer": "armor", "shape": "rect", "x": "-half($leg_w) - 1", "y": -2, "w": "$leg_w + 2", "h": 2, "fill": "$boot_ramp.shadow", "when": "$sole" },
+    { "anchor": "foot_f", "layer": "armor", "shape": "rect", "x": "-half($leg_w) - 1", "y": "1 - $boot", "w": "$leg_w + 2", "h": "$boot", "fill": "$boot_ramp.base" },
+    { "anchor": "foot_f", "layer": "armor", "shape": "ellipse", "x": "half($leg_w)", "y": "1 - max(2, $boot // 2)", "w": "max(2, $leg_w // 2)", "h": "max(2, $boot // 2)", "fill": "$boot_ramp.light" },
+    { "anchor": "foot_f", "layer": "armor", "shape": "rect", "x": "-half($leg_w) - 1", "y": -2, "w": "$leg_w + 2", "h": 2, "fill": "$boot_ramp.shadow", "when": "$sole" }
+  ],
+  "examples": [
+    {},
+    { "boot": 26, "sole": true, "boot_ramp": "blue" },
+    { "boot": 8, "sole": false, "boot_ramp": "red" }
+  ]
+}

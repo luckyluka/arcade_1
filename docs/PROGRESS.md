@@ -16,7 +16,7 @@ condensed current view.
 | M28 | AI SDK v0.1 — headless `arcade1 run`, scripted input, per-frame hashes, `build/test/golden/inspect/info`, record/replay, named variables | COMPLETE |
 | M29 | the fresh-agent SDK round ("Breakout-lite") and its doc-gap findings — `docs/m29/` | landed (record) |
 | Wave 7a/7/8 | fixes + hygiene, the AI art pipeline, audio observability (cards 4.1–4.9, 7.1–7.8, 8.1–8.3) | COMPLETE — see [ROADMAP.md](ROADMAP.md) |
-| ArcForge | M0 (spec + reference implementation), X0 (variable-size core), X1 (language extensions) | COMPLETE — see [../arcforge/docs/ROADMAP.md](../arcforge/docs/ROADMAP.md) |
+| ArcForge | M0 (spec + reference implementation), X0 (variable-size core), X1 (language extensions), X2 (hero wave: `humanoid_side`, `platformer_24`, six recipes, one-file hero `small`/`big`/`fire`) | X2 landed — exit criteria green; Gate G1x (blind rubric) is the owner's call — see [../arcforge/docs/ROADMAP.md](../arcforge/docs/ROADMAP.md) |
 | ArcForge S1 | shaded look: 5-tone ramps, `ramp.*` shaded fills, `capsule`, joint `rotate`; `shaded_15` + `knight_front` | landed — language extension outside the X roadmap, see [../arcforge/docs/LANGUAGE.md](../arcforge/docs/LANGUAGE.md) |
 | Wave 9 | freeze-readiness dossier | NOT STARTED |
 | Wave 10 | ARCADE-1 on FPGA (RTL + board) | NOT STARTED |

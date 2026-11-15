@@ -1,0 +1,25 @@
+{
+  "recipe": "overalls",
+  "version": "1.0.0",
+  "category": "humanoid/body",
+  "description": "Work overalls: full-length trousers over both legs, a bib on the lower torso, and optional shoulder straps.",
+  "applies_to": ["humanoid_side"],
+  "slot": "body_gear",
+  "requires_anchors": ["origin"],
+  "parameters": {
+    "bib": { "type": "percent", "of": "height", "min": 8, "max": 30, "default": 18, "min_px": 4 },
+    "straps": { "type": "bool", "default": true },
+    "pants": { "type": "bool", "default": true },
+    "overall_ramp": { "type": "ramp", "default": "blue", "allow": ["blue", "red", "gold"] }
+  },
+  "geometry": [
+    { "anchor": "origin", "layer": "armor", "shape": "rect", "x": "$leg_b_x - $cx", "y": "1 - $leg_h", "w": "$leg_f_x + $leg_w - $leg_b_x", "h": "$leg_h", "fill": "$overall_ramp.base", "when": "$pants" },
+    { "anchor": "origin", "layer": "armor", "shape": "rect", "x": 0, "y": "1 - $leg_h - $bib", "w": "max(2, half($torso_w) - 1)", "h": "$bib + 1", "fill": "$overall_ramp.base" },
+    { "anchor": "origin", "layer": "armor", "shape": "rect", "x": "$torso_x + 1 - $cx", "y": "$torso_top + 2 - $foot_y", "w": 2, "h": "max(2, $foot_y - $torso_top - $leg_h - $bib)", "fill": "$overall_ramp.shadow", "when": "$straps" }
+  ],
+  "examples": [
+    {},
+    { "bib": 30, "straps": true, "pants": true, "overall_ramp": "gold" },
+    { "bib": 8, "straps": false, "pants": false, "overall_ramp": "red" }
+  ]
+}

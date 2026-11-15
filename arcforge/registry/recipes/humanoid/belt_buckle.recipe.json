@@ -1,0 +1,25 @@
+{
+  "recipe": "belt_buckle",
+  "version": "1.0.0",
+  "category": "humanoid/waist",
+  "description": "Waist belt: a dark strap across the hips with a metal buckle plate and optional prong.",
+  "applies_to": ["humanoid_side"],
+  "slot": "waist_gear",
+  "requires_anchors": ["back"],
+  "parameters": {
+    "belt": { "type": "percent", "of": "height", "min": 4, "max": 14, "default": 8, "min_px": 2 },
+    "buckle": { "type": "percent", "of": "torso_w", "min": 25, "max": 60, "default": 40, "min_px": 3 },
+    "prong": { "type": "bool", "default": true },
+    "buckle_ramp": { "type": "ramp", "default": "gold", "allow": ["gold", "steel"] }
+  },
+  "geometry": [
+    { "anchor": "back", "layer": "armor", "shape": "rect", "x": 0, "y": "$torso_h - $belt - half($torso_h)", "w": "$torso_w", "h": "$belt", "fill": "outline" },
+    { "anchor": "back", "layer": "armor", "shape": "rect", "x": "$torso_w - $buckle", "y": "$torso_h - $belt - half($torso_h)", "w": "$buckle", "h": "$belt", "fill": "$buckle_ramp.base" },
+    { "anchor": "back", "layer": "armor", "shape": "rect", "x": "$torso_w - $buckle", "y": "$torso_h - $belt - half($torso_h)", "w": "max(2, $buckle // 2)", "h": "$belt", "fill": "$armor_ramp.shadow", "when": "$prong" }
+  ],
+  "examples": [
+    {},
+    { "belt": 14, "buckle": 60, "prong": true, "buckle_ramp": "steel" },
+    { "belt": 4, "buckle": 25, "prong": false }
+  ]
+}

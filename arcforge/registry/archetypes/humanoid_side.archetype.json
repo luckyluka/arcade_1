@@ -1,0 +1,168 @@
+{
+  "archetype": "humanoid_side",
+  "version": "1.0.0",
+  "description": "Side-view humanoid parametric in size (2.1, spec-next 03): facing right, asymmetric (`symmetric: false`), one size parameter `height` (12..64) drives every metric, four classes vary the head proportion, and min_cell(size) is the cell contract. Parts are depth-ordered: back limb, near limb, torso, arm, head; per-part offsets plus leg swap poses carry the animation.",
+  "view": "side",
+  "canvas": {
+    "default": [44, 40],
+    "supported": [[44, 40]]
+  },
+  "params": {
+    "armor_ramp": { "type": "ramp", "default": "red", "allow": ["red", "blue", "gold", "steel"] },
+    "skin_ramp": { "type": "ramp", "default": "skin", "allow": ["skin"] }
+  },
+  "layers": ["back", "body", "armor", "held", "foreground", "fx"],
+  "symmetric": false,
+  "size": {
+    "height": { "min": 12, "max": 64, "default": 32 }
+  },
+  "classes": [
+    { "name": "tiny", "max": 16 },
+    { "name": "small", "max": 28 },
+    { "name": "medium", "max": 44 },
+    { "name": "large", "max": 64 }
+  ],
+  "proportions": {
+    "tiny": { "p_head": 36 },
+    "small": { "p_head": 32 },
+    "medium": { "p_head": 28 },
+    "large": { "p_head": 24 }
+  },
+  "metrics": [
+    ["u",         "max(1, $height // 16)"],
+    ["head_h",    "max(4, ($height * $p_head + 50) // 100)"],
+    ["leg_h",     "max(3, ($height * 30 + 50) // 100)"],
+    ["torso_h",   "$height - $head_h - $leg_h + 2"],
+    ["torso_w",   "max(4, ($height * 34 + 50) // 100)"],
+    ["head_w",    "max(4, ($height * 40 + 50) // 100)"],
+    ["leg_w",     "max(2, ($height * 16 + 50) // 100)"],
+    ["arm_w",     "max(2, ($height * 12 + 50) // 100)"],
+    ["arm_h",     "max(4, $torso_h - $u)"],
+    ["hand_h",    "max(2, $arm_h // 3)"],
+    ["cx",        "half($W)"],
+    ["foot_y",    "$H - 2"],
+    ["leg_top",   "$foot_y - $leg_h + 1"],
+    ["torso_bot", "$leg_top"],
+    ["torso_top", "$torso_bot - $torso_h + 1"],
+    ["head_bot",  "$torso_top"],
+    ["head_top",  "$head_bot - $head_h + 1"],
+    ["half_t",    "half($torso_w)"],
+    ["half_h",    "half($head_w)"],
+    ["half_l",    "half($leg_w)"],
+    ["torso_x",   "$cx - $half_t"],
+    ["head_x",    "$cx - $half_h + 2"],
+    ["leg_f_x",   "$cx - $half_l + 1"],
+    ["leg_b_x",   "$leg_f_x - max(1, $leg_w // 2)"],
+    ["arm_f_x",   "$torso_x + $torso_w - $arm_w + 1"],
+    ["arm_b_x",   "$torso_x - half($arm_w)"]
+  ],
+  "min_cell": ["$height + 4", "$height + 2"],
+  "parts": {
+    "root": { "shapes": [] },
+    "leg_b": {
+      "shapes": [
+        { "shape": "rect", "layer": "back", "x": "$leg_b_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.shadow" }
+      ],
+      "variants": {
+        "fwd": [
+          { "shape": "rect", "layer": "back", "x": "$leg_f_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.shadow" }
+        ],
+        "back": [
+          { "shape": "rect", "layer": "back", "x": "$leg_b_x - max(1, $leg_w // 2)", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.shadow" }
+        ]
+      }
+    },
+    "arm_b": {
+      "shapes": [
+        { "shape": "rect", "layer": "back", "x": "$arm_b_x", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h - $hand_h", "fill": "$armor_ramp.shadow" },
+        { "shape": "rect", "layer": "back", "x": "$arm_b_x", "y": "$torso_top + $arm_h - $hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "$skin_ramp.shadow" }
+      ]
+    },
+    "leg_f": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": "$leg_f_x", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h", "fill": "$armor_ramp.base" }
+      ],
+      "variants": {
+        "lift": [
+          { "shape": "rect", "layer": "body", "x": "$leg_f_x + max(1, $leg_w // 3)", "y": "$leg_top", "w": "$leg_w", "h": "$leg_h - 1", "fill": "$armor_ramp.base" }
+        ]
+      }
+    },
+    "torso": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": "$torso_x", "y": "$torso_top", "w": "$torso_w", "h": "$torso_h", "fill": "$armor_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$torso_x", "y": "$torso_bot - max(2, $u) + 1", "w": "$torso_w", "h": "max(2, $u)", "fill": "$armor_ramp.shadow" }
+      ]
+    },
+    "arm_f": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": "$arm_f_x", "y": "$torso_top", "w": "$arm_w", "h": "$arm_h - $hand_h", "fill": "$armor_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$arm_f_x", "y": "$torso_top + $arm_h - $hand_h", "w": "$arm_w", "h": "$hand_h", "fill": "$skin_ramp.base" }
+      ]
+    },
+    "head": {
+      "shapes": [
+        { "shape": "rect", "layer": "body", "x": "$head_x", "y": "$head_top", "w": "$head_w", "h": "$head_h", "fill": "$skin_ramp.base" },
+        { "shape": "rect", "layer": "body", "x": "$head_x + $head_w - 3", "y": "$head_top + max(1, $head_h // 3)", "w": 2, "h": 2, "fill": "outline" }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": { "part": "root", "at": ["$cx", "$foot_y"] },
+    "head": { "part": "head", "at": ["$head_x + half($head_w)", "$head_top + half($head_h)"] },
+    "hat": { "part": "head", "at": ["$head_x + half($head_w)", "$head_top"] },
+    "hand_f": { "part": "arm_f", "at": ["$arm_f_x + half($arm_w)", "$torso_top + $arm_h - 1"] },
+    "hand_b": { "part": "arm_b", "at": ["$arm_b_x + half($arm_w)", "$torso_top + $arm_h - 1"] },
+    "foot_f": { "part": "leg_f", "at": ["$leg_f_x + half($leg_w)", "$foot_y"] },
+    "foot_b": { "part": "leg_b", "at": ["$leg_b_x + half($leg_w)", "$foot_y"] },
+    "back": { "part": "torso", "at": ["$torso_x", "$torso_top + half($torso_h)"] }
+  },
+  "animations": {
+    "idle_breathe": {
+      "fps": 4,
+      "loop": true,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "torso": [0, 1], "head": [0, 1], "arm_f": [0, 1], "arm_b": [0, 1] } }
+      ]
+    },
+    "walk_cycle_6": {
+      "fps": 10,
+      "loop": true,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "torso": [0, 1], "head": [0, 1], "arm_f": [1, 1], "arm_b": [-1, 1] }, "swap": { "leg_b": "fwd" } },
+        { "offsets": {}, "swap": { "leg_b": "fwd", "leg_f": "lift" } },
+        { "offsets": { "torso": [0, 1], "head": [0, 1], "arm_f": [-1, 1], "arm_b": [1, 1] } },
+        { "offsets": {}, "swap": { "leg_b": "back" } },
+        { "offsets": {}, "swap": { "leg_b": "back", "leg_f": "lift" } }
+      ]
+    },
+    "attack_slash": {
+      "fps": 12,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "torso": [1, 0], "head": [1, 0], "arm_f": [3, -1], "arm_b": [1, 0] } },
+        { "offsets": {} }
+      ]
+    },
+    "hurt": {
+      "fps": 6,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "torso": [-2, 0], "head": [-2, -1], "arm_f": [-2, 0], "arm_b": [-2, 0] } }
+      ]
+    },
+    "death": {
+      "fps": 4,
+      "loop": false,
+      "frames": [
+        { "offsets": {} },
+        { "offsets": { "torso": [-1, 0], "head": [-2, 0], "arm_f": [-1, -1], "arm_b": [-2, 0] } },
+        { "offsets": { "torso": [1, 1], "head": [2, 1], "arm_f": [2, 1], "arm_b": [1, 1] } }
+      ]
+    }
+  }
+}

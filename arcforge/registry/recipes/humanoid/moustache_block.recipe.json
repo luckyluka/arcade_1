@@ -1,0 +1,23 @@
+{
+  "recipe": "moustache_block",
+  "version": "1.0.0",
+  "category": "humanoid/face",
+  "description": "Blocky dark moustache across the lower face, flush with the chin; optionally doubled into a bushier upper strip.",
+  "applies_to": ["humanoid_side"],
+  "slot": "mouth_detail",
+  "requires_anchors": ["head"],
+  "parameters": {
+    "moust": { "type": "percent", "of": "head_w", "min": 30, "max": 90, "default": 60, "min_px": 3 },
+    "thick": { "type": "percent", "of": "head_h", "min": 20, "max": 50, "default": 35, "min_px": 2 },
+    "bushy": { "type": "bool", "default": false }
+  },
+  "geometry": [
+    { "anchor": "head", "layer": "armor", "shape": "rect", "x": -1, "y": "$head_h - half($head_h) - $thick", "w": "$moust", "h": "$thick", "fill": "outline" },
+    { "anchor": "head", "layer": "armor", "shape": "rect", "x": -1, "y": "$head_h - half($head_h) - $thick - max(2, $thick // 2 + 1)", "w": "$moust", "h": "max(2, $thick // 2 + 1)", "fill": "outline", "when": "$bushy" }
+  ],
+  "examples": [
+    {},
+    { "moust": 90, "thick": 50, "bushy": true },
+    { "moust": 30, "thick": 20, "bushy": false }
+  ]
+}

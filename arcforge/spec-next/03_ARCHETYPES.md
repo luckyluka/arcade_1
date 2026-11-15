@@ -2,6 +2,20 @@
 
 > PROPOSED. Sizes are ranges, not constants. Every archetype declares `size`, `classes`, `metrics`, `anchors`, `layers`, `animations`, `min_cell`, and whether it is `symmetric`.
 
+> **Status (X2, implemented in `tools/arcforge_ref.py`)**: `humanoid_side` is live —
+> `registry/archetypes/humanoid_side.archetype.json`, the six-recipe humanoid set
+> (`cap_round`, `overalls`, `gloves`, `boots_round`, `moustache_block`, `belt_buckle`), and
+> the one-file hero `examples/hero.knight.json` whose `small`/`big`/`fire` ids derive through
+> `variants`; exercised by `make check` (8-size sweep at `min_cell`, all parameter extremes,
+> hero goldens) and `make spec-check`'s live sweep. **Finding (template binding):** the
+> template inventory above names 11 animations, but `schema/asset.schema.json`'s `animations`
+> `propertyNames` enum allows only `idle/walk/attack/hurt/death` as document keys — so only
+> those five are bindable 1:1, and the archetype implements exactly
+> `idle_breathe(2) walk_cycle_6(6) attack_slash(3) hurt(2) death(3)`.
+> `run_cycle_4/skid/jump_up/jump_down/crouch/win` stay unimplemented until a schema change
+> (LANGUAGE.md + reference tool together, per rule 7). The other archetypes in the table are
+> not implemented. The document stays PROPOSED until every section is.
+
 | archetype | used for | size params (range) | classes | key anchors |
 |---|---|---|---|---|
 | `humanoid_side` | hero (all power states), humanoid enemies | `height` 12–64 | tiny ≤16, small ≤28, medium ≤44, large | `origin, head, hand_f, hand_b, foot_f, foot_b, back, hat` |

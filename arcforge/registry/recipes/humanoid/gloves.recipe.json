@@ -1,0 +1,24 @@
+{
+  "recipe": "gloves",
+  "version": "1.0.0",
+  "category": "humanoid/hands",
+  "description": "Work gloves: a palm block over each hand plus a contrasting cuff over the lower forearm.",
+  "applies_to": ["humanoid_side"],
+  "slot": "hands_gear",
+  "requires_anchors": ["hand_f", "hand_b"],
+  "parameters": {
+    "cuff": { "type": "percent", "of": "height", "min": 6, "max": 22, "default": 12, "min_px": 2 },
+    "glove_ramp": { "type": "ramp", "default": "steel", "allow": ["steel", "gold", "blue"] }
+  },
+  "geometry": [
+    { "anchor": "hand_f", "layer": "armor", "shape": "rect", "x": "-half($arm_w + 1)", "y": "1 - $hand_h", "w": "$arm_w + 1", "h": "$hand_h", "fill": "$glove_ramp.base" },
+    { "anchor": "hand_f", "layer": "armor", "shape": "rect", "x": "-half($arm_w + 1)", "y": "1 - $hand_h - $cuff", "w": "$arm_w + 1", "h": "$cuff", "fill": "$glove_ramp.shadow" },
+    { "anchor": "hand_b", "layer": "armor", "shape": "rect", "x": "-half($arm_w + 1)", "y": "1 - $hand_h", "w": "$arm_w + 1", "h": "$hand_h", "fill": "$glove_ramp.base" },
+    { "anchor": "hand_b", "layer": "armor", "shape": "rect", "x": "-half($arm_w + 1)", "y": "1 - $hand_h - $cuff", "w": "$arm_w + 1", "h": "$cuff", "fill": "$glove_ramp.shadow" }
+  ],
+  "examples": [
+    {},
+    { "cuff": 22, "glove_ramp": "gold" },
+    { "cuff": 6, "glove_ramp": "blue" }
+  ]
+}

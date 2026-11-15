@@ -43,4 +43,14 @@ try:
 except (ValueError, KeyError):
     sw_ok = False
 check("live sweep: humanoid_front_scalable, 6 sizes, symmetric, no clipping", sw_ok, "" if sw_ok else (sw.stdout or sw.stderr)[-200:])
+
+# X2: same live sweep for the side-view archetype (asymmetric by design, so no symmetry claim).
+sw2 = subprocess.run([sys.executable, str(HERE.parent / "tools" / "arcforge_ref.py"), "sweep",
+                      str(HERE.parent / "registry" / "archetypes" / "humanoid_side.archetype.json")],
+                     capture_output=True, text=True)
+try:
+    sw2_ok = sw2.returncode == 0 and json.loads(sw2.stdout)["status"] == "PASS"
+except (ValueError, KeyError):
+    sw2_ok = False
+check("live sweep: humanoid_side, 8 sizes, no clipping", sw2_ok, "" if sw2_ok else (sw2.stdout or sw2.stderr)[-200:])
 print("\nALL GREEN" if not fails else f"\n{fails} FAILED"); sys.exit(1 if fails else 0)

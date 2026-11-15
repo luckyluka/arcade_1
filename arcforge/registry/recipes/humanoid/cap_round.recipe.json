@@ -1,0 +1,24 @@
+{
+  "recipe": "cap_round",
+  "version": "1.0.0",
+  "category": "humanoid/head",
+  "description": "Round cap: an ellipse crown covering the top of the head with an optional forward brim.",
+  "applies_to": ["humanoid_side"],
+  "slot": "head_gear",
+  "requires_anchors": ["hat"],
+  "parameters": {
+    "crown": { "type": "percent", "of": "head_h", "min": 30, "max": 70, "default": 30, "min_px": 2 },
+    "brim": { "type": "percent", "of": "head_w", "min": 10, "max": 45, "default": 25, "min_px": 2 },
+    "visor": { "type": "bool", "default": true },
+    "cap_ramp": { "type": "ramp", "default": "red", "allow": ["red", "blue", "gold"] }
+  },
+  "geometry": [
+    { "anchor": "hat", "layer": "armor", "shape": "ellipse", "x": "-half($head_w)", "y": 0, "w": "$head_w", "h": "$crown", "fill": "$cap_ramp.base" },
+    { "anchor": "hat", "layer": "armor", "shape": "rect", "x": "half($head_w)", "y": "$crown - 2", "w": "$brim", "h": 2, "fill": "$cap_ramp.shadow", "when": "$visor" }
+  ],
+  "examples": [
+    {},
+    { "crown": 70, "brim": 45, "visor": true, "cap_ramp": "gold" },
+    { "crown": 30, "brim": 10, "visor": false, "cap_ramp": "blue" }
+  ]
+}

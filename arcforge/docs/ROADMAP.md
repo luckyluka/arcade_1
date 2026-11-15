@@ -26,6 +26,9 @@ Metrics, expression anchors, `odd/even/half`, `percent`, size classes + proporti
 ## X1 Language extensions (25–40 h) — from `spec-next/07_MILESTONES.md`, before M4
 `mirror`, `line`, `repeat` (+ `%`), `px` shape, `locals`, `variants`/`extends`/`palette_swap`, `px 2`, parameter tracks, swap frames, new assertions. **Exit:** every example in `spec-next/examples` compiles; negative fixtures per new `E_*` code.
 
+## X2 Hero archetypes — from `spec-next/07_MILESTONES.md`, before Gate G1x
+`humanoid_side` (side view, `height` 12–64, four classes, `min_cell` contract, the five bindable animation templates), the `platformer_24` style pack, six hero recipes (`cap_round`, `overalls`, `gloves`, `boots_round`, `moustache_block`, `belt_buckle`) and the one-file hero `examples/hero.knight.json` whose `small`/`big`/`fire` ids derive through `variants` (fire costs only a `palette_swap`). **Exit:** the sweep passes on `humanoid_side` at every size and parameter extreme; hero assertions and the three new goldens are green. **Status:** exit criteria green; Gate G1x's blind rubric remains the owner's judgment.
+
 ## Gate G1x — the v2.1 freeze gate (before M4)
 Hero small + big compile from one file with `variants`, the sweep passes across its declared range, blind rubric ≥ 3.5, and `fire` costs only a `palette_swap`. **If it fails:** stop and fall back to hand-drawn `.px` for the hero; keep ArcForge for tiles, atlas, palette, level preview and quality tooling. Only after G1x passes is v2.1 frozen and M4.1 allowed to start.
 
@@ -40,7 +43,7 @@ A standalone C CLI (`arcforge` binary) that replaces the Python reference as the
 ### Sequencing (read first)
 
 1. **Do not start M4.1 before v2.1 is frozen.** The variable-size work (`spec-next`: X0 metrics/expression anchors/`percent` params, X1 `variants`/`mirror`/`repeat`) changes the language. Porting first means porting twice.
-2. Order: X0 → X1 (only what level 1 needs) → Gate G1x → **P0 (below)** → M4.1 → M4.2 → M4.3.
+2. Order: X0 → X1 (only what level 1 needs) → X2 (hero archetypes) → Gate G1x → **P0 (below)** → M4.1 → M4.2 → M4.3.
 3. G3 (a game consumes assets) stays. The owner may waive it explicitly in the card commit message; it is not waived by default.
 
 ### Contract
