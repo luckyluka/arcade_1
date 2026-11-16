@@ -1,0 +1,21 @@
+px 1
+name legf
+size 7 9
+anchor attach 4 8
+legend
+  . transparent
+  o outline
+  B blue.base
+  M steel.base
+  L steel.light
+  S steel.shadow
+rows
+  ooBBBBB
+  ooBBBBB
+  ooBBBBB
+  ooBBBBB
+  ooBBBBB
+  ooBBBBB
+  ooMMMML
+  oSSSSSS
+  SSSSSSS

@@ -1,0 +1,24 @@
+px 1
+name armf
+size 4 13
+anchor attach 2 12
+legend
+  . transparent
+  o outline
+  s skin.base
+  R red.base
+  L red.light
+rows
+  RRRL
+  RRRL
+  RRRL
+  RRRL
+  RRRL
+  RRRL
+  RRRL
+  ssss
+  ssss
+  ssss
+  ssss
+  ssss
+  ssss

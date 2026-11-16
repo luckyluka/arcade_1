@@ -1,0 +1,15 @@
+px 1
+name armf
+size 4 5
+anchor attach 1 4
+legend
+  . transparent
+  o outline
+  s skin.base
+  R red.base
+rows
+  oRo.
+  oRo.
+  oso.
+  oso.
+  oso.

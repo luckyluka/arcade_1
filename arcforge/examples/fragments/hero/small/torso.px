@@ -1,0 +1,17 @@
+px 1
+name torso
+size 10 7
+anchor attach 2 3
+legend
+  . transparent
+  o outline
+  R red.base
+  k red.shadow
+rows
+  ...ooooooo
+  ...RRRRRRR
+  ...RRRRRRR
+  ...RRRRRRR
+  ...RRRRRRR
+  ...kkkkkRR
+  ...ooooooo

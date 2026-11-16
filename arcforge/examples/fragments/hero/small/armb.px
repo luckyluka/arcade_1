@@ -1,0 +1,16 @@
+px 1
+name armb
+size 4 7
+anchor attach 2 5
+legend
+  . transparent
+  o outline
+  k red.shadow
+rows
+  oooo
+  okko
+  okko
+  okko
+  okko
+  okko
+  oooo

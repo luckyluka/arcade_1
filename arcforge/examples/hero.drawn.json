@@ -1,0 +1,71 @@
+{
+ "arcforge": "2.1",
+ "asset": {
+  "id": "hero.drawn.small",
+  "type": "character",
+  "version": "1.0.0",
+  "description": "Level-1 hero, hand-drawn .px fallback (G1x review 001): every visible piece is a hand-drawn fragment riding the humanoid_side skeleton; the parametric mannequin is fully covered in its static poses, and its swap-pose slivers (one pixel of leg per stride frame) share the fragment palette. small = height 16."
+ },
+ "archetype": {
+  "name": "humanoid_side",
+  "size": {"height": 16},
+  "params": {"armor_ramp": "red", "skin_ramp": "skin"}
+ },
+ "style_pack": "platformer_24",
+ "features": [],
+ "custom": [
+  {"id": "armb", "type": "px_fragment", "file": "fragments/hero/small/armb.px", "anchor": "hand_b", "layer": "back"},
+  {"id": "legf", "type": "px_fragment", "file": "fragments/hero/small/legf.px", "anchor": "foot_f", "layer": "body"},
+  {"id": "torso", "type": "px_fragment", "file": "fragments/hero/small/torso.px", "anchor": "back", "layer": "armor"},
+  {"id": "armf", "type": "px_fragment", "file": "fragments/hero/small/armf.px", "anchor": "hand_f", "layer": "armor"},
+  {"id": "head", "type": "px_fragment", "file": "fragments/hero/small/head.px", "anchor": "hat", "layer": "armor"}
+ ],
+ "animations": {
+  "idle": {"template": "idle_breathe"},
+  "walk": {"template": "walk_cycle_6"},
+  "attack": {"template": "attack_slash"},
+  "hurt": {"template": "hurt"},
+  "death": {"template": "death"}
+ },
+ "target": {
+  "profile": "arcade1-draft",
+  "canvas": {"mode": "auto", "margin": 1, "multiple_of": 1, "align": "pivot_bottom_center"},
+  "clip_policy": "error"
+ },
+ "export": {"formats": ["png", "spritesheet"]},
+ "tests": [
+  {"assert": "baseline_stable", "anchor": "foot_f", "max": 1},
+  {"assert": "pivot_stable", "max": 0},
+  {"assert": "min_feature", "min": 2},
+  {"assert": "cell_fill", "min": 0.25, "max": 0.75},
+  {"assert": "palette_size", "max": 24}
+ ],
+ "variants": [
+  {
+   "id": "hero.drawn.big",
+   "override": {
+    "asset": {"description": "Level-1 hero, hand-drawn .px fallback (G1x review 001), height 32: the same five-piece hand-drawn cover set redrawn at the big scale (head/torso/arm_f/arm_b/leg_f) over the humanoid_side skeleton, with armor_ramp set to blue so the stride slivers read as leg shading."},
+    "archetype": {"size": {"height": 32}, "params": {"armor_ramp": "blue"}},
+    "custom": [
+     {"id": "armb", "type": "px_fragment", "file": "fragments/hero/big/armb.px", "anchor": "hand_b", "layer": "back"},
+     {"id": "legf", "type": "px_fragment", "file": "fragments/hero/big/legf.px", "anchor": "foot_f", "layer": "body"},
+     {"id": "torso", "type": "px_fragment", "file": "fragments/hero/big/torso.px", "anchor": "back", "layer": "armor"},
+     {"id": "armf", "type": "px_fragment", "file": "fragments/hero/big/armf.px", "anchor": "hand_f", "layer": "armor"},
+     {"id": "head", "type": "px_fragment", "file": "fragments/hero/big/head.px", "anchor": "hat", "layer": "armor"}
+    ],
+    "tests": [
+     {"assert": "baseline_stable", "anchor": "foot_f", "max": 1},
+     {"assert": "pivot_stable", "max": 0},
+     {"assert": "min_feature", "min": 2},
+     {"assert": "cell_fill", "min": 0.25, "max": 0.75},
+     {"assert": "palette_size", "max": 24}
+    ]
+   }
+  },
+  {
+   "id": "hero.drawn.fire",
+   "from": "hero.drawn.big",
+   "palette_swap": {"red": "gold"}
+  }
+ ]
+}

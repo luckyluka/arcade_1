@@ -34,6 +34,8 @@ Hero small + big compile from one file with `variants`, the sweep passes across 
 
 **Status (2026-11-15): FAILED on the rubric.** Mechanical criteria all green; the blind rubric passed big (height 32) and failed small (height 16) — `art/reviews/001-g1x.md` records the verdict and the sheets. The fallback is in force: the hero goes to hand-drawn `.px`, ArcForge keeps tiles/atlas/palette/level preview/quality tooling, v2.1 stays unfrozen and M4.1 stays blocked.
 
+**Fallback delivered (2026-11-16):** `examples/hero.drawn.json` — five hand-drawn `.px` pieces per scale over the `humanoid_side` skeleton, three ids from one file (`small` base, `big` via `variants` override, `fire` via `from` + `palette_swap`), 51 frames, `make check`/`make spec-check` ALL GREEN, three new goldens. Swap-pose stride frames expose one pixel of mannequin leg per side; aligning `armor_ramp` with the fragment art makes the slivers read as leg shading. The finding and the leak-check harness are in `../../docs/experiments/hero-drawn-fallback.md`. Gate status itself is unchanged: G1x FAILED, v2.1 unfrozen, M4.1 blocked.
+
 ## M4 The C compiler (whole tool in C) (90–130 h incl. P0) — start only after Gate G3 (a game consumes assets)
 
 Go is dropped in the same change in: ROADMAP.md M4, FEASIBILITY.md (G3 line + effort table), ARCHITECTURE.md (implementation plan), AGENTS.md rule 8, and the oracle docstring in `tools/arcforge_ref.py`.

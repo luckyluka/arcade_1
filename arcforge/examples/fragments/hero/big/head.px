@@ -1,0 +1,20 @@
+px 1
+name head
+size 15 10
+anchor attach 7 1
+legend
+  . transparent
+  o outline
+  s skin.base
+  R red.base
+rows
+  ...............
+  .ooRRRRRRRRRoo.
+  .oRRRRRRRRRRRo.
+  .RRRRRRRRRRRRR.
+  .RRRRRRRRRRRRR.
+  .sssssssssssss.
+  .ssssssssoosss.
+  .ssssssssoosss.
+  .sssssssssssss.
+  .ooooooooooooo.
