@@ -339,23 +339,294 @@ def parse_px(text):
 # --------------------------------------------------------------------------
 # Validation + compilation to IR
 # --------------------------------------------------------------------------
-def schema_validator(name):
+# --------------------------------------------------------------------------
+# Schema diagnostics (ROADMAP P0.1)
+#
+# jsonschema supplies only the *structure* of a failure: the keyword that
+# failed, the expected value, the instance and the path. The wording comes
+# from the tables below, because the C compiler (M4) must reproduce every
+# report byte-for-byte and no library text may leak into a message. One
+# schema check produces one list of diagnostics, deduplicated and ordered by
+# (path, kind, message).
+# --------------------------------------------------------------------------
+PATTERN_NAMES = {   # our pattern vocabulary, keyed by the regex in schema/
+    "^[a-z0-9_]+$": "identifier",
+    "^[a-z0-9_]{1,64}$": "identifier",
+    "^[a-z0-9_]+(\\.[a-z0-9_]+)*$": "dotted identifier",
+    "^\\d+\\.\\d+\\.\\d+$": "semver",
+    "^[a-z0-9_]+(/[a-z0-9_]+)*$": "category path",
+    "^p_[a-z0-9_]{1,62}$": "parameter name",
+    "^[EW]_[A-Z_]+$": "diagnostic code",
+}
+
+KIND_RANK = {       # the "kind" half of the (path, kind, message) ordering
+    "additionalProperties": 0, "required": 1, "type": 2, "enum": 3,
+    "const": 4, "pattern": 5, "minimum": 6, "maximum": 7, "minItems": 8,
+    "maxItems": 9, "minProperties": 10, "maxProperties": 11,
+    "uniqueItems": 12, "items": 13, "oneOf": 14, "anyOf": 15, "allOf": 16,
+}
+KIND_UNKNOWN = 99
+
+
+def _lit(v):
+    """Literal for a message: JSON encoding, byte-stable on every platform."""
+    return json.dumps(v)
+
+
+def _typename(v):
+    if v is None:
+        return "null"
+    if isinstance(v, bool):
+        return "boolean"
+    if isinstance(v, int):
+        return "integer"
+    if isinstance(v, float):
+        return "number"
+    if isinstance(v, str):
+        return "string"
+    if isinstance(v, list):
+        return "array"
+    return "object"
+
+
+def _scalar(v):
+    """observed/expected carry scalars; a whole object in prose is noise."""
+    return v if v is None or isinstance(v, (str, int, float, bool)) else None
+
+
+def _emit(out, kind, path, message, code="E_SCHEMA", **kw):
+    out.append((tuple(path.split("/")), KIND_RANK.get(kind, KIND_UNKNOWN),
+                kind, message, D(code, path, message, **kw)))
+
+
+def _pattern_message(value, regex):
+    name = PATTERN_NAMES.get(regex)
+    if name:
+        return f"{_lit(value)} is not a valid {name}", name
+    return f"{_lit(value)} does not match the required format", regex
+
+
+def _is_property_names(e):
+    """True for a failure of an object's `propertyNames` sub-schema.
+
+    jsonschema reports it at the *object's* path with the offending key as
+    the instance (the schema path ends `... propertyNames <keyword>`; a
+    property merely *named* `propertyNames` would sit behind `properties`,
+    which is the disambiguator).
+    """
+    sp = list(e.absolute_schema_path)
+    if len(sp) < 2 or sp[-2] != "propertyNames":
+        return False
+    return not (len(sp) >= 3 and sp[-3] == "properties")
+
+
+def _sub_location(c):
+    """Pointer of an error relative to the value it was checked against.
+
+    propertyNames errors need the key appended, otherwise they look like
+    they sit at the object itself (one level too shallow for the depth
+    comparison in _collect_oneof)."""
+    p = ptr(*c.absolute_path)
+    return p + ptr(c.instance) if _is_property_names(c) else p
+
+
+def _collect_schema_error(e, prefix, root, out):
+    """Turn one jsonschema ValidationError into our diagnostics.
+
+    Never reads e.message: every sentence is composed here from the
+    keyword, the expected value and the instance. `prefix` is the pointer
+    this document sits at (a registry file path, or the enclosing oneOf
+    value); `root` is the whole schema, for $defs when re-checking branches.
+    """
+    kind = e.validator
+    path = prefix + ptr(*e.absolute_path)
+
+    if kind == "additionalProperties":
+        # structural: the instance's keys that the object schema does not
+        # declare. jsonschema would only tell us this in prose.
+        props = e.schema.get("properties", {}) if isinstance(e.schema, dict) else {}
+        for k in sorted(k for k in e.instance if k not in props):
+            _emit(out, kind, path + ptr(k),
+                  f"unknown field '{k}'. Free text is metadata, never executable visual intent; "
+                  "use archetype/features/params or a custom px_fragment",
+                  code="E_UNKNOWN_FIELD", suggestions=["features", "custom", "metadata"])
+        return
+
+    if kind == "oneOf":
+        _collect_oneof(e, prefix, root, out)
+        return
+
+    if kind == "required" and isinstance(e.instance, dict):
+        # one diagnostic per missing key; the set is recomputed from the
+        # required list and the instance instead of parsed out of prose.
+        for k in (k for k in e.validator_value if k not in e.instance):
+            _emit(out, kind, path, f"'{k}' is a required property", expected=k)
+        return
+
+    if kind == "pattern":
+        message, expected = _pattern_message(e.instance, e.validator_value)
+        if _is_property_names(e):
+            # propertyNames: the instance is the *key*, reported at the
+            # object's own path, so attach it to the pointer.
+            _emit(out, kind, path + ptr(e.instance), message,
+                  observed=_scalar(e.instance), expected=expected)
+        else:
+            _emit(out, kind, path, message,
+                  observed=_scalar(e.instance), expected=expected)
+        return
+
+    if kind == "type":
+        exp = e.validator_value
+        shape = exp if isinstance(exp, str) else " or ".join(exp)
+        _emit(out, kind, path, f"expected {shape}, got {_typename(e.instance)}",
+              observed=_scalar(e.instance), expected=shape)
+        return
+
+    if kind == "enum":
+        exp = list(e.validator_value)
+        _emit(out, kind, path, f"expected one of {_lit(exp)}, got {_lit(e.instance)}",
+              observed=_scalar(e.instance), expected=exp)
+        return
+
+    if kind == "const":
+        _emit(out, kind, path, f"expected {_lit(e.validator_value)}, got {_lit(e.instance)}",
+              observed=_scalar(e.instance), expected=e.validator_value)
+        return
+
+    if kind in ("minimum", "maximum"):
+        op = ">=" if kind == "minimum" else "<="
+        _emit(out, kind, path, f"expected {op} {_lit(e.validator_value)}, got {_lit(e.instance)}",
+              observed=_scalar(e.instance), expected=f"{op} {e.validator_value}")
+        return
+
+    if kind in ("minItems", "maxItems", "minProperties", "maxProperties"):
+        at = "at least" if kind.startswith("min") else "at most"
+        b = e.validator_value
+        unit = ("entry" if b == 1 else "entries") if kind.endswith("Items") \
+            else ("key" if b == 1 else "keys")
+        n = len(e.instance)
+        _emit(out, kind, path, f"expected {at} {b} {unit}, got {n}",
+              observed=n, expected=f"{at} {b}")
+        return
+
+    if kind == "uniqueItems":
+        dup, found = None, False
+        for i, v in enumerate(e.instance):
+            if v in e.instance[:i]:
+                dup, found = v, True
+                break
+        _emit(out, kind, path,
+              f"duplicate entry {_lit(dup)}" if found else "array entries must be unique",
+              observed=_scalar(dup) if found else None)
+        return
+
+    if kind == "items":
+        # `items: false` behind prefixItems: the array may not grow longer.
+        n = len(e.instance) if isinstance(e.instance, list) else None
+        if n is not None and isinstance(e.schema, dict) and "prefixItems" in e.schema:
+            b = len(e.schema["prefixItems"])
+            _emit(out, kind, path, f"expected at most {b} entries, got {n}",
+                  observed=n, expected=f"at most {b}")
+            return
+
+    if e.context:   # anyOf and friends wrap their failures
+        for sub in sorted(e.context, key=lambda c: (tuple(map(str, c.absolute_path)), c.validator)):
+            _collect_schema_error(sub, prefix, root, out)
+        return
+    _emit(out, kind, path, f"value does not satisfy the '{kind}' constraint",
+          observed=_scalar(e.instance))
+
+
+def _collect_oneof(e, prefix, root, out):
+    """Explain a oneOf failure with the form the document reached for.
+
+    The branches are re-checked structurally (jsonschema only says that
+    none of them fits):
+      1. a branch that fails solely because keys are missing at the value
+         itself names the intended form;
+      2. otherwise the deepest disagreement -- the entry or field that is
+         actually wrong -- beats a bare "wrong shape" at the top, and
+         branches that disagree at the same spot are merged into one
+         message;
+      3. if every branch only disputes the top-level shape, the shapes are
+         merged ("expected array or object, got string").
+    Branches are validated inside a wrapper carrying the schema's $defs,
+    because a branch may $ref them (`#/$defs/...`).
+    """
+    path = prefix + ptr(*e.absolute_path)
+    branches = e.schema.get("oneOf") if isinstance(e.schema, dict) else None
+    if not isinstance(branches, list) or not branches:
+        _emit(out, "oneOf", path, "value does not satisfy one of the allowed forms",
+              observed=_scalar(e.instance))
+        return
     from jsonschema import Draft202012Validator
-    return Draft202012Validator(load_json(SCHEMA_DIR / name))
+    defs = root.get("$defs", {}) if isinstance(root, dict) else {}
+    checked = [list(Draft202012Validator({"$defs": defs, "allOf": [b]}).iter_errors(e.instance))
+               for b in branches]
+    if sum(1 for es in checked if not es) > 1:
+        _emit(out, "oneOf", path, "value matches more than one allowed form",
+              observed=_scalar(e.instance))
+        return
+    intended = [es for es in checked
+                if es and all(c.validator == "required" and not list(c.absolute_path) for c in es)]
+    if intended:
+        for sub in intended[0]:
+            _collect_schema_error(sub, path, root, out)
+        return
+
+    allerrs = [c for es in checked for c in es]
+    located = [(_sub_location(c), c) for c in allerrs]
+    depth = max(p.count("/") for p, _c in located)
+    if depth:
+        pool = [(p, c) for p, c in located if p.count("/") == depth]
+    else:
+        specific = [(p, c) for p, c in located if c.validator != "type"]
+        pool = specific or located
+    groups = {}
+    for p, c in pool:
+        groups.setdefault((p, c.validator), []).append(c)
+    for key in sorted(groups, key=lambda k: (k[0], KIND_RANK.get(k[1], KIND_UNKNOWN), k[1])):
+        g = groups[key]
+        if len(g) > 1 and g[0].validator in ("const", "type"):
+            exps = []
+            for c in g:
+                if c.validator_value not in exps:
+                    exps.append(c.validator_value)
+            gp = path + key[0]
+            if g[0].validator == "type":
+                shape = " or ".join(x if isinstance(x, str) else " or ".join(x) for x in exps)
+                _emit(out, "type", gp, f"expected {shape}, got {_typename(g[0].instance)}",
+                      observed=_scalar(g[0].instance), expected=shape)
+            elif len(exps) == 1:
+                _emit(out, "const", gp,
+                      f"expected {_lit(exps[0])}, got {_lit(g[0].instance)}",
+                      observed=_scalar(g[0].instance), expected=exps[0])
+            else:
+                _emit(out, "const", gp,
+                      f"expected one of {_lit(exps)}, got {_lit(g[0].instance)}",
+                      observed=_scalar(g[0].instance), expected=list(exps))
+            continue
+        for c in g:
+            _collect_schema_error(c, path, root, out)
 
 
 def schema_diags(doc, schema_name, base_path=""):
-    diags = []
-    for e in sorted(schema_validator(schema_name).iter_errors(doc), key=lambda e: list(map(str, e.absolute_path))):
-        p = base_path + ptr(*e.absolute_path)
-        if e.validator == "additionalProperties" and "were unexpected" in e.message or "was unexpected" in e.message:
-            for extra in re.findall(r"'([^']+)'", e.message):
-                diags.append(D("E_UNKNOWN_FIELD", p + ptr(extra),
-                               f"unknown field '{extra}'. Free text is metadata, never executable visual intent; "
-                               "use archetype/features/params or a custom px_fragment",
-                               suggestions=["features", "custom", "metadata"]))
-        else:
-            diags.append(D("E_SCHEMA", p or "/", e.message))
+    """Schema failures as our diagnostics, ordered (path, kind, message).
+
+    Deduplicated: the same message at the same path can be reached through
+    more than one keyword or more than one oneOf branch."""
+    from jsonschema import Draft202012Validator
+    root = load_json(SCHEMA_DIR / schema_name)
+    entries = []
+    for e in Draft202012Validator(root).iter_errors(doc):
+        _collect_schema_error(e, base_path, root, entries)
+    entries.sort(key=lambda t: t[:4])
+    diags, seen = [], set()
+    for _parts, _rank, _kind, message, d in entries:
+        key = (d["code"], d["path"], message)
+        if key not in seen:
+            seen.add(key)
+            diags.append(d)
     return diags
 
 

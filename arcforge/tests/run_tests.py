@@ -45,5 +45,11 @@ for name, spec in exp.items():
     status_ok = (r["status"] == "FAIL") == bool(want_e)
     check(f"invalid/{name}", status_ok and got_e == want_e and got_w == want_w,
           f"expected errors {want_e} warnings {want_w}, got errors {got_e} warnings {got_w}")
+# P0.1: E_SCHEMA/E_UNKNOWN_FIELD wording and ordering are ours, not the
+# jsonschema library's -- the C compiler must reproduce them byte-for-byte.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_schema_messages.py")],
+                   capture_output=True, text=True)
+check("schema diagnostics messages (P0.1)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)
