@@ -28,14 +28,16 @@ The AI drives ArcForge through a small tool surface (CLI now, MCP server in M5).
 - `E_SCHEMA` / `E_UNKNOWN_FIELD` wording is produced by the tool, never by a
   library: one fixed sentence per failure kind — `expected <type>, got <value>`,
   `'<key>' is a required property`, `'<value>' is not a valid <identifier |
-  dotted identifier | semver | category path | parameter name>`,
+  dotted identifier | semver | category path | parameter name | diagnostic
+  code>` (the name vocabulary, checked by hand — see `docs/LANGUAGE.md`),
   `expected one of [...], got ...`, `expected >= <n>, got <v>`, `expected at
   most <n> entries, got <m>` — and `oneOf` failures name the intended form (the
   branch that only lacks keys, the deepest disagreement, or the merged shapes:
   `expected array or object, got string`). Diagnostics from one schema check
   are deduplicated and ordered by (path, kind, message), so the same document
   always yields the same report; the C compiler (M4) must reproduce it
-  byte-for-byte. Vectors: `tests/test_schema_messages.py`.
+  byte-for-byte. Vectors: `tests/test_schema_messages.py`,
+  `tests/test_pattern_vocab.py`.
 
 | code | meaning |
 |---|---|

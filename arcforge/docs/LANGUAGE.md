@@ -21,6 +21,28 @@ documents cannot use the 2.1 fields (`arcforge` unknown value or unknown key →
 ```
 Only `description` and `metadata` are free-form, and neither affects output. Any other unknown key is `E_UNKNOWN_FIELD`.
 
+### Name vocabulary (P0.2)
+
+Names are never matched with regular expressions — the C compiler (M4) has no
+regex engine — so the schemas declare a name form with `"format"` and both
+tools check it by hand. A failed check is `E_SCHEMA` at the value's pointer
+(`"<value>" is not a valid <form>`); a value of the wrong type is reported by
+the type check, not the format check.
+
+| format | rule | used by |
+|---|---|---|
+| `identifier` | 1–64 characters of `a-z 0-9 _` | recipe/archetype/style/slot names, object keys, ramp names, fragment vars |
+| `dotted_identifier` | one or more `identifier`s joined by `.` | `asset.id` |
+| `semver` | exactly three groups of 1+ digits `0-9` joined by `.` (e.g. `2.0.0`) | `asset.version`, recipe `version` |
+| `category_path` | one or more `identifier`s joined by `/` | recipe `category` |
+| `parameter_name` | `p_` + `identifier`, 64 characters total | class proportion keys |
+| `diagnostic_code` | `E_` or `W_` + 1+ of `A-Z _` | diagnostic `code` |
+
+Digits are `0-9` only (no Unicode digits), and the 64-character cap keeps
+every identifier below the threshold where `difflib`'s similarity heuristic
+starts treating long sequences specially — so the Python tool and the C
+compiler suggest the same near-misses.
+
 ### Derived assets (2.1, X1)
 | field | meaning |
 |---|---|

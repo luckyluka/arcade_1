@@ -16,7 +16,7 @@
         "additionalProperties": false,
         "required": ["code", "severity", "path", "message"],
         "properties": {
-          "code": { "type": "string", "pattern": "^[EW]_[A-Z_]+$" },
+          "code": { "type": "string", "format": "diagnostic_code" },
           "severity": { "enum": ["error", "warning"] },
           "path": { "type": "string", "description": "RFC 6901 JSON Pointer into the asset (or a file path for registry lint)." },
           "message": { "type": "string" },

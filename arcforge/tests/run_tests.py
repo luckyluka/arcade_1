@@ -51,5 +51,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_schema_messages.p
                    capture_output=True, text=True)
 check("schema diagnostics messages (P0.1)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.2: the pattern vocabulary is checked by hand (no regex engine in C).
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_pattern_vocab.py")],
+                   capture_output=True, text=True)
+check("pattern vocabulary (P0.2)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

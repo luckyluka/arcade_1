@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["style_pack", "version", "description", "max_colors", "outline", "ramps"],
   "properties": {
-    "style_pack": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "style_pack": { "type": "string", "format": "identifier" },
     "version": { "type": "string" },
     "description": { "type": "string" },
     "max_colors": { "type": "integer", "minimum": 2, "maximum": 256 },

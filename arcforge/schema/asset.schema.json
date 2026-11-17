@@ -13,26 +13,26 @@
       "additionalProperties": false,
       "required": ["id", "type", "version"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$" },
+        "id": { "type": "string", "format": "dotted_identifier" },
         "type": { "enum": ["character", "enemy", "boss", "projectile", "pickup", "effect", "tile", "ui"] },
-        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "version": { "type": "string", "format": "semver" },
         "description": { "type": "string", "description": "Metadata only. Never executable visual intent." }
       }
     },
     "metadata": { "type": "object", "description": "Free-form notes. Ignored by the compiler.", "additionalProperties": true },
     "extends": { "type": "string", "description": "2.1: asset file this document derives from; RFC-7386 merge, path relative to this file, at most 3 links, no cycles." },
     "palette_swap": { "type": "object", "description": "2.1: ramp-name map applied when fills resolve (both ends must exist in the style pack).",
-      "propertyNames": { "pattern": "^[a-z0-9_]+$" },
-      "additionalProperties": { "type": "string", "pattern": "^[a-z0-9_]+$" } },
+      "propertyNames": { "format": "identifier" },
+      "additionalProperties": { "type": "string", "format": "identifier" } },
     "variants": { "type": "array", "description": "2.1: derived assets from one file; each entry composes the base (or an earlier entry) with an RFC-7386 override.",
       "items": { "type": "object", "additionalProperties": false, "required": ["id"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)*$" },
+          "id": { "type": "string", "format": "dotted_identifier" },
           "from": { "type": "string", "description": "Base document id or an earlier variant id." },
           "override": { "type": "object", "description": "RFC 7386 JSON Merge Patch over the source document (arrays replace whole)." },
           "palette_swap": { "type": "object",
-            "propertyNames": { "pattern": "^[a-z0-9_]+$" },
-            "additionalProperties": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+            "propertyNames": { "format": "identifier" },
+            "additionalProperties": { "type": "string", "format": "identifier" } }
         } } },
     "target": {
       "type": "object",
@@ -53,16 +53,16 @@
         "clip_policy": { "enum": ["error", "warn"] }
       }
     },
-    "style_pack": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "style_pack": { "type": "string", "format": "identifier" },
     "archetype": {
       "type": "object",
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
-        "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "name": { "type": "string", "format": "identifier" },
         "params": { "type": "object" },
         "size": { "type": "object", "minProperties": 1,
-          "propertyNames": { "pattern": "^[a-z0-9_]{1,64}$" },
+          "propertyNames": { "format": "identifier" },
           "additionalProperties": { "type": "integer", "minimum": 1, "maximum": 512 } }
       }
     },
@@ -70,13 +70,13 @@
       "type": "array",
       "items": {
         "oneOf": [
-          { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          { "type": "string", "format": "identifier" },
           {
             "type": "object",
             "additionalProperties": false,
             "required": ["recipe"],
             "properties": {
-              "recipe": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+              "recipe": { "type": "string", "format": "identifier" },
               "params": { "type": "object" }
             }
           }
@@ -90,12 +90,12 @@
         "additionalProperties": false,
         "required": ["id", "type", "file", "anchor", "layer"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "id": { "type": "string", "format": "identifier" },
           "type": { "const": "px_fragment" },
           "file": { "type": "string" },
           "frame": { "type": "integer", "minimum": 0, "description": "2.1: px-2 frame to draw (default 0)." },
-          "anchor": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-          "layer": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+          "anchor": { "type": "string", "format": "identifier" },
+          "layer": { "type": "string", "format": "identifier" }
         }
       }
     },
@@ -106,7 +106,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": ["template"],
-        "properties": { "template": { "type": "string", "pattern": "^[a-z0-9_]+$" } }
+        "properties": { "template": { "type": "string", "format": "identifier" } }
       }
     },
     "tests": {

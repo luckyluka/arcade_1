@@ -6,12 +6,12 @@
   "additionalProperties": false,
   "required": ["recipe", "version", "category", "description", "applies_to", "slot", "requires_anchors", "parameters", "geometry", "examples"],
   "properties": {
-    "recipe": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
-    "category": { "type": "string", "pattern": "^[a-z0-9_]+(/[a-z0-9_]+)*$" },
+    "recipe": { "type": "string", "format": "identifier" },
+    "version": { "type": "string", "format": "semver" },
+    "category": { "type": "string", "format": "category_path" },
     "description": { "type": "string" },
     "applies_to": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-    "slot": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "slot": { "type": "string", "format": "identifier" },
     "stackable": { "type": "boolean" },
     "conflicts_with": { "type": "array", "items": { "type": "string" } },
     "requires_anchors": { "type": "array", "items": { "type": "string" } },
@@ -28,7 +28,7 @@
           { "type": "object", "additionalProperties": false, "required": ["type", "default"],
             "properties": { "type": { "const": "ramp" }, "default": { "type": "string" }, "allow": { "type": "array", "items": { "type": "string" } } } },
           { "type": "object", "additionalProperties": false, "required": ["type", "of", "default"],
-            "properties": { "type": { "const": "percent" }, "of": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+            "properties": { "type": { "const": "percent" }, "of": { "type": "string", "format": "identifier" },
                             "default": { "type": "integer", "minimum": 0, "maximum": 100 },
                             "min": { "type": "integer", "minimum": 0, "maximum": 100 },
                             "max": { "type": "integer", "minimum": 0, "maximum": 100 },
@@ -41,7 +41,7 @@
         { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/shape" },
           "description": "One geometry shared by every archetype in applies_to." },
         { "type": "object", "minProperties": 1,
-          "propertyNames": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "propertyNames": { "type": "string", "format": "identifier" },
           "additionalProperties": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/shape" } },
           "description": "Keyed by archetype name: the geometry used when the recipe is applied to that archetype. Every applies_to member needs a key and every key must be in applies_to (E_RECIPE_GEOMETRY)." }
       ]
@@ -62,7 +62,7 @@
       "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } } },
     "locals": { "type": "array",
       "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": false,
-        "prefixItems": [ { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" }, { "type": "string" } ] } }
+        "prefixItems": [ { "type": "string", "format": "identifier" }, { "type": "string" } ] } }
   },
   "$defs": {
     "shape": {
@@ -83,7 +83,7 @@
         "fill": { "type": "string" },
         "when": { "type": "string" },
         "mirror": { "enum": ["x"] },
-        "var": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+        "var": { "type": "string", "format": "identifier" },
         "count": { "type": ["number", "string"] },
         "step_x": { "type": ["number", "string"] },
         "step_y": { "type": ["number", "string"] },
@@ -125,7 +125,7 @@
         "fill": { "type": "string" },
         "when": { "type": "string" },
         "mirror": { "enum": ["x"] },
-        "var": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$" },
+        "var": { "type": "string", "format": "identifier" },
         "count": { "type": ["number", "string"] },
         "step_x": { "type": ["number", "string"] },
         "step_y": { "type": ["number", "string"] },

@@ -339,8 +339,7 @@ def parse_px(text):
 # --------------------------------------------------------------------------
 # Validation + compilation to IR
 # --------------------------------------------------------------------------
-# --------------------------------------------------------------------------
-# Schema diagnostics (ROADMAP P0.1)
+# Schema diagnostics (ROADMAP P0.1 + P0.2)
 #
 # jsonschema supplies only the *structure* of a failure: the keyword that
 # failed, the expected value, the instance and the path. The wording comes
@@ -348,15 +347,56 @@ def parse_px(text):
 # report byte-for-byte and no library text may leak into a message. One
 # schema check produces one list of diagnostics, deduplicated and ordered by
 # (path, kind, message).
+#
+# Name formats (P0.2): the schemas declare a vocabulary name via
+# `"format"` and the check below runs it by hand -- no regex engine in the
+# dependency-free C build, and the 64-character cap keeps every identifier
+# under the 200-character threshold where difflib's SequenceMatcher.autojunk
+# starts applying, so similarity behaves the same in both tools.
 # --------------------------------------------------------------------------
-PATTERN_NAMES = {   # our pattern vocabulary, keyed by the regex in schema/
-    "^[a-z0-9_]+$": "identifier",
-    "^[a-z0-9_]{1,64}$": "identifier",
-    "^[a-z0-9_]+(\\.[a-z0-9_]+)*$": "dotted identifier",
-    "^\\d+\\.\\d+\\.\\d+$": "semver",
-    "^[a-z0-9_]+(/[a-z0-9_]+)*$": "category path",
-    "^p_[a-z0-9_]{1,62}$": "parameter name",
-    "^[EW]_[A-Z_]+$": "diagnostic code",
+def _digits(s):
+    return bool(s) and all("0" <= c <= "9" for c in s)
+
+
+def _is_identifier(s):
+    """`identifier`: 1..64 characters of [a-z0-9_]."""
+    return 0 < len(s) <= 64 and all(c == "_" or "a" <= c <= "z" or "0" <= c <= "9" for c in s)
+
+
+def _is_dotted_identifier(s):
+    """`dotted_identifier`: identifiers joined by `.` (at least one)."""
+    return all(_is_identifier(p) for p in s.split("."))
+
+
+def _is_semver(s):
+    """`semver`: exactly three groups of 1..n digits `0-9` joined by `.`."""
+    parts = s.split(".")
+    return len(parts) == 3 and all(_digits(p) for p in parts)
+
+
+def _is_category_path(s):
+    """`category_path`: identifiers joined by `/` (at least one)."""
+    return all(_is_identifier(p) for p in s.split("/"))
+
+
+def _is_parameter_name(s):
+    """`parameter_name`: `p_` + identifier, 64 characters total."""
+    return s.startswith("p_") and len(s) <= 64 and _is_identifier(s[2:])
+
+
+def _is_diagnostic_code(s):
+    """`diagnostic_code`: `E_`/`W_` followed by 1..n of [A-Z_]."""
+    return len(s) >= 3 and s[:2] in ("E_", "W_") and \
+        all("A" <= c <= "Z" or c == "_" for c in s[2:])
+
+
+VOCABULARY = {
+    "identifier": _is_identifier,
+    "dotted_identifier": _is_dotted_identifier,
+    "semver": _is_semver,
+    "category_path": _is_category_path,
+    "parameter_name": _is_parameter_name,
+    "diagnostic_code": _is_diagnostic_code,
 }
 
 KIND_RANK = {       # the "kind" half of the (path, kind, message) ordering
@@ -399,35 +439,86 @@ def _emit(out, kind, path, message, code="E_SCHEMA", **kw):
                 kind, message, D(code, path, message, **kw)))
 
 
-def _pattern_message(value, regex):
-    name = PATTERN_NAMES.get(regex)
-    if name:
-        return f"{_lit(value)} is not a valid {name}", name
-    return f"{_lit(value)} does not match the required format", regex
+def _vocab_message(value, fmt):
+    return f"{_lit(value)} is not a valid {fmt.replace('_', ' ')}"
 
 
-def _is_property_names(e):
-    """True for a failure of an object's `propertyNames` sub-schema.
+def _resolve_ref(root, ref):
+    """Resolve a local `#/$defs/...` reference inside one schema document."""
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return None
+    node = root
+    for part in ref[2:].split("/"):
+        part = part.replace("~1", "/").replace("~0", "~")
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node if isinstance(node, dict) else None
 
-    jsonschema reports it at the *object's* path with the offending key as
-    the instance (the schema path ends `... propertyNames <keyword>`; a
-    property merely *named* `propertyNames` would sit behind `properties`,
-    which is the disambiguator).
+
+def _collect_formats(doc, schema, root, prefix, out, dpath=""):
+    """P0.2: run the pattern vocabulary by hand.
+
+    Walks every place a schema can attach a `format`: string values, object
+    keys (propertyNames), array items (prefixItems then items),
+    additionalProperties values, and each oneOf/allOf/if/then/else branch.
+    `dpath` is the pointer of `doc` inside the document, `prefix` the
+    file-level prefix used by registry lint. jsonschema does not assert
+    `format`, so this is the only place the check happens.
     """
-    sp = list(e.absolute_schema_path)
-    if len(sp) < 2 or sp[-2] != "propertyNames":
-        return False
-    return not (len(sp) >= 3 and sp[-3] == "properties")
-
-
-def _sub_location(c):
-    """Pointer of an error relative to the value it was checked against.
-
-    propertyNames errors need the key appended, otherwise they look like
-    they sit at the object itself (one level too shallow for the depth
-    comparison in _collect_oneof)."""
-    p = ptr(*c.absolute_path)
-    return p + ptr(c.instance) if _is_property_names(c) else p
+    if not isinstance(schema, dict):
+        return
+    if "$ref" in schema:
+        target = _resolve_ref(root, schema["$ref"])
+        # refs in schema/ always point at $defs; a broken one is a schema bug
+        if target is not None:
+            _collect_formats(doc, target, root, prefix, out, dpath)
+        return
+    fmt = schema.get("format")
+    if isinstance(fmt, str) and fmt in VOCABULARY and isinstance(doc, str) \
+            and not VOCABULARY[fmt](doc):
+        _emit(out, "pattern", prefix + dpath, _vocab_message(doc, fmt),
+              observed=doc, expected=fmt)
+    if isinstance(doc, dict):
+        props = schema.get("properties")
+        extra = schema.get("additionalProperties")
+        for k, v in doc.items():
+            if isinstance(props, dict) and k in props:
+                _collect_formats(v, props[k], root, prefix, out, dpath + ptr(k))
+            if isinstance(extra, dict):
+                _collect_formats(v, extra, root, prefix, out, dpath + ptr(k))
+        names = schema.get("propertyNames")
+        if isinstance(names, dict):
+            for k in doc:
+                _collect_formats(k, names, root, prefix, out, dpath + ptr(k))
+    elif isinstance(doc, list):
+        start = 0
+        pfx = schema.get("prefixItems")
+        if isinstance(pfx, list):
+            for i, v in enumerate(doc[:len(pfx)]):
+                _collect_formats(v, pfx[i], root, prefix, out, dpath + ptr(i))
+            start = len(pfx)
+        items = schema.get("items")
+        if isinstance(items, dict):
+            for i, v in enumerate(doc[start:], start):
+                _collect_formats(v, items, root, prefix, out, dpath + ptr(i))
+    for kw in ("oneOf", "allOf", "anyOf"):
+        branches = schema.get(kw)
+        if isinstance(branches, list):
+            for br in branches:
+                _collect_formats(doc, br, root, prefix, out, dpath)
+    cond = schema.get("if")
+    if isinstance(cond, dict):
+        # if/then/else: assert `then` only when the condition holds (and
+        # `else` only when it does not). The conditions in schema/ are flat
+        # (no $ref), so the condition is checked as written.
+        from jsonschema import Draft202012Validator
+        matched = Draft202012Validator(cond).is_valid(doc)
+        branch = schema.get("then" if matched else "else")
+        if isinstance(branch, dict):
+            _collect_formats(doc, branch, root, prefix, out, dpath)
+    # `not` is deliberately not walked: a format inside it must NOT hold,
+    # so asserting it there would invert the meaning (schema/ has no `not`).
 
 
 def _collect_schema_error(e, prefix, root, out):
@@ -461,18 +552,6 @@ def _collect_schema_error(e, prefix, root, out):
         # required list and the instance instead of parsed out of prose.
         for k in (k for k in e.validator_value if k not in e.instance):
             _emit(out, kind, path, f"'{k}' is a required property", expected=k)
-        return
-
-    if kind == "pattern":
-        message, expected = _pattern_message(e.instance, e.validator_value)
-        if _is_property_names(e):
-            # propertyNames: the instance is the *key*, reported at the
-            # object's own path, so attach it to the pointer.
-            _emit(out, kind, path + ptr(e.instance), message,
-                  observed=_scalar(e.instance), expected=expected)
-        else:
-            _emit(out, kind, path, message,
-                  observed=_scalar(e.instance), expected=expected)
         return
 
     if kind == "type":
@@ -575,7 +654,7 @@ def _collect_oneof(e, prefix, root, out):
         return
 
     allerrs = [c for es in checked for c in es]
-    located = [(_sub_location(c), c) for c in allerrs]
+    located = [(ptr(*c.absolute_path), c) for c in allerrs]
     depth = max(p.count("/") for p, _c in located)
     if depth:
         pool = [(p, c) for p, c in located if p.count("/") == depth]
@@ -613,13 +692,16 @@ def _collect_oneof(e, prefix, root, out):
 def schema_diags(doc, schema_name, base_path=""):
     """Schema failures as our diagnostics, ordered (path, kind, message).
 
-    Deduplicated: the same message at the same path can be reached through
-    more than one keyword or more than one oneOf branch."""
+    Two sources: jsonschema for the structural keywords, and the hand-run
+    pattern vocabulary (P0.2) for `format`. Deduplicated: the same message
+    at the same path can be reached through more than one keyword, more
+    than one oneOf branch, or both sources."""
     from jsonschema import Draft202012Validator
     root = load_json(SCHEMA_DIR / schema_name)
     entries = []
     for e in Draft202012Validator(root).iter_errors(doc):
         _collect_schema_error(e, base_path, root, entries)
+    _collect_formats(doc, root, root, base_path, entries)
     entries.sort(key=lambda t: t[:4])
     diags, seen = [], set()
     for _parts, _rank, _kind, message, d in entries:
