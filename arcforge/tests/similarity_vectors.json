@@ -1,0 +1,114 @@
+{
+  "description": "P0.6 similarity spec vectors. close(name, options) = difflib.get_close_matches(str(name), list(options), n=3, cutoff=0.6): seq1 = candidate, seq2 = query, Ratcliff/Obershelp ratio, keep ratio >= 0.6, at most 3, ties by lexicographically larger string. The E_UNKNOWN_RECIPE fix threshold is separate: exactly 1 suggestion, or SequenceMatcher(None, name, suggestion).ratio() > 0.85 (strict >, query as seq1). Recomputed against the reference tool by tests/test_similarity.py.",
+  "close": [
+    {
+      "name": "energy_sword",
+      "options": ["boots_heavy", "cape_torn", "energy_sword", "energy_swords", "helmet_closed"],
+      "want": ["energy_sword", "energy_swords"],
+      "note": "exact match first; the plural passes cutoff 0.6"
+    },
+    {
+      "name": "zzzz_nope",
+      "options": ["boots_heavy", "cape_torn", "energy_sword"],
+      "want": [],
+      "note": "nothing reaches cutoff -> no suggestions"
+    },
+    {
+      "name": "abcYY",
+      "options": ["abcXX"],
+      "want": ["abcXX"],
+      "note": "ratio exactly 0.6 is KEPT (cutoff is >=, not >)"
+    },
+    {
+      "name": "abdZ",
+      "options": ["abcXY"],
+      "want": [],
+      "note": "ratio 0.4444.. is below cutoff -> dropped"
+    },
+    {
+      "name": "energy_sword",
+      "options": ["energy_swrd", "enrgy_sword"],
+      "want": ["enrgy_sword", "energy_swrd"],
+      "note": "equal ratios -> ties order by the lexicographically LARGER string first, regardless of options order"
+    },
+    {
+      "name": "boots_heavy",
+      "options": ["boots_heavy", "boots_heavys", "boots_heav", "boots_heax", "boots_light", "boots_lights", "cape_torn"],
+      "want": ["boots_heavy", "boots_heavys", "boots_heav"],
+      "note": "n=3 cap: more candidates pass cutoff than are returned"
+    },
+    {
+      "name": "axe_simpx",
+      "options": ["axe_simple", "backpack_small", "belt_buckle", "boots_heavy"],
+      "want": ["axe_simple"],
+      "note": "single suggestion; ratio 0.8421.. is below the 0.85 fix threshold yet still suggested (suggestion cutoff and fix threshold are different numbers)"
+    }
+  ],
+  "ratio": [
+    {
+      "a": "dddbbdbadc",
+      "b": "caccadabba",
+      "ratio": 0.4,
+      "reverse": 0.2,
+      "note": "asymmetric: Ratcliff/Obershelp ratio depends on argument order, so the fix check's order (query first) matters"
+    },
+    {
+      "a": "commoncorecommoncaaa",
+      "b": "commoncorecommoncbbb",
+      "ratio": 0.85,
+      "reverse": 0.85,
+      "note": "EXACTLY 0.85: strict > excludes it -> no fix when there is more than one suggestion"
+    },
+    {
+      "a": "abcXX",
+      "b": "abcYY",
+      "ratio": 0.6,
+      "reverse": 0.6,
+      "note": "EXACTLY 0.6: the suggestion cutoff includes it"
+    },
+    {
+      "a": "boots_heax",
+      "b": "boots_heavy",
+      "ratio": 0.8571428571428571,
+      "reverse": 0.8571428571428571,
+      "note": "just above 0.85 -> fix fires"
+    },
+    {
+      "a": "cape_shox",
+      "b": "cape_short",
+      "ratio": 0.8421052631578947,
+      "reverse": 0.8421052631578947,
+      "note": "just below 0.85 -> no fix when multiple suggestions"
+    }
+  ],
+  "fix_threshold": {
+    "base_asset": "examples/hero.iron_knight.json",
+    "probe": "the E_UNKNOWN_RECIPE is produced by replacing features[0].recipe with `recipe` and calling compile_asset",
+    "cases": [
+      {
+        "recipe": "cape_shox",
+        "want_suggestions": ["cape_short", "cape_torn"],
+        "want_fix": null,
+        "note": "2 suggestions, top ratio 0.8421.. <= 0.85 -> NO fix (ambiguous)"
+      },
+      {
+        "recipe": "boots_heax",
+        "want_suggestions": ["boots_heavy", "boots_light"],
+        "want_fix": [{"op": "replace", "path": "/features/0/recipe", "value": "boots_heavy"}],
+        "note": "2 suggestions, top ratio 0.8571.. > 0.85 -> fix (unambiguous enough)"
+      },
+      {
+        "recipe": "axe_simpx",
+        "want_suggestions": ["axe_simple"],
+        "want_fix": [{"op": "replace", "path": "/features/0/recipe", "value": "axe_simple"}],
+        "note": "exactly 1 suggestion -> fix regardless of ratio (0.8421.. <= 0.85)"
+      },
+      {
+        "recipe": "energy_swrd",
+        "want_suggestions": ["energy_sword"],
+        "want_fix": [{"op": "replace", "path": "/features/0/recipe", "value": "energy_sword"}],
+        "note": "the AI_INTERFACE.md example"
+      }
+    ]
+  }
+}

@@ -71,5 +71,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_output_format.py"
                    capture_output=True, text=True)
 check("JSON output format (P0.5)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.6: similarity spec — close() defaults and the 0.85 fix threshold.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_similarity.py")],
+                   capture_output=True, text=True)
+check("similarity spec (P0.6)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

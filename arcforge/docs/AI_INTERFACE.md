@@ -24,6 +24,29 @@ The AI drives ArcForge through a small tool surface (CLI now, MCP server in M5).
 ```
 - `path` is an RFC 6901 JSON Pointer into the asset.
 - `fix` is an RFC 6902 patch, present only when unambiguous.
+- `suggestions` come from one fixed algorithm, reproduced exactly by the C
+  compiler (M4): `close(name, options)` is
+  `difflib.get_close_matches(str(name), list(options), n=3, cutoff=0.6)` —
+  every call site uses those defaults. It scores each candidate as **seq1**
+  against the query as **seq2** with the Ratcliff/Obershelp ratio (longest
+  match, leftmost in seq1 then leftmost in seq2; the quick ratios are
+  pre-filters only), keeps candidates with `ratio >= 0.6`, returns at most
+  3, and orders ties by the lexicographically **larger** string first — so
+  the result never depends on the order of `options`. The 64-character
+  identifier cap (P0.2) keeps every input under difflib's 200-character
+  autojunk threshold, so Python and C see the same matcher.
+- The `E_UNKNOWN_RECIPE` fix threshold is separate from the suggestion
+  cutoff: the replace-fix is attached when there is **exactly 1**
+  suggestion, or when
+  `SequenceMatcher(None, name, suggestion).ratio() > 0.85` — strict `>`,
+  and the argument order is the *opposite* of `get_close_matches` (the
+  query is seq1 here; the ratio is not symmetric). Other codes attach a
+  fix when there is exactly one suggestion (`E_UNKNOWN_SWAP_SET` falls
+  back to a remove-fix), or on any suggestion (`E_RECIPE_GEOMETRY`
+  add-fix, no fix when there is none; `E_UNKNOWN_PART` replace, falling
+  back to remove; the stray-geometry-key remove-fix is unconditional).
+  Vectors: `tests/similarity_vectors.json`, run by
+  `tests/test_similarity.py`.
 - Codes are stable. Warnings never fail a run.
 - `E_SCHEMA` / `E_UNKNOWN_FIELD` wording is produced by the tool, never by a
   library: one fixed sentence per failure kind — `expected <type>, got <value>`,
