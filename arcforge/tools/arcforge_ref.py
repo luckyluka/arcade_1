@@ -35,7 +35,12 @@ TONES = ("deep", "shadow", "base", "light", "high")   # a ramp has 3..5 of these
 
 
 def load_json(p):
-    return json.loads(Path(p).read_text())
+    # OUTPUT_FORMAT.md: reports contain only finite numbers, and no
+    # conforming parser (M4's bundled one included) accepts NaN/Infinity
+    # tokens -- reject them at read time exactly like malformed JSON.
+    def _reject(token):
+        raise json.JSONDecodeError(f"invalid JSON constant {token}", "", 0)
+    return json.loads(Path(p).read_text(), parse_constant=_reject)
 
 
 def load_registry():
@@ -436,9 +441,74 @@ KIND_RANK = {       # the "kind" half of the (path, kind, message) ordering
 KIND_UNKNOWN = 99
 
 
+def num4(v):
+    """A number as it appears in report *text* (OUTPUT_FORMAT.md).
+
+    Integers print plain ('42'); floats always carry exactly four decimal
+    digits ('0.5000'), correctly rounded -- so message strings and JSON
+    number fields follow one rule and the C compiler needs one formatter.
+    """
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return format(v, ".4f") if isinstance(v, float) else str(v)
+
+
+def dump_json(obj, indent=2):
+    """Serialise a report exactly as OUTPUT_FORMAT.md specifies.
+
+    That document is the normative spec (the C compiler reproduces it
+    byte-for-byte); this function is the reference implementation:
+    insertion-ordered keys, 2-space indent, `": "` between key and value,
+    `","` + newline between items, empty containers inline, strings
+    escaped like json.dumps(ensure_ascii=True), integers plain, floats
+    with exactly four decimal digits. `indent=None` selects the compact
+    form used for JSON fragments embedded in message text (`_lit`).
+    Non-finite floats cannot occur (load_json rejects the tokens) -- a
+    future occurrence is a bug, not a format decision.
+    """
+    def w(v, depth):
+        if v is None:
+            return "null"
+        if v is True:
+            return "true"
+        if v is False:
+            return "false"
+        if isinstance(v, int):
+            return str(v)
+        if isinstance(v, float):
+            return format(v, ".4f")
+        if isinstance(v, str):
+            return json.dumps(v, ensure_ascii=True)
+        if isinstance(v, (list, tuple)):
+            if not v:
+                return "[]"
+            if indent is None:
+                return "[" + ", ".join(w(x, depth + 1) for x in v) + "]"
+            inner = " " * (indent * (depth + 1))
+            return ("[\n" + inner
+                    + (",\n" + inner).join(w(x, depth + 1) for x in v)
+                    + "\n" + " " * (indent * depth) + "]")
+        if isinstance(v, dict):
+            if not v:
+                return "{}"
+            items = [(json.dumps(str(k), ensure_ascii=True) + ": " + w(x, depth + 1))
+                     for k, x in v.items()]
+            if indent is None:
+                return "{" + ", ".join(items) + "}"
+            inner = " " * (indent * (depth + 1))
+            return ("{\n" + inner + (",\n" + inner).join(items)
+                    + "\n" + " " * (indent * depth) + "}")
+        raise TypeError(f"not JSON-serialisable: {type(v).__name__}")
+    return w(obj, 0)
+
+
 def _lit(v):
-    """Literal for a message: JSON encoding, byte-stable on every platform."""
-    return json.dumps(v)
+    """JSON fragment embedded in a message: compact writer, byte-stable.
+
+    Same rules as a report (OUTPUT_FORMAT.md), compact separators --
+    e.g. `["int", "bool"]`, `{"a": 1}`.
+    """
+    return dump_json(v, indent=None)
 
 
 def _typename(v):
@@ -626,7 +696,7 @@ def _collect_schema_error(e, prefix, root, out):
     if kind in ("minimum", "maximum"):
         op = ">=" if kind == "minimum" else "<="
         _emit(out, kind, path, f"expected {op} {_lit(e.validator_value)}, got {_lit(e.instance)}",
-              observed=_scalar(e.instance), expected=f"{op} {e.validator_value}")
+              observed=_scalar(e.instance), expected=f"{op} {num4(e.validator_value)}")
         return
 
     if kind in ("minItems", "maxItems", "minProperties", "maxProperties"):
@@ -636,7 +706,7 @@ def _collect_schema_error(e, prefix, root, out):
             else ("key" if b == 1 else "keys")
         n = len(e.instance)
         _emit(out, kind, path, f"expected {at} {b} {unit}, got {n}",
-              observed=n, expected=f"{at} {b}")
+              observed=n, expected=f"{at} {num4(b)}")
         return
 
     if kind == "uniqueItems":
@@ -656,7 +726,7 @@ def _collect_schema_error(e, prefix, root, out):
         if n is not None and isinstance(e.schema, dict) and "prefixItems" in e.schema:
             b = len(e.schema["prefixItems"])
             _emit(out, kind, path, f"expected at most {b} entries, got {n}",
-                  observed=n, expected=f"at most {b}")
+                  observed=n, expected=f"at most {num4(b)}")
             return
 
     if e.context:   # anyOf and friends wrap their failures
@@ -797,7 +867,7 @@ def check_params(specs, given, path, style, diags, label, env=None):
             if v < lo or v > hi:
                 c = max(lo, min(hi, v))
                 diags.append(D("E_PARAM_RANGE", pp, f"'{k}' out of range", observed=v,
-                               expected=f"{lo}..{hi}",
+                               expected=f"{num4(lo)}..{num4(hi)}",
                                fix=[{"op": "replace", "path": pp, "value": c}]))
                 continue
             out[k] = max(spec.get("min_px", 0), (dim * v + 50) // 100)
@@ -809,7 +879,7 @@ def check_params(specs, given, path, style, diags, label, env=None):
             if v < spec["min"] or v > spec["max"]:
                 c = max(spec["min"], min(spec["max"], v))
                 diags.append(D("E_PARAM_RANGE", pp, f"'{k}' out of range", observed=v,
-                               expected=f"{spec['min']}..{spec['max']}",
+                               expected=f"{num4(spec['min'])}..{num4(spec['max'])}",
                                fix=[{"op": "replace", "path": pp, "value": c}]))
                 continue
         elif t == "bool":
@@ -1218,7 +1288,7 @@ def compile_asset(asset, reg, base_dir):
             c = max(spec["min"], min(spec["max"], v))
             diags.append(D("E_SIZE_RANGE", ptr("archetype", "size", k),
                            f"size parameter '{k}' out of range", observed=v,
-                           expected=f"{spec['min']}..{spec['max']}",
+                           expected=f"{num4(spec['min'])}..{num4(spec['max'])}",
                            fix=[{"op": "replace", "path": ptr("archetype", "size", k), "value": c}]))
             v = c
         size_env[k] = v
@@ -1388,7 +1458,7 @@ def compile_asset(asset, reg, base_dir):
             if sv < lo or sv > hi:
                 diags.append(D("E_RECIPE_SIZE_RANGE", fp,
                                f"recipe '{name}' supports {primary} {lo}..{hi}; this asset uses {sv}",
-                               observed=sv, expected=f"{lo}..{hi}",
+                               observed=sv, expected=f"{num4(lo)}..{num4(hi)}",
                                fix=[{"op": "replace", "path": ptr("archetype", "size", primary),
                                      "value": max(lo, min(hi, sv))}]))
                 continue
@@ -1960,16 +2030,16 @@ def run_tests(ir, renders):
             res(i, t, [W, H] == t.get("expected"), [W, H], t.get("expected"))
         elif a == "palette_size":
             cols = {(v[3], v[4]) for f in frames for v in f["grid"].values()}
-            res(i, t, len(cols) <= t["max"], len(cols), f"<= {t['max']}")
+            res(i, t, len(cols) <= t["max"], len(cols), f"<= {num4(t['max'])}")
         elif a == "feature_present":
             res(i, t, t["recipe"] in ir["features"], ir["features"], f"contains {t['recipe']}",
                 f"feature '{t['recipe']}' is not in the compiled asset")
         elif a == "silhouette_area":
             frac = len(renders["base"][0]["grid"]) / (W * H)
-            res(i, t, t.get("min", 0) <= frac <= t.get("max", 1), round(frac, 4), f"{t.get('min', 0)}..{t.get('max', 1)}")
+            res(i, t, t.get("min", 0) <= frac <= t.get("max", 1), round(frac, 4), f"{num4(t.get('min', 0))}..{num4(t.get('max', 1))}")
         elif a == "bbox_margin":
             m = min(min(x, y, W - 1 - x, H - 1 - y) for f in frames for (x, y) in f["grid"])
-            res(i, t, m >= t.get("min", 0), m, f">= {t.get('min', 0)}",
+            res(i, t, m >= t.get("min", 0), m, f">= {num4(t.get('min', 0))}",
                 "opaque pixels come closer to the canvas edge than allowed (outline included)")
         elif a == "anchor_inside_canvas":
             an = ir["anchors"].get(t.get("anchor"))
@@ -1985,10 +2055,10 @@ def run_tests(ir, renders):
             res(i, t, ok, obs[:1], "inside canvas in every frame")
         elif a == "root_stable":
             disp = max(max(abs(f["offsets"].get("root", (0, 0))[0]), abs(f["offsets"].get("root", (0, 0))[1])) for f in frames)
-            res(i, t, disp <= t["max"], disp, f"<= {t['max']}")
+            res(i, t, disp <= t["max"], disp, f"<= {num4(t['max'])}")
         elif a == "frame_count":
             n = sum(len(fs) for k, fs in renders.items() if k != "base")
-            res(i, t, n <= t["max"], n, f"<= {t['max']}")
+            res(i, t, n <= t["max"], n, f"<= {num4(t['max'])}")
         # ---- spec-next 02 §H (X1) ----------------------------------------
         elif a == "baseline_stable":
             an = ir["anchors"].get(t.get("anchor"))
@@ -1997,7 +2067,7 @@ def run_tests(ir, renders):
                 continue
             ys = [an["at"][1] + part_offset(f["offsets"], an["part"])[1] for f in frames]
             spread = max(ys) - min(ys)
-            res(i, t, spread <= t["max"], spread, f"<= {t['max']}",
+            res(i, t, spread <= t["max"], spread, f"<= {num4(t['max'])}",
                 f"anchor '{t.get('anchor')}' floats {spread}px between frames (feet must not float)")
         elif a == "pivot_stable":
             org = ir["anchors"].get("origin")
@@ -2009,7 +2079,7 @@ def run_tests(ir, renders):
             for f in frames:
                 ox, oy = part_offset(f["offsets"], org["part"])
                 disp = max(disp, abs(org["at"][0] + ox - bx), abs(org["at"][1] + oy - by))
-            res(i, t, disp <= t["max"], disp, f"<= {t['max']}",
+            res(i, t, disp <= t["max"], disp, f"<= {num4(t['max'])}",
                 "the origin anchor drifts from its base-frame position")
         elif a == "min_feature":
             # `detail` (02 §E `affects: ["detail"]`) is documentation-only — no
@@ -2022,13 +2092,13 @@ def run_tests(ir, renders):
                     if w and h:
                         dims.append(min(w, h))
             obs = min(dims) if dims else 0
-            res(i, t, obs >= t["min"], obs, f">= {t['min']}",
+            res(i, t, obs >= t["min"], obs, f">= {num4(t['min'])}",
                 "a compiled shape is thinner than the minimum (all shapes count: the 'detail' marker is documentation-only)")
         elif a == "cell_fill":
             ratios = [len(f["grid"]) / (W * H) for f in frames]
             lo, hi = round(min(ratios), 4), round(max(ratios), 4)
             res(i, t, lo >= t.get("min", 0) and hi <= t.get("max", 1), [lo, hi],
-                f"{t.get('min', 0)}..{t.get('max', 1)}", "cell opacity ratio outside the declared band")
+                f"{num4(t.get('min', 0))}..{num4(t.get('max', 1))}", "cell opacity ratio outside the declared band")
         elif a == "seamless":
             # tileable borders must be opaque and free of outline pixels,
             # in every rendered frame (02 §H)
@@ -2060,7 +2130,7 @@ def run_tests(ir, renders):
                         coms.append((sum(x for x, _ in f["grid"]) // n, sum(y for _, y in f["grid"]) // n))
                 for pa, pb in zip(coms, coms[1:]):
                     worst = max(worst, abs(pb[0] - pa[0]), abs(pb[1] - pa[1]))
-            res(i, t, worst <= t["max"], worst, f"<= {t['max']}",
+            res(i, t, worst <= t["max"], worst, f"<= {num4(t['max'])}",
                 "centre of mass jumps between consecutive frames")
         elif a == "orphan_pixels":
             worst, where = 0, None
@@ -2071,7 +2141,7 @@ def run_tests(ir, renders):
                             if all((x + dx, y + dy) not in g for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))))
                     if c > worst:
                         worst, where = c, (name, fi)
-            res(i, t, worst <= t["max"], worst, f"<= {t['max']}",
+            res(i, t, worst <= t["max"], worst, f"<= {num4(t['max'])}",
                 f"isolated single pixel(s) in frame {where}")
 
     # implicit checks, always on
@@ -2104,7 +2174,7 @@ def run_tests(ir, renders):
                 p = f"/features/{rest}" if kind == "feature" else f"/{kind}/{rest}"
                 diags.append(D("W_FEATURE_TOO_SMALL", p,
                                f"shape of '{d['src']}' is {w}x{h}px, below min_feature_px {minf}",
-                               observed=[w, h], expected=f">= {minf}px on both axes",
+                               observed=[w, h], expected=f">= {num4(minf)}px on both axes",
                                severity="warning"))
     # occlusion: a feature whose every drawable pixel is overpainted in every
     # frame contributes nothing to the picture (spec 01 §9).
@@ -2373,9 +2443,8 @@ def sweep_archetype(arch, reg, base_path="", out_dir=None):
     sheet = out_dir / f"{name}.contact_sheet.png"
     write_contact_sheet(sheet, cells, len(sizes), len(columns))
     tpath = out_dir / f"{name}.table.json"
-    tpath.write_text(json.dumps({"archetype": name, "primary_size": primary,
-                                 "sizes": sizes, "columns": columns, "rows": rows},
-                                indent=2) + "\n")
+    tpath.write_text(dump_json({"archetype": name, "primary_size": primary,
+                                "sizes": sizes, "columns": columns, "rows": rows}) + "\n")
 
     def rel(p):
         try:
@@ -2400,7 +2469,7 @@ def report(stage, asset_id, diags, **extra):
 
 def load_asset(path):
     p = Path(path)
-    return json.loads(p.read_text()), p.parent
+    return load_json(p), p.parent
 
 
 def asset_id(asset):
@@ -2672,7 +2741,7 @@ def cmd_validate(args):
                 ids.append(aid)
             extra = {"stats": {"ids": ids}} if len(ids) > 1 else {}
             r = report("validate", asset_id(doc), diags, **extra)
-    print(json.dumps(r, indent=2))
+    print(dump_json(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -2681,7 +2750,7 @@ def cmd_render(args):
     docs, xdiags, base = load_asset_docs(args.asset)
     if xdiags:
         doc, _ = load_asset(args.asset)
-        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
+        print(dump_json(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
     compiled = []
     fail = []
@@ -2695,7 +2764,7 @@ def cmd_render(args):
         compiled.append((aid, d2, pfx, ir))
     if len(compiled) != len(docs):
         doc, _ = load_asset(args.asset)
-        print(json.dumps(report("validate", asset_id(doc), fail), indent=2))
+        print(dump_json(report("validate", asset_id(doc), fail), indent=2))
         return 1
     stats = {}
     total = 0
@@ -2729,7 +2798,7 @@ def cmd_render(args):
             (out / "spritesheet.png").write_bytes(png_bytes(W * cols, H * len(rows), bytes(sheet)))
         atlas["hitboxes"] = ir["hitboxes"]
         atlas["anchors"] = {k: v for k, v in ir["anchors"].items()}
-        (out / "atlas.json").write_text(json.dumps(atlas, indent=2))
+        (out / "atlas.json").write_text(dump_json(atlas))
         # preview: base frame + every animation row, scaled, on a dark backdrop
         pw = W * cols + (cols * 0)
         allrows = [("base", renders["base"])] + rows
@@ -2745,7 +2814,7 @@ def cmd_render(args):
     st = {"out": stats[ids[0]], "frames": total}
     if len(ids) > 1:
         st = {"out": stats, "frames": total, "ids": ids}
-    print(json.dumps(report("render", ids[0], [], stats=st), indent=2))
+    print(dump_json(report("render", ids[0], [], stats=st), indent=2))
     return 0
 
 
@@ -2754,7 +2823,7 @@ def cmd_test(args):
     docs, xdiags, base = load_asset_docs(args.asset)
     if xdiags:
         doc, _ = load_asset(args.asset)
-        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
+        print(dump_json(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
     diags, results, ids = [], [], []
     for aid, d2, pfx in docs:
@@ -2769,13 +2838,13 @@ def cmd_test(args):
         results += r2
     if not results and diags:
         # nothing compiled (the single-document v2.0 shape): validate stage
-        print(json.dumps(report("validate", ids[0], diags), indent=2))
+        print(dump_json(report("validate", ids[0], diags), indent=2))
         return 1
     extra = {"tests": results}
     if len(ids) > 1:
         extra["stats"] = {"ids": ids}
     r = report("test", ids[0], diags, **extra)
-    print(json.dumps(r, indent=2))
+    print(dump_json(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -2788,7 +2857,7 @@ def cmd_golden(args):
     docs, xdiags, base = load_asset_docs(args.asset)
     if xdiags:
         doc, _ = load_asset(args.asset)
-        print(json.dumps(report("validate", asset_id(doc), xdiags), indent=2))
+        print(dump_json(report("validate", asset_id(doc), xdiags), indent=2))
         return 1
     diags, ids, total, written, compiled_n = [], [], 0, [], 0
     for aid, d2, pfx in docs:
@@ -2802,7 +2871,7 @@ def cmd_golden(args):
         total += len(hashes)
         gp = ROOT / "tests" / "golden" / f"{aid}.json"
         if args.update:
-            gp.write_text(json.dumps({"asset": aid, "frames": hashes}, indent=2) + "\n")
+            gp.write_text(dump_json({"asset": aid, "frames": hashes}) + "\n")
             written.append(str(gp))
             continue
         want = json.loads(gp.read_text())["frames"] if gp.exists() else {}
@@ -2811,19 +2880,19 @@ def cmd_golden(args):
                          expected=want.get(k, "missing")[:12]), path=pfx + "/" + k)
                   for k in sorted(set(hashes) | set(want)) if hashes.get(k) != want.get(k)]
     if not compiled_n and diags:
-        print(json.dumps(report("validate", ids[0], diags), indent=2))
+        print(dump_json(report("validate", ids[0], diags), indent=2))
         return 1
     if args.update and not diags:
         st = {"written": written[0] if len(written) == 1 else written, "frames": total}
         if len(ids) > 1:
             st["ids"] = ids
-        print(json.dumps(report("golden", ids[0], [], stats=st), indent=2))
+        print(dump_json(report("golden", ids[0], [], stats=st), indent=2))
         return 0
     st = {"frames": total}
     if len(ids) > 1:
         st["ids"] = ids
     r = report("golden", ids[0], diags, stats=st)
-    print(json.dumps(r, indent=2))
+    print(dump_json(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -2877,7 +2946,7 @@ def cmd_lint(args):
             sweep_stats[aname] = summary
     r = report("lint", "registry", diags, stats={"archetypes": len(reg["archetypes"]), "recipes": len(reg["recipes"]),
                                                  "styles": len(reg["styles"]), "sweep": sweep_stats})
-    print(json.dumps(r, indent=2))
+    print(dump_json(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -2886,12 +2955,12 @@ def cmd_sweep(args):
     arch, _ = load_asset(args.archetype)
     diags = schema_diags(arch, "archetype.schema.json")
     if diags:
-        print(json.dumps(report("sweep", arch.get("archetype", "?"), diags), indent=2))
+        print(dump_json(report("sweep", arch.get("archetype", "?"), diags), indent=2))
         return 1
     sd, summary = sweep_archetype(arch, reg, base_path=f"archetype:{arch['archetype']}",
                                   out_dir=ROOT / "out" / "sweep")
     r = report("sweep", arch["archetype"], sd, stats=summary or {})
-    print(json.dumps(r, indent=2))
+    print(dump_json(r, indent=2))
     return 0 if r["status"] == "PASS" else 1
 
 
@@ -2905,7 +2974,7 @@ def cmd_list(args):
                           "parameters": sorted(r["parameters"])} for n, r in reg[k].items()}
         else:
             out[k] = {n: v.get("description", "") for n, v in reg[k].items()}
-    print(json.dumps(out, indent=2))
+    print(dump_json(out, indent=2))
     return 0
 
 
@@ -2913,10 +2982,10 @@ def cmd_describe(args):
     reg = load_registry()
     table = reg[{"recipe": "recipes", "archetype": "archetypes", "style": "styles"}[args.kind]]
     if args.name not in table:
-        print(json.dumps(report("validate", args.name, [D("E_UNKNOWN_" + args.kind.upper(), "/", f"no {args.kind} '{args.name}'",
+        print(dump_json(report("validate", args.name, [D("E_UNKNOWN_" + args.kind.upper(), "/", f"no {args.kind} '{args.name}'",
                                                           suggestions=close(args.name, table), expected=sorted(table))]), indent=2))
         return 1
-    print(json.dumps(table[args.name], indent=2))
+    print(dump_json(table[args.name], indent=2))
     return 0
 
 

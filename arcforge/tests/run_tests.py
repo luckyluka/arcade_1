@@ -66,5 +66,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_trig_table.py")],
                    capture_output=True, text=True)
 check("trig table artifacts (P0.4)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.5: JSON output format spec (docs/OUTPUT_FORMAT.md) vs reference writer.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_output_format.py")],
+                   capture_output=True, text=True)
+check("JSON output format (P0.5)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)
