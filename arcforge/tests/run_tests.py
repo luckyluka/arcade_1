@@ -81,5 +81,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_iteration_order.p
                    capture_output=True, text=True)
 check("iteration order + hashseed determinism (P0.7)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# M4.1a: bundled C JSON layer vs the Python oracle (vectors + corpus bytes).
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_c_json.py")],
+                   capture_output=True, text=True)
+check("C JSON layer parity (M4.1a)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

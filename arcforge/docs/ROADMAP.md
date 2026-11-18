@@ -65,6 +65,12 @@ A standalone C CLI (`arcforge` binary) that replaces the Python reference as the
 | M4.2 | expression evaluator, shape build, rasterizer, outline post-pass, RGBA + SHA-256 frame hashes, `.px` | 30–40 |
 | M4.3 | `render/test/golden/lint/list/describe` parity, differential harness, gate flip | 15–25 |
 
+**M4.1 sub-cards:**
+
+- [x] **M4.1a — bundled JSON layer** (`c/json.{c,h}`, no external libraries): parser preserving key order, rejecting duplicate keys / out-of-int64 integers / `NaN`-`Infinity` tokens / invalid UTF-8 / trailing garbage (depth cap 512), and the writer implementing `docs/OUTPUT_FORMAT.md` byte-for-byte in both forms (indent=2 reports, compact message fragments). `c/json_test.c` carries the grammar/escaping/number vectors and runs plain **and** under `-fsanitize=undefined,address` (acceptance 5); `tests/test_c_json.py` is the differential: acceptance parity and pretty/compact byte parity plus ASCII and run-to-run determinism over **every** checked-in JSON file (127 at time of writing) against the Python oracle.
+- [ ] **M4.1b — hand-coded table-driven schema validator + registry load** (one validator shared by asset/recipe/archetype/style schemas; `schema/*.json` remains the documentation of record).
+- [ ] **M4.1c — `validate` diagnostics parity**: `E_*` codes, `path`, `observed`/`expected`, `suggestions` (P0.6 algorithm) and JSON-Patch `fix` byte-identical to Python, including the negative-fixture corpus.
+
 **Descope option** (if over budget): ship C `validate`, `render`, `golden` first; keep `lint`, `list`, `describe` on Python until a later card. The gate then flips per command, recorded in AGENTS.md.
 
 ### Acceptance (byte-identical)

@@ -1,4 +1,5 @@
 out/
+build/
 __pycache__/
 *.pyc
 files (4)/
