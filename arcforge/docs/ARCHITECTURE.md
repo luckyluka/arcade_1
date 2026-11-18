@@ -32,6 +32,17 @@ A flat list of drawables `{kind, geometry, fill(ramp,tone), layer index, sequenc
   CLI contract, and the values at the reference angles. Regenerate with
   `python3 tools/gen_trig_table.py`; `--check` verifies without writing.
 - No RNG, no time, no map-order dependence (sort by (layer, sequence)).
+  **P0.7: no dict/set order dependence anywhere in output.** Registry
+  documents load in **sorted-by-file-path order** (all three kinds), so
+  `list`/`describe`/`lint` iterate names in that order; every set that
+  reaches a report does so through `sorted()` (feature-occlusion sets,
+  `overridable` params, `known_parts`, shadowed-param clashes) or through
+  `close()`, whose `nlargest` tie-break on distinct `(ratio, string)`
+  tuples is order-independent. `tests/test_iteration_order.py` pins the
+  load order against an independent sorted-path walk, runs every
+  report-producing command twice under **different `PYTHONHASHSEED`
+  values** (stdout plus written `atlas.json` and sweep `table.json`
+  byte-identical), and pins the `sorted()` call sites in the source.
 - Registry and tool versions are part of the build identity; golden hashes are per frame (SHA-256 of RGBA).
 
 ## Targets

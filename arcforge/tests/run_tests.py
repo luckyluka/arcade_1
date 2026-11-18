@@ -76,5 +76,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_similarity.py")],
                    capture_output=True, text=True)
 check("similarity spec (P0.6)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.7: registry iteration order + no hash-order leakage in any report.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_iteration_order.py")],
+                   capture_output=True, text=True)
+check("iteration order + hashseed determinism (P0.7)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)
