@@ -61,5 +61,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_int_range.py")],
                    capture_output=True, text=True)
 check("integer range + floor semantics (P0.3)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.4: trig table artifacts stay byte-identical to the formula and the oracle.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_trig_table.py")],
+                   capture_output=True, text=True)
+check("trig table artifacts (P0.4)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

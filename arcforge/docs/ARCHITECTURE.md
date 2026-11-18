@@ -20,6 +20,17 @@ A flat list of drawables `{kind, geometry, fill(ramp,tone), layer index, sequenc
 ## Determinism contract
 - Integer / 1/64-pixel fixed point for all raster decisions; pixel-centre sampling; even-odd rule with integer cross-multiplication.
 - Trig from an integer-degree table rounded to 1e-6; rotated vertices rounded to 1/64 px with half-up integer rounding.
+  **P0.4: the table is a generated artifact, not a per-run computation.**
+  `tools/gen_trig_table.py` writes `c/gen/trig_table.h` (the C build
+  includes it and **never calls libm**) and `tests/trig_table.json` from
+  `int(round(cos|sin(deg) * 1e6))` for deg −180..180 inclusive,
+  round-half-even exactly as Python's `round()` (no exact `.5` tie occurs
+  in this table, so the tie rule never decides a value).
+  `tests/test_trig_table.py` pins: both files byte-identical to a fresh
+  regeneration, every entry equal to the oracle's `COS`/`SIN`, the
+  header's array text equal to the JSON when parsed back, the `--check`
+  CLI contract, and the values at the reference angles. Regenerate with
+  `python3 tools/gen_trig_table.py`; `--check` verifies without writing.
 - No RNG, no time, no map-order dependence (sort by (layer, sequence)).
 - Registry and tool versions are part of the build identity; golden hashes are per frame (SHA-256 of RGBA).
 
