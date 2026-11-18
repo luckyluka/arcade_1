@@ -1,0 +1,13 @@
+{
+  "arcforge": "2.0",
+  "asset": {
+    "id": "hero.int_overflow",
+    "type": "character",
+    "version": "1.0.0",
+    "description": "Negative fixture: metadata integer beyond int32 (P0.3)."
+  },
+  "target": { "profile": "arcade1-draft", "canvas": [32, 32] },
+  "style_pack": "arcade_16",
+  "archetype": { "name": "humanoid_front_scalable" },
+  "metadata": { "spawn_count": 4294967296 }
+}

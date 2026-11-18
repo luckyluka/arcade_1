@@ -56,5 +56,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_pattern_vocab.py"
                    capture_output=True, text=True)
 check("pattern vocabulary (P0.2)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# P0.3: int32 range at parse time and floor semantics for negatives.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_int_range.py")],
+                   capture_output=True, text=True)
+check("integer range + floor semantics (P0.3)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

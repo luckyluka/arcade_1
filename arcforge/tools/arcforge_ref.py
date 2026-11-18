@@ -81,6 +81,21 @@ def ptr(*parts):
 #   numbers, 'strings', true/false, $name, + - * /, comparisons, && || !,
 #   floor ceil round min max abs clamp
 # --------------------------------------------------------------------------
+# P0.3 (integer semantics): every integer written in a document and every
+# integer literal in an expression must fit in int32. Larger values are
+# rejected at parse time -- JSON integers as E_INT_RANGE over the whole
+# document, expression literals as ExprError (E_RECIPE_EXPR /
+# E_ARCHETYPE_EXPR) -- so the C port never meets a value its 64-bit
+# arithmetic could silently wrap. See docs/LANGUAGE.md.
+INT_MIN = -(2 ** 31)
+INT_MAX = 2 ** 31 - 1
+INT_RANGE = f"{INT_MIN}..{INT_MAX}"
+
+
+def int_range_message(value):
+    return f"integer {value} is outside the valid range {INT_RANGE}"
+
+
 class ExprError(Exception):
     pass
 
@@ -122,6 +137,9 @@ def ev(expr, env):
 
 def _ev(n, env):
     if isinstance(n, ast.Constant) and isinstance(n.value, (int, float, str, bool)):
+        if isinstance(n.value, int) and not isinstance(n.value, bool) \
+                and not INT_MIN <= n.value <= INT_MAX:
+            raise ExprError(int_range_message(n.value))
         return n.value
     if isinstance(n, ast.Name):
         if n.id.startswith("__"):
@@ -133,6 +151,15 @@ def _ev(n, env):
             return CONSTS[n.id]
         raise ExprError(f"unknown identifier {n.id!r}")
     if isinstance(n, ast.UnaryOp):
+        # Fold `-(literal)` before recursing: the AST writes -2147483648 as
+        # -(2147483648), so the operand alone is out of range even though
+        # the value as written is in range. The folded value is checked.
+        if isinstance(n.op, ast.USub) and isinstance(n.operand, ast.Constant) \
+                and isinstance(n.operand.value, int) and not isinstance(n.operand.value, bool):
+            v = -n.operand.value
+            if not INT_MIN <= v <= INT_MAX:
+                raise ExprError(int_range_message(v))
+            return v
         v = _ev(n.operand, env)
         if isinstance(n.op, ast.USub):
             return -v
@@ -404,6 +431,7 @@ KIND_RANK = {       # the "kind" half of the (path, kind, message) ordering
     "const": 4, "pattern": 5, "minimum": 6, "maximum": 7, "minItems": 8,
     "maxItems": 9, "minProperties": 10, "maxProperties": 11,
     "uniqueItems": 12, "items": 13, "oneOf": 14, "anyOf": 15, "allOf": 16,
+    "int_range": 17,    # P0.3: our own walk, not a jsonschema keyword
 }
 KIND_UNKNOWN = 99
 
@@ -441,6 +469,29 @@ def _emit(out, kind, path, message, code="E_SCHEMA", **kw):
 
 def _vocab_message(value, fmt):
     return f"{_lit(value)} is not a valid {fmt.replace('_', ' ')}"
+
+
+def _collect_int_range(doc, prefix, out, dpath=""):
+    """P0.3: every JSON integer in the document must fit in int32.
+
+    A whole-document walk (free-form `metadata` included): jsonschema has
+    no keyword for the range of an arbitrary integer, and Python ints
+    never overflow while C's do. Booleans are not integers here, and
+    floats are out of this card's scope (see
+    ../../docs/experiments/arcforge-integer-overflow.md). Clamping would
+    silently change meaning, so no `fix` -- the observed/expected pair
+    says the range.
+    """
+    if isinstance(doc, dict):
+        for k, v in doc.items():
+            _collect_int_range(v, prefix, out, dpath + ptr(k))
+    elif isinstance(doc, list):
+        for i, v in enumerate(doc):
+            _collect_int_range(v, prefix, out, dpath + ptr(i))
+    elif isinstance(doc, int) and not isinstance(doc, bool) \
+            and not INT_MIN <= doc <= INT_MAX:
+        _emit(out, "int_range", prefix + dpath, int_range_message(doc),
+              code="E_INT_RANGE", observed=doc, expected=INT_RANGE)
 
 
 def _resolve_ref(root, ref):
@@ -692,16 +743,18 @@ def _collect_oneof(e, prefix, root, out):
 def schema_diags(doc, schema_name, base_path=""):
     """Schema failures as our diagnostics, ordered (path, kind, message).
 
-    Two sources: jsonschema for the structural keywords, and the hand-run
-    pattern vocabulary (P0.2) for `format`. Deduplicated: the same message
-    at the same path can be reached through more than one keyword, more
-    than one oneOf branch, or both sources."""
+    Three sources: jsonschema for the structural keywords, the hand-run
+    pattern vocabulary (P0.2) for `format`, and the int32 range walk
+    (P0.3) over every integer in the document. Deduplicated: the same
+    message at the same path can be reached through more than one
+    keyword, more than one oneOf branch, or both sources."""
     from jsonschema import Draft202012Validator
     root = load_json(SCHEMA_DIR / schema_name)
     entries = []
     for e in Draft202012Validator(root).iter_errors(doc):
         _collect_schema_error(e, base_path, root, entries)
     _collect_formats(doc, root, root, base_path, entries)
+    _collect_int_range(doc, base_path, entries)
     entries.sort(key=lambda t: t[:4])
     diags, seen = [], set()
     for _parts, _rank, _kind, message, d in entries:

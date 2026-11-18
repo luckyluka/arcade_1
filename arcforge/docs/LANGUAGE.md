@@ -96,6 +96,24 @@ Total, side-effect free, no loops, no user functions.
   every metric value is floored on assignment.
 - `when` on a shape: drawn only if true.
 
+### Integer semantics (P0.3)
+
+- **Range.** Every integer written in a document — free-form `metadata`
+  included — and every integer literal in an expression must be within
+  `[-2147483648, 2147483647]`. Out-of-range JSON integers are `E_INT_RANGE`
+  at validate: the pointer, `observed`, `expected` (`-2147483648..2147483647`)
+  and no `fix` — clamping would silently change meaning. Out-of-range
+  expression literals are `E_RECIPE_EXPR` / `E_ARCHETYPE_EXPR`. Unary minus
+  folds before the check, so `-2147483648` is accepted (it is written in
+  range) and `-2147483649` is not. Booleans are not integers; floats are
+  not range-checked.
+- **Floor division, everywhere.** `//` and `%` floor for negatives
+  (`-7 // 2 == -4`, `-7 % 2 == 1` — the operator list above), `rot_fixed`
+  and all raster arithmetic divide with floor
+  (`((x*c - y*s) * 64 + 500000) // 1000000`), geometry and metric values
+  floor on assignment (`to_int`, `half = floor(x/2)`). A truncating C `/`
+  would disagree on every negative intermediate.
+
 ## Shapes
 `rect {x,y,w,h}`, `ellipse {x,y,w,h}` (bounding box), `poly {points}`; fields may be numbers or expressions. Relative to the shape's `anchor` in recipes, absolute in archetypes. `rotate` allowed on rect/poly (not ellipse). `fill` = `outline` | `<ramp>.<tone>` | `$param.<tone>`, tone ∈ shadow, base, light.
 Rasterization: a pixel is filled if its **centre** lies inside the shape (even-odd rule), computed in 1/64-pixel integers.

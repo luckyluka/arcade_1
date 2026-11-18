@@ -48,6 +48,7 @@ The AI drives ArcForge through a small tool surface (CLI now, MCP server in M5).
 | E_RECIPE_NOT_APPLICABLE / E_SLOT_CONFLICT / E_MISSING_ANCHOR / E_CANVAS_UNSUPPORTED | composition problems |
 | E_PX_NOT_FOUND / E_PX_PARSE / E_PX_LEGEND | fragment problems |
 | E_RECIPE_EXPR / E_ARCHETYPE_EXPR | registry content bug (fix the registry, not the asset) |
+| E_INT_RANGE | integer written in the document or in an expression literal is outside `-2147483648..2147483647` (P0.3) |
 | E_PALETTE_BUDGET / E_TEST_FAILED / E_GOLDEN_MISMATCH | output checks |
 | W_CLIPPED | pixels fell outside the canvas |
 
