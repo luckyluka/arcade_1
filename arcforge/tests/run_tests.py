@@ -86,5 +86,10 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_c_json.py")],
                    capture_output=True, text=True)
 check("C JSON layer parity (M4.1a)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# M4.1b: table-driven C schema validator + registry loader vs the oracle.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_schema_parity.py")],
+                   capture_output=True, text=True)
+check("C schema validator parity (M4.1b)", p.returncode == 0,
+      "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)
