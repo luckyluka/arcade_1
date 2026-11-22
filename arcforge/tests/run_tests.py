@@ -91,5 +91,14 @@ p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_schema_parity.py"
                    capture_output=True, text=True)
 check("C schema validator parity (M4.1b)", p.returncode == 0,
       "" if p.returncode == 0 else (p.stdout + p.stderr)[-600:])
+# M4.1c: expression pipeline + the whole non-raster `validate` half vs the oracle.
+for label, script in (("C expression parity (M4.1c)", "test_expr_parity.py"),
+                      ("C validate parity (M4.1c)", "test_validate_parity.py")):
+    p = subprocess.run([sys.executable, str(ROOT / "tests" / script)],
+                       capture_output=True, text=True)
+    detail = "" if p.returncode == 0 else \
+        "\n".join(l for l in p.stdout.splitlines() if l.startswith("FAIL"))[:900] \
+        or (p.stdout + p.stderr)[-600:]
+    check(label, p.returncode == 0, detail)
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)

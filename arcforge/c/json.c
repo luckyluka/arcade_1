@@ -124,6 +124,103 @@ const af_json *af_json_get(const af_json *obj, const char *key) {
     return NULL;
 }
 
+/* index of the pair with this key, or -1 */
+static long obj_index(const af_json *o, const char *key) {
+    for (size_t i = 0; i + 1 < o->n; i += 2)
+        if (o->items[i]->type == AF_JSON_STRING &&
+            strcmp(o->items[i]->s, key) == 0)
+            return (long)i;
+    return -1;
+}
+
+af_json *af_json_clone(const af_json *v) {
+    if (!v) return NULL;
+    switch (v->type) {
+    case AF_JSON_NULL: return af_json_null();
+    case AF_JSON_BOOL: return af_json_bool(v->b);
+    case AF_JSON_INT: return af_json_int(v->i);
+    case AF_JSON_FLOAT: return af_json_float(v->d);
+    case AF_JSON_STRING: return af_json_strn(v->s, v->slen);
+    case AF_JSON_ARRAY: {
+        af_json *a = af_json_arr();
+        if (!a) return NULL;
+        for (size_t i = 0; i < v->n; i++) {
+            af_json *c = af_json_clone(v->items[i]);
+            if (!c || af_json_arr_push(a, c)) { af_json_free(c); af_json_free(a); return NULL; }
+        }
+        return a;
+    }
+    case AF_JSON_OBJECT: {
+        af_json *o = af_json_obj();
+        if (!o) return NULL;
+        for (size_t i = 0; i + 1 < v->n; i += 2) {
+            af_json *c = af_json_clone(v->items[i + 1]);
+            if (!c || af_json_obj_put(o, v->items[i]->s, c)) {
+                af_json_free(c); af_json_free(o); return NULL;
+            }
+        }
+        return o;
+    }
+    }
+    return NULL;
+}
+
+int af_json_obj_set(af_json *o, const char *key, af_json *v) {
+    if (!o || !key || !v || o->type != AF_JSON_OBJECT) { af_json_free(v); return -1; }
+    long at = obj_index(o, key);
+    if (at >= 0) {
+        af_json_free(o->items[at + 1]);
+        o->items[at + 1] = v;
+        return 0;
+    }
+    return af_json_obj_put(o, key, v);
+}
+
+int af_json_obj_del(af_json *o, const char *key) {
+    if (!o || !key || o->type != AF_JSON_OBJECT) return -1;
+    long at = obj_index(o, key);
+    if (at < 0) return 0;
+    af_json_free(o->items[at]);
+    af_json_free(o->items[at + 1]);
+    for (size_t i = (size_t)at + 2; i < o->n; i++) o->items[i - 2] = o->items[i];
+    o->n -= 2;
+    return 0;
+}
+
+static int num_bits_eq(double a, double b) {
+    uint64_t x, y;
+    memcpy(&x, &a, sizeof x);
+    memcpy(&y, &b, sizeof y);
+    return x == y;
+}
+
+int af_json_equal(const af_json *a, const af_json *b) {
+    if (a == b) return 1;
+    if (!a || !b || a->type != b->type) return 0;
+    switch (a->type) {
+    case AF_JSON_NULL: return 1;
+    case AF_JSON_BOOL: return a->b == b->b;
+    case AF_JSON_INT: return a->i == b->i;
+    case AF_JSON_FLOAT: return num_bits_eq(a->d, b->d);
+    case AF_JSON_STRING:
+        return a->slen == b->slen && memcmp(a->s, b->s, a->slen) == 0;
+    case AF_JSON_ARRAY:
+        if (a->n != b->n) return 0;
+        for (size_t i = 0; i < a->n; i++)
+            if (!af_json_equal(a->items[i], b->items[i])) return 0;
+        return 1;
+    case AF_JSON_OBJECT: {
+        if (a->n != b->n) return 0;
+        for (size_t i = 0; i + 1 < a->n; i += 2) {
+            const af_json *bv = af_json_get(b, a->items[i]->s);
+            if (!bv || !af_json_equal(a->items[i + 1], bv)) return 0;
+        }
+        return 1;
+    }
+    }
+    return 0;
+}
+
 void af_json_free(af_json *v) {
     if (!v) return;
     free(v->s);

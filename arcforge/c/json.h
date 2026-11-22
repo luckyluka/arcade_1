@@ -42,8 +42,10 @@ typedef struct af_json {
     double d;              /* AF_JSON_FLOAT  */
     char *s;               /* AF_JSON_STRING: UTF-8, NUL-terminated */
     size_t slen;           /* length of s in bytes (excluding NUL)  */
-    struct af_json **items;/* AF_JSON_ARRAY items, AF_JSON_OBJECT: key/value pairs */
-    size_t n;              /* items / pairs (pairs = 2n entries)     */
+    struct af_json **items;/* AF_JSON_ARRAY items; AF_JSON_OBJECT interleaved
+                            * key, value, key, value, ...                */
+    size_t n;              /* items; for an object: key/value ENTRIES
+                            * (= 2 * pairs, so pairs == n / 2)          */
     size_t cap;
 } af_json;
 
@@ -77,5 +79,24 @@ int af_json_obj_put(af_json *o, const char *key, af_json *v);
 
 /* first value for key, or NULL (objects never hold duplicates) */
 const af_json *af_json_get(const af_json *obj, const char *key);
+
+/* deep copy (merge_patch, variant expansion, registry views). NULL on
+ * out-of-memory. */
+af_json *af_json_clone(const af_json *v);
+
+/* out[key] = v, Python dict assignment: an existing key keeps its
+ * position and its old value is freed, a new key is appended. Takes
+ * ownership of v (freed on failure). 0 ok, -1 OOM / bad shape. */
+int af_json_obj_set(af_json *o, const char *key, af_json *v);
+
+/* out.pop(key, None): remove the pair if present. 0 ok, -1 bad shape. */
+int af_json_obj_del(af_json *o, const char *key);
+
+/* Structural equality with Python's json.dumps(..., sort_keys=True)
+ * distinguishing power: 1 and 1.0 are DIFFERENT (the writers differ),
+ * -0.0 and 0.0 are different, objects compare key-wise and ignore pair
+ * order (sort_keys), arrays compare in order. This is the equality
+ * `json.dumps(d, sort_keys=True)` implies, without formatting anything. */
+int af_json_equal(const af_json *a, const af_json *b);
 
 #endif /* ARCFORGE_JSON_H */

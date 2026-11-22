@@ -1,9 +1,16 @@
-/* main.c -- the `arcforge` C CLI (M4.1b).
+/* main.c -- the `arcforge` C CLI (M4.1b + M4.1c).
  *
- * Two read-only entry points, both byte-compatible with the Python
- * oracle (arcforge AGENTS rule 8: Python stays the oracle until M4.3
- * flips the gate; tests/test_schema_parity.py proves the parity):
+ * Three entry points, all byte-compatible with the Python oracle
+ * (arcforge AGENTS rule 8: Python stays the oracle until M4.3 flips the
+ * gate; tests/test_schema_parity.py + test_validate_parity.py prove the
+ * parity):
  *
+ *   arcforge validate ASSET.json
+ *       The oracle's cmd_validate: the full non-raster validate pipeline
+ *       (extends/variants, compile_asset, recipe/style docs) printed as
+ *       dump_json(report, indent=2) plus a newline; exit 0 on PASS, 1 on
+ *       FAIL. An oracle traceback is an exit 1 with EMPTY stdout: only a
+ *       stderr note is added.
  *   arcforge --schema-check JOBS.json
  *       JOBS is an array of {schema, base, file} or {schema, base, doc}
  *       jobs. `schema` names a file under schema/, `base` is the pointer
@@ -17,10 +24,12 @@
  *
  * Diagnostics are data, not failures: a job whose document violates its
  * schema still exits 0. Exit 2 with a message on stderr means the tool
- * itself could not run (unreadable/unparsable file, bad job shape, OOM).
+ * itself could not run (unreadable/unparsable file, bad job shape, OOM);
+ * for `validate`, usage errors are exit 2 as well.
  *
- * Paths are relative to the current directory; the parity test runs the
- * binary from the arcforge root, like the Python tool.
+ * --schema-check/--registry-list paths are relative to the current
+ * directory; `validate` locates the arcforge root from its own binary
+ * (find_root) like the oracle does from its script path.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,6 +37,7 @@
 
 #include "json.h"
 #include "schema.h"
+#include "validate.h"
 
 /* Read a whole file. Returns 0 with a heap buffer + length, or -1 with
  * err[] filled. */
@@ -199,13 +209,36 @@ static int cmd_registry_list(void) {
     return rc;
 }
 
+/* arcforge validate ASSET.json -- the oracle's cmd_validate (M4.1c).
+ * The report goes to stdout exactly like print(dump_json(report, 2));
+ * exit 0 on PASS, 1 on FAIL. A traceback in the oracle is an exit 1
+ * with an EMPTY stdout: af_validate() returns NULL and we print only a
+ * stderr note. OOM while writing the report is exit 1 too. */
+static int cmd_validate(const char *asset, const char *argv0) {
+    af_json *report = af_validate(asset, argv0);
+    if (!report) {
+        const char *why = af_validate_why();
+        fprintf(stderr, "arcforge: validate: %s\n", why && why[0] ? why : "error");
+        return 1;
+    }
+    const af_json *st = af_json_get(report, "status");
+    int pass = st && st->type == AF_JSON_STRING && strcmp(st->s, "PASS") == 0;
+    int pr = print_report(report);
+    af_json_free(report);
+    if (pr != 0) return 1;
+    return pass ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc == 3 && strcmp(argv[1], "--schema-check") == 0)
         return cmd_schema_check(argv[2]);
     if (argc == 2 && strcmp(argv[1], "--registry-list") == 0)
         return cmd_registry_list();
+    if (argc == 3 && strcmp(argv[1], "validate") == 0)
+        return cmd_validate(argv[2], argv[0]);
     fprintf(stderr,
-            "usage: arcforge --schema-check JOBS.json\n"
+            "usage: arcforge validate ASSET.json\n"
+            "       arcforge --schema-check JOBS.json\n"
             "       arcforge --registry-list\n");
     return 2;
 }
