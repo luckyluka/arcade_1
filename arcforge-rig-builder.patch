@@ -1,0 +1,1989 @@
+diff --git a/arcforge/Makefile b/arcforge/Makefile
+index 474fc2f..f8acbaf 100644
+--- a/arcforge/Makefile
++++ b/arcforge/Makefile
+@@ -5,6 +5,7 @@ EX = examples/hero.iron_knight.json
+ .PHONY: check lint test golden render list spec-check
+ check:
+ 	$(PY) tests/run_tests.py
++	$(PY) tests/check_rigs.py
+ spec-check:
+ 	$(PY) spec-next/check_spec.py
+ lint:
+diff --git a/arcforge/docs/RIG.md b/arcforge/docs/RIG.md
+new file mode 100644
+index 0000000..0cee4cc
+--- /dev/null
++++ b/arcforge/docs/RIG.md
+@@ -0,0 +1,73 @@
++# Rigs: the short way to make a new hero
++
++A **rig** is a ~50-line JSON file. `tools/rig_build.py` expands it into the full archetype (parts, layers, anchors,
++animation frames), checks it with ArcForge's own validator, renders a preview and tells you what is wrong in one line
++per problem. This exists so small local models can make archetypes: they only write the rig, never the 1000-line JSON.
++
++## Workflow (the whole thing)
++1. `cp rigs/knight_front.rig.json staging/<name>.rig.json` (or `rigs/mage_front.rig.json`; both are known good).
++2. Edit it: new `name`, shapes, colours, animation part lists.
++3. `python3 tools/rig_build.py staging/<name>.rig.json`  → read the output, fix, rerun (max 5 attempts).
++4. When it prints `OK` and a `PREVIEW:` path, open that PNG (rows: base, then every animation).
++5. Happy? `python3 tools/rig_build.py staging/<name>.rig.json --accept` adds it to `registry/` (runs the lint gate).
++6. See variants: `python3 tools/gen_assets.py --archetype <name> --n 60 --out out/gen` and open `out/gen/sheet.png`.
++
++## Canvas and coordinates
++`"size": [96, 96]`. x goes right, y goes DOWN, (0,0) is the top-left pixel. The feet touch y = 93, the centre line is
++x = 48. Keep every pixel inside the canvas (hat tips at y >= 2). Pixels outside the canvas are an error.
++
++## Shapes (one list each, numbers only, in pixels)
++| Shape | Form | Notes |
++|---|---|---|
++| capsule | `["capsule", fill, x1, y1, x2, y2, width]` | thick line with round ends; add `{"flat": true}` for square ends (torso, robe, belt) |
++| ellipse | `["ellipse", fill, cx, cy, rx, ry]` | centre and radii |
++| rect | `["rect", fill, x, y, w, h]` | flat colour only |
++| poly | `["poly", fill, [[x,y],[x,y],[x,y]]]` | flat colour only (hat cones, spikes) |
++
++Any shape may end with an options dict: `{"layer": "armor"}` puts just that shape on another layer.
++
++## Fills
++`T` = team colour, `S` = steel, `K` = skin, each as a ramp of 5 tones (`skin` has 4).
++- `"S"` on a **capsule or ellipse** = shaded as a volume (looks round). This is the nice look.
++- `"S.base"`, `"T.deep"`, `"S.high"` = one flat tone (`deep, shadow, base, light, high`). **rect and poly must be flat.**
++- `"outline"` = the dark outline colour (eyes, details).
++One asset can use at most 15 colours: outline + one team ramp + steel + skin. Do not invent other ramps.
++
++## Layers and parts
++Layers draw back to front: `back, body, armor, held, foreground, fx`. Inside a layer, parts and shapes draw in the
++order they are written. Each part is `{"layer": "body", "shapes": [...]}`. A part moves as one piece in animations,
++so split the character into parts that move separately (legs/feet, arm, head...). Keep the part names `head`, `helmet`,
++`torso`, `arm_l`, `arm_r`, `leg_l`, `leg_r`, `pauldron_l`, `pauldron_r`, `plume` when they exist: the style draws
++inner outlines for those.
++
++`"anchors": {"hand_r": ["arm_r", x, y]}` marks where a held item attaches. Optional.
++
++## Animations (use presets; the key is the template name)
++```json
++"idle_breathe": {"preset": "bob",   "parts": ["torso","head"], "fps": 4},
++"walk_cycle":   {"preset": "walk",  "legs": ["leg_l","leg_r"], "body": ["torso","head"], "lift": 4, "fps": 10},
++"attack_slash": {"preset": "swing", "part": "arm_r", "pivot": [60,50], "degrees": [0,-35,-70,-20,40,70,40,10],
++                 "bob": [0,0,-1,0,1,1,0,0], "body": ["torso","head"], "hit_frames": [4,5]},
++"hurt":         {"preset": "hurt",  "parts": ["torso","head","arm_l","arm_r"]},
++"death":        {"preset": "death", "parts": ["every","part"], "keep": ["feet","parts"], "angle": 18, "drop": 6}
++```
++- `swing` rotates one part about the **pivot** (the shoulder, in canvas pixels). Positive degrees = clockwise.
++  Put the arm AND the weapon in that one part so they swing together. Ellipses do not rotate (only their centre moves),
++  so build limbs and weapons from capsules.
++- `death` leans the character back about the feet. Tall or wide characters clip: lower `angle` (try 12) and `drop`.
++- Names that start with `idle`, `walk`, `attack`, `hurt` or `death` are picked up automatically.
++
++## Common errors, quick fixes
++| Message | Fix |
++|---|---|
++| `fill 'X' must start with T, S, K` | use T, S, K or outline |
++| `capsule = [...] (got 4 numbers)` | capsule needs x1,y1,x2,y2,width |
++| `part 'tail' is not defined` | list only parts that exist in `parts` |
++| `E_CLIPPED ... fall outside the canvas` | move or shrink shapes; for death lower angle/drop; for attack reduce the swing degrees |
++| `palette_size` | you used a fill outside T, S, K, outline |
++
++## Prompt to give a local model
++> Read docs/RIG.md and rigs/mage_front.rig.json. Create a new hero rig at staging/<name>.rig.json: <describe it>.
++> Copy the structure of the mage rig, change shapes and colours. Run `python3 tools/rig_build.py staging/<name>.rig.json`,
++> fix every reported error from its message, and stop after 5 attempts. Do not edit anything under tools/ or schema/.
++> When it prints OK, run it with `--accept` and tell me the PREVIEW path.
+diff --git a/arcforge/registry/archetypes/mage_front.archetype.json b/arcforge/registry/archetypes/mage_front.archetype.json
+new file mode 100644
+index 0000000..180fe72
+--- /dev/null
++++ b/arcforge/registry/archetypes/mage_front.archetype.json
+@@ -0,0 +1,1459 @@
++{
++  "archetype": "mage_front",
++  "version": "1.0.0",
++  "description": "96x96 front-view mage: long robe, pointed hat, white beard, staff in the right hand.",
++  "view": "front",
++  "canvas": {
++    "default": [
++      96,
++      96
++    ],
++    "supported": [
++      [
++        96,
++        96
++      ]
++    ]
++  },
++  "params": {
++    "team_ramp": {
++      "type": "ramp",
++      "default": "blue",
++      "allow": [
++        "blue",
++        "red",
++        "green",
++        "gold"
++      ]
++    },
++    "skin_ramp": {
++      "type": "ramp",
++      "default": "skin",
++      "allow": [
++        "skin"
++      ]
++    },
++    "steel_ramp": {
++      "type": "ramp",
++      "default": "steel",
++      "allow": [
++        "steel"
++      ]
++    }
++  },
++  "layers": [
++    "back",
++    "body",
++    "armor",
++    "held",
++    "foreground",
++    "fx"
++  ],
++  "parts": {
++    "root": {
++      "shapes": []
++    },
++    "foot_l": {
++      "shapes": [
++        {
++          "shape": "ellipse",
++          "layer": "body",
++          "x": 36,
++          "y": 89,
++          "w": 10,
++          "h": 5,
++          "fill": "$steel_ramp.*"
++        }
++      ]
++    },
++    "foot_r": {
++      "shapes": [
++        {
++          "shape": "ellipse",
++          "layer": "body",
++          "x": 50,
++          "y": 89,
++          "w": 10,
++          "h": 5,
++          "fill": "$steel_ramp.*"
++        }
++      ]
++    },
++    "robe": {
++      "shapes": [
++        {
++          "shape": "capsule",
++          "layer": "body",
++          "x1": 48,
++          "y1": 42,
++          "x2": 48,
++          "y2": 84,
++          "w": 26,
++          "fill": "$team_ramp.*",
++          "caps": "flat"
++        },
++        {
++          "shape": "capsule",
++          "layer": "body",
++          "x1": 48,
++          "y1": 60,
++          "x2": 48,
++          "y2": 62,
++          "w": 26,
++          "fill": "$steel_ramp.*",
++          "caps": "flat"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "armor",
++          "x": 46,
++          "y": 59,
++          "w": 5,
++          "h": 4,
++          "fill": "$steel_ramp.high"
++        }
++      ]
++    },
++    "arm_l": {
++      "shapes": [
++        {
++          "shape": "capsule",
++          "layer": "body",
++          "x1": 37,
++          "y1": 46,
++          "x2": 33,
++          "y2": 62,
++          "w": 8,
++          "fill": "$team_ramp.*"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "body",
++          "x": 30,
++          "y": 61,
++          "w": 7,
++          "h": 7,
++          "fill": "$skin_ramp.*"
++        }
++      ]
++    },
++    "head": {
++      "shapes": [
++        {
++          "shape": "ellipse",
++          "layer": "body",
++          "x": 40,
++          "y": 22,
++          "w": 17,
++          "h": 18,
++          "fill": "$skin_ramp.*"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "armor",
++          "x": 44,
++          "y": 30,
++          "w": 2,
++          "h": 3,
++          "fill": "outline"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "armor",
++          "x": 51,
++          "y": 30,
++          "w": 2,
++          "h": 3,
++          "fill": "outline"
++        }
++      ]
++    },
++    "beard": {
++      "shapes": [
++        {
++          "shape": "ellipse",
++          "layer": "armor",
++          "x": 42,
++          "y": 35,
++          "w": 13,
++          "h": 14,
++          "fill": "$steel_ramp.*"
++        }
++      ]
++    },
++    "hat": {
++      "shapes": [
++        {
++          "shape": "ellipse",
++          "layer": "armor",
++          "x": 34,
++          "y": 19,
++          "w": 28,
++          "h": 8,
++          "fill": "$team_ramp.*"
++        },
++        {
++          "shape": "poly",
++          "layer": "armor",
++          "points": [
++            [
++              39,
++              23
++            ],
++            [
++              57,
++              23
++            ],
++            [
++              52,
++              12
++            ],
++            [
++              46,
++              3
++            ],
++            [
++              44,
++              12
++            ]
++          ],
++          "fill": "$team_ramp.deep"
++        }
++      ]
++    },
++    "arm_r": {
++      "shapes": [
++        {
++          "shape": "capsule",
++          "layer": "held",
++          "x1": 63,
++          "y1": 22,
++          "x2": 66,
++          "y2": 74,
++          "w": 4,
++          "fill": "$steel_ramp.*"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "held",
++          "x": 58,
++          "y": 14,
++          "w": 10,
++          "h": 10,
++          "fill": "$steel_ramp.high"
++        },
++        {
++          "shape": "capsule",
++          "layer": "held",
++          "x1": 59,
++          "y1": 46,
++          "x2": 62,
++          "y2": 62,
++          "w": 8,
++          "fill": "$team_ramp.*"
++        },
++        {
++          "shape": "ellipse",
++          "layer": "held",
++          "x": 59,
++          "y": 61,
++          "w": 7,
++          "h": 7,
++          "fill": "$skin_ramp.*"
++        }
++      ]
++    }
++  },
++  "anchors": {
++    "origin": {
++      "part": "root",
++      "at": [
++        48,
++        93
++      ]
++    },
++    "hand_r": {
++      "part": "arm_r",
++      "at": [
++        62,
++        64
++      ]
++    },
++    "head_top": {
++      "part": "hat",
++      "at": [
++        50,
++        4
++      ]
++    }
++  },
++  "animations": {
++    "idle_breathe": {
++      "fps": 4,
++      "loop": true,
++      "frames": [
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              1
++            ],
++            "head": [
++              0,
++              1
++            ],
++            "beard": [
++              0,
++              1
++            ],
++            "hat": [
++              0,
++              1
++            ],
++            "arm_l": [
++              0,
++              1
++            ],
++            "arm_r": [
++              0,
++              1
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              1
++            ],
++            "head": [
++              0,
++              1
++            ],
++            "beard": [
++              0,
++              1
++            ],
++            "hat": [
++              0,
++              1
++            ],
++            "arm_l": [
++              0,
++              1
++            ],
++            "arm_r": [
++              0,
++              1
++            ]
++          }
++        }
++      ]
++    },
++    "walk_cycle": {
++      "fps": 10,
++      "loop": true,
++      "frames": [
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ],
++            "foot_l": [
++              0,
++              -4
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              1
++            ],
++            "head": [
++              0,
++              1
++            ],
++            "beard": [
++              0,
++              1
++            ],
++            "hat": [
++              0,
++              1
++            ],
++            "arm_l": [
++              0,
++              1
++            ],
++            "arm_r": [
++              0,
++              1
++            ],
++            "foot_l": [
++              0,
++              -4
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              -4
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              1
++            ],
++            "head": [
++              0,
++              1
++            ],
++            "beard": [
++              0,
++              1
++            ],
++            "hat": [
++              0,
++              1
++            ],
++            "arm_l": [
++              0,
++              1
++            ],
++            "arm_r": [
++              0,
++              1
++            ],
++            "foot_r": [
++              0,
++              -4
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          }
++        }
++      ]
++    },
++    "attack_cast": {
++      "fps": 12,
++      "loop": false,
++      "phases": [
++        "windup",
++        "strike",
++        "recover"
++      ],
++      "frames": [
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              0,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              -20,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              -45,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              -10,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              30,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              45,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              25,
++              58,
++              44
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "arm_r": [
++              5,
++              58,
++              44
++            ]
++          }
++        }
++      ],
++      "hit_frames": [
++        4,
++        5
++      ]
++    },
++    "hurt": {
++      "fps": 8,
++      "loop": false,
++      "frames": [
++        {
++          "offsets": {
++            "robe": [
++              -3,
++              -1
++            ],
++            "head": [
++              -3,
++              -1
++            ],
++            "beard": [
++              -3,
++              -1
++            ],
++            "hat": [
++              -3,
++              -1
++            ],
++            "arm_l": [
++              -3,
++              -1
++            ],
++            "arm_r": [
++              -3,
++              -1
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              -2,
++              0
++            ],
++            "head": [
++              -2,
++              0
++            ],
++            "beard": [
++              -2,
++              0
++            ],
++            "hat": [
++              -2,
++              0
++            ],
++            "arm_l": [
++              -2,
++              0
++            ],
++            "arm_r": [
++              -2,
++              0
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          }
++        }
++      ]
++    },
++    "death": {
++      "fps": 8,
++      "loop": false,
++      "frames": [
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              0
++            ],
++            "head": [
++              0,
++              0
++            ],
++            "beard": [
++              0,
++              0
++            ],
++            "hat": [
++              0,
++              0
++            ],
++            "arm_l": [
++              0,
++              0
++            ],
++            "arm_r": [
++              0,
++              0
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              0,
++              48,
++              93
++            ],
++            "foot_r": [
++              0,
++              48,
++              93
++            ],
++            "robe": [
++              0,
++              48,
++              93
++            ],
++            "head": [
++              0,
++              48,
++              93
++            ],
++            "beard": [
++              0,
++              48,
++              93
++            ],
++            "hat": [
++              0,
++              48,
++              93
++            ],
++            "arm_l": [
++              0,
++              48,
++              93
++            ],
++            "arm_r": [
++              0,
++              48,
++              93
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              1
++            ],
++            "head": [
++              0,
++              1
++            ],
++            "beard": [
++              0,
++              1
++            ],
++            "hat": [
++              0,
++              1
++            ],
++            "arm_l": [
++              0,
++              1
++            ],
++            "arm_r": [
++              0,
++              1
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              4,
++              48,
++              93
++            ],
++            "foot_r": [
++              4,
++              48,
++              93
++            ],
++            "robe": [
++              4,
++              48,
++              93
++            ],
++            "head": [
++              4,
++              48,
++              93
++            ],
++            "beard": [
++              4,
++              48,
++              93
++            ],
++            "hat": [
++              4,
++              48,
++              93
++            ],
++            "arm_l": [
++              4,
++              48,
++              93
++            ],
++            "arm_r": [
++              4,
++              48,
++              93
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              2
++            ],
++            "head": [
++              0,
++              2
++            ],
++            "beard": [
++              0,
++              2
++            ],
++            "hat": [
++              0,
++              2
++            ],
++            "arm_l": [
++              0,
++              2
++            ],
++            "arm_r": [
++              0,
++              2
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              8,
++              48,
++              93
++            ],
++            "foot_r": [
++              8,
++              48,
++              93
++            ],
++            "robe": [
++              8,
++              48,
++              93
++            ],
++            "head": [
++              8,
++              48,
++              93
++            ],
++            "beard": [
++              8,
++              48,
++              93
++            ],
++            "hat": [
++              8,
++              48,
++              93
++            ],
++            "arm_l": [
++              8,
++              48,
++              93
++            ],
++            "arm_r": [
++              8,
++              48,
++              93
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              4
++            ],
++            "head": [
++              0,
++              4
++            ],
++            "beard": [
++              0,
++              4
++            ],
++            "hat": [
++              0,
++              4
++            ],
++            "arm_l": [
++              0,
++              4
++            ],
++            "arm_r": [
++              0,
++              4
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              13,
++              48,
++              93
++            ],
++            "foot_r": [
++              13,
++              48,
++              93
++            ],
++            "robe": [
++              13,
++              48,
++              93
++            ],
++            "head": [
++              13,
++              48,
++              93
++            ],
++            "beard": [
++              13,
++              48,
++              93
++            ],
++            "hat": [
++              13,
++              48,
++              93
++            ],
++            "arm_l": [
++              13,
++              48,
++              93
++            ],
++            "arm_r": [
++              13,
++              48,
++              93
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              5
++            ],
++            "head": [
++              0,
++              5
++            ],
++            "beard": [
++              0,
++              5
++            ],
++            "hat": [
++              0,
++              5
++            ],
++            "arm_l": [
++              0,
++              5
++            ],
++            "arm_r": [
++              0,
++              5
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              16,
++              48,
++              93
++            ],
++            "foot_r": [
++              16,
++              48,
++              93
++            ],
++            "robe": [
++              16,
++              48,
++              93
++            ],
++            "head": [
++              16,
++              48,
++              93
++            ],
++            "beard": [
++              16,
++              48,
++              93
++            ],
++            "hat": [
++              16,
++              48,
++              93
++            ],
++            "arm_l": [
++              16,
++              48,
++              93
++            ],
++            "arm_r": [
++              16,
++              48,
++              93
++            ]
++          }
++        },
++        {
++          "offsets": {
++            "foot_l": [
++              0,
++              0
++            ],
++            "foot_r": [
++              0,
++              0
++            ],
++            "robe": [
++              0,
++              6
++            ],
++            "head": [
++              0,
++              6
++            ],
++            "beard": [
++              0,
++              6
++            ],
++            "hat": [
++              0,
++              6
++            ],
++            "arm_l": [
++              0,
++              6
++            ],
++            "arm_r": [
++              0,
++              6
++            ]
++          },
++          "rotate": {
++            "foot_l": [
++              18,
++              48,
++              93
++            ],
++            "foot_r": [
++              18,
++              48,
++              93
++            ],
++            "robe": [
++              18,
++              48,
++              93
++            ],
++            "head": [
++              18,
++              48,
++              93
++            ],
++            "beard": [
++              18,
++              48,
++              93
++            ],
++            "hat": [
++              18,
++              48,
++              93
++            ],
++            "arm_l": [
++              18,
++              48,
++              93
++            ],
++            "arm_r": [
++              18,
++              48,
++              93
++            ]
++          }
++        }
++      ]
++    }
++  }
++}
+diff --git a/arcforge/rigs/knight_front.rig.json b/arcforge/rigs/knight_front.rig.json
+new file mode 100644
+index 0000000..3365ffe
+--- /dev/null
++++ b/arcforge/rigs/knight_front.rig.json
+@@ -0,0 +1,48 @@
++{
++  "name": "knight_front",
++  "description": "96x96 front-view knight, volume shaded (rig version of the hand-written archetype).",
++  "size": [96, 96],
++  "view": "front",
++  "anchors": {"hand_r": ["arm_r", 60, 68], "head_top": ["helmet", 48, 10]},
++  "parts": {
++    "leg_l": {"layer": "body", "shapes": [
++        ["capsule", "S", 41, 78, 41, 88, 6],
++        ["ellipse", "S", 41, 92, 6, 4],
++        ["ellipse", "S", 41, 82.5, 4, 3.5]]},
++    "leg_r": {"layer": "body", "shapes": [
++        ["capsule", "S", 55, 78, 55, 88, 6],
++        ["ellipse", "S", 55, 92, 6, 4],
++        ["ellipse", "S", 55, 82.5, 4, 3.5]]},
++    "torso": {"layer": "body", "shapes": [
++        ["capsule", "T", 48, 46, 48, 75, 22, {"flat": true}],
++        ["capsule", "S", 48, 74, 48, 77, 22, {"flat": true}],
++        ["ellipse", "S.high", 48, 76, 3, 2, {"layer": "armor"}]]},
++    "arm_l": {"layer": "body", "shapes": [
++        ["capsule", "S", 36, 50, 33, 66, 7],
++        ["ellipse", "K", 33, 68, 4, 4]]},
++    "head": {"layer": "armor", "shapes": [
++        ["ellipse", "K", 48.5, 33, 10.5, 11, {"layer": "body"}],
++        ["ellipse", "outline", 43.5, 37.5, 1.5, 1.5],
++        ["ellipse", "outline", 52.5, 37.5, 1.5, 1.5],
++        ["ellipse", "K.shadow", 47.5, 39.5, 1.5, 1.5]]},
++    "pauldron_l": {"layer": "armor", "shapes": [
++        ["ellipse", "S", 35.5, 47, 7.5, 7]]},
++    "pauldron_r": {"layer": "armor", "shapes": [
++        ["ellipse", "S", 59.5, 47, 7.5, 7]]},
++    "helmet": {"layer": "armor", "shapes": [
++        ["ellipse", "S", 48, 24, 13, 10]]},
++    "plume": {"layer": "armor", "shapes": [
++        ["capsule", "T", 48, 20, 48, 10, 6]]},
++    "arm_r": {"layer": "held", "shapes": [
++        ["capsule", "S", 60, 50, 60, 68, 7],
++        ["ellipse", "K", 60, 67, 4, 4],
++        ["capsule", "S", 60, 68, 73, 40, 5],
++        ["capsule", "S", 56, 66, 64, 69, 3]]}
++  },
++  "animations": {
++    "idle_breathe": {"preset": "bob", "parts": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "fps": 4},
++    "walk_cycle": {"preset": "walk", "legs": ["leg_l", "leg_r"], "body": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "lift": 4, "fps": 10},
++    "attack_slash": {"preset": "swing", "part": "arm_r", "pivot": [60, 50], "degrees": [0, -35, -70, -20, 40, 70, 40, 10],
++                     "bob": [0, 0, -1, 0, 1, 1, 0, 0], "body": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "fps": 12, "hit_frames": [4, 5]}
++  }
++}
+diff --git a/arcforge/rigs/mage_front.rig.json b/arcforge/rigs/mage_front.rig.json
+new file mode 100644
+index 0000000..b36dc9d
+--- /dev/null
++++ b/arcforge/rigs/mage_front.rig.json
+@@ -0,0 +1,39 @@
++{
++  "name": "mage_front",
++  "description": "96x96 front-view mage: long robe, pointed hat, white beard, staff in the right hand.",
++  "size": [96, 96],
++  "view": "front",
++  "anchors": {"hand_r": ["arm_r", 62, 64], "head_top": ["hat", 50, 4]},
++  "parts": {
++    "foot_l": {"layer": "body", "shapes": [["ellipse", "S", 41, 91, 5, 2.5]]},
++    "foot_r": {"layer": "body", "shapes": [["ellipse", "S", 55, 91, 5, 2.5]]},
++    "robe": {"layer": "body", "shapes": [
++        ["capsule", "T", 48, 42, 48, 84, 26, {"flat": true}],
++        ["capsule", "S", 48, 60, 48, 62, 26, {"flat": true}],
++        ["ellipse", "S.high", 48, 61, 2.5, 1.8, {"layer": "armor"}]]},
++    "arm_l": {"layer": "body", "shapes": [
++        ["capsule", "T", 37, 46, 33, 62, 8],
++        ["ellipse", "K", 33, 64, 3.5, 3.5]]},
++    "head": {"layer": "body", "shapes": [
++        ["ellipse", "K", 48, 31, 8.5, 9],
++        ["ellipse", "outline", 44.5, 31, 1, 1.4, {"layer": "armor"}],
++        ["ellipse", "outline", 51.5, 31, 1, 1.4, {"layer": "armor"}]]},
++    "beard": {"layer": "armor", "shapes": [["ellipse", "S", 48, 42, 6.5, 7]]},
++    "hat": {"layer": "armor", "shapes": [
++        ["ellipse", "T", 48, 23, 14, 4],
++        ["poly", "T.deep", [[39, 23], [57, 23], [52, 12], [46, 3], [44, 12]]]]},
++    "arm_r": {"layer": "held", "shapes": [
++        ["capsule", "S", 63, 22, 66, 74, 4],
++        ["ellipse", "S.high", 63, 19, 5, 5],
++        ["capsule", "T", 59, 46, 62, 62, 8],
++        ["ellipse", "K", 62, 64, 3.5, 3.5]]}
++  },
++  "animations": {
++    "idle_breathe": {"preset": "bob", "parts": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "fps": 4},
++    "walk_cycle": {"preset": "walk", "legs": ["foot_l", "foot_r"], "body": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "lift": 4, "fps": 10},
++    "attack_cast": {"preset": "swing", "part": "arm_r", "pivot": [58, 44], "degrees": [0, -20, -45, -10, 30, 45, 25, 5],
++                    "body": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "fps": 12, "hit_frames": [4, 5]},
++    "hurt": {"preset": "hurt", "parts": ["robe", "head", "beard", "hat", "arm_l", "arm_r"]},
++    "death": {"preset": "death", "parts": ["foot_l", "foot_r", "robe", "head", "beard", "hat", "arm_l", "arm_r"], "keep": ["foot_l", "foot_r"], "angle": 18, "drop": 6}
++  }
++}
+diff --git a/arcforge/tests/check_rigs.py b/arcforge/tests/check_rigs.py
+new file mode 100644
+index 0000000..1642ba6
+--- /dev/null
++++ b/arcforge/tests/check_rigs.py
+@@ -0,0 +1,38 @@
++#!/usr/bin/env python3
++"""Rig regression: every rigs/*.rig.json must build clean, and the knight rig must reproduce the hand-written
++knight_front archetype's golden frames bit for bit."""
++import json
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(ROOT / "tools"))
++import arcforge_ref as A
++import rig_build as R
++
++fail = 0
++for p in sorted((ROOT / "rigs").glob("*.rig.json")):
++    try:
++        arch = R.expand(json.loads(p.read_text()))
++        sd = A.schema_diags(arch, "archetype.schema.json")
++        reg = A.load_registry()
++        reg["archetypes"][arch["archetype"]] = arch
++        d, ir = A.compile_asset(R.example_asset(arch, "shaded_15", "blue"), reg, ROOT)
++        errs = [x for x in sd + d if x["severity"] == "error"]
++        if ir is not None:
++            _, d2 = A.run_tests(ir, A.render_all(ir))
++            errs += [x for x in d2 if x["severity"] == "error"]
++        ok = not errs
++        print(("PASS " if ok else "FAIL ") + f"rig {p.name}" + ("" if ok else f" {[e['code'] for e in errs][:4]}"))
++        fail += not ok
++        if p.name == "knight_front.rig.json" and ir is not None:
++            g = json.loads((ROOT / "tests" / "golden" / "hero.knight_blue.json").read_text())["frames"]
++            h = A.frame_hashes(A.render_all(ir))
++            bad = [k for k in g if g[k] != h.get(k)]
++            print(("PASS " if not bad else "FAIL ") + f"rig knight_front reproduces golden ({len(g)} frames)")
++            fail += bool(bad)
++    except Exception as e:  # a rig that crashes the builder is a failure too
++        print(f"FAIL rig {p.name}: {type(e).__name__}: {e}")
++        fail += 1
++print("RIGS GREEN" if not fail else "RIGS FAILED")
++sys.exit(1 if fail else 0)
+diff --git a/arcforge/tools/gen_assets.py b/arcforge/tools/gen_assets.py
+index 0d54ff1..e09e604 100644
+--- a/arcforge/tools/gen_assets.py
++++ b/arcforge/tools/gen_assets.py
+@@ -41,9 +41,17 @@ def pick_anims(arch):
+     return out
+ 
+ 
++def styles_for(reg, arch):
++    """Styles that define every ramp the archetype's ramp parameters may pick (e.g. knight_front needs shaded_15)."""
++    ok = [n for n, st in sorted(reg["styles"].items())
++          if all(r in st["ramps"] for s in arch.get("params", {}).values()
++                 if s["type"] == "ramp" and s.get("allow") for r in s["allow"])]
++    return ok or sorted(reg["styles"])
++
++
+ def make_doc(reg, rng, aname, i, seed):
+     arch = reg["archetypes"][aname]
+-    style_name = rng.choice(sorted(reg["styles"]))
++    style_name = rng.choice(styles_for(reg, arch))
+     style = reg["styles"][style_name]
+     size_specs = arch.get("size") or {}
+     archetype, size_val = {"name": aname}, None
+diff --git a/arcforge/tools/rig_build.py b/arcforge/tools/rig_build.py
+new file mode 100644
+index 0000000..cfbb8ba
+--- /dev/null
++++ b/arcforge/tools/rig_build.py
+@@ -0,0 +1,261 @@
++#!/usr/bin/env python3
++"""Compact rig -> full archetype JSON -> validated -> rendered preview. Built so small local models succeed.
++
++  python3 tools/rig_build.py staging/mage.rig.json            # build, check, render out/rig/<name>.png
++  python3 tools/rig_build.py staging/mage.rig.json --team red # preview another team colour
++  python3 tools/rig_build.py staging/mage.rig.json --accept   # also add it to registry/ (runs the lint gate)
++
++The rig is ~60 lines of JSON (see rigs/*.rig.json and docs/RIG.md). This tool writes the 1000-line archetype
++(parts, layers, anchors, animation frames), builds an example asset, runs ArcForge's own validator and tests,
++and prints at most 12 short diagnostics. Style: shaded_15 (ramps T=team, S=steel, K=skin)."""
++import argparse
++import json
++import math
++import subprocess
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(ROOT / "tools"))
++import arcforge_ref as A
++
++LAYERS = ["back", "body", "armor", "held", "foreground", "fx"]
++RAMP = {"T": "$team_ramp", "S": "$steel_ramp", "K": "$skin_ramp"}
++ANIM_KEYS = ("idle", "walk", "attack", "hurt", "death")
++
++
++class RigError(Exception):
++    pass
++
++
++def fl(v):
++    return math.floor(v + 0.5)
++
++
++def fill(code, flat, where):
++    if code == "outline":
++        return code
++    r, _, t = str(code).partition(".")
++    if r not in RAMP:
++        raise RigError(f"{where}: fill '{code}' must start with T, S, K or be 'outline' (e.g. 'S', 'T.base', 'S.high')")
++    if flat and not t:
++        t = "base"
++    if t and t not in ("deep", "shadow", "base", "light", "high"):
++        raise RigError(f"{where}: tone '{t}' must be deep, shadow, base, light or high")
++    return f"{RAMP[r]}.{t or '*'}"
++
++
++def need(sp, n, where, usage):
++    nums = [v for v in sp[2:] if not isinstance(v, (dict, list, str))]
++    if len(sp) < n:
++        raise RigError(f"{where}: needs {usage}")
++
++
++def shape(sp, layer, where):
++    if not isinstance(sp, list) or len(sp) < 3:
++        raise RigError(f"{where}: a shape is a list like ['capsule','S',x1,y1,x2,y2,w]")
++    opts = sp[-1] if isinstance(sp[-1], dict) else {}
++    body = sp[:-1] if opts else sp
++    k = body[0]
++    lay = opts.get("layer", layer)
++    if lay not in LAYERS:
++        raise RigError(f"{where}: layer '{lay}' must be one of {LAYERS}")
++    if k == "capsule":
++        if len(body) != 7:
++            raise RigError(f"{where}: capsule = ['capsule', fill, x1, y1, x2, y2, width]  (got {len(body) - 2} numbers)")
++        _, f, x1, y1, x2, y2, w = body
++        d = {"shape": "capsule", "layer": lay, "x1": fl(x1), "y1": fl(y1), "x2": fl(x2), "y2": fl(y2), "w": max(1, fl(w)),
++             "fill": fill(f, False, where)}
++        if opts.get("flat"):
++            d["caps"] = "flat"
++        return d
++    if k == "ellipse":
++        if len(body) != 6:
++            raise RigError(f"{where}: ellipse = ['ellipse', fill, cx, cy, rx, ry]  (centre and radii)")
++        _, f, cx, cy, rx, ry = body
++        return {"shape": "ellipse", "layer": lay, "x": fl(cx - rx), "y": fl(cy - ry), "w": max(1, fl(2 * rx)),
++                "h": max(1, fl(2 * ry)), "fill": fill(f, False, where)}
++    if k == "rect":
++        if len(body) != 6:
++            raise RigError(f"{where}: rect = ['rect', fill, x, y, w, h]  (flat colour: use 'S.base' style fills)")
++        _, f, x, y, w, h = body
++        return {"shape": "rect", "layer": lay, "x": fl(x), "y": fl(y), "w": fl(w), "h": fl(h), "fill": fill(f, True, where)}
++    if k == "poly":
++        if len(body) != 3 or not isinstance(body[2], list):
++            raise RigError(f"{where}: poly = ['poly', fill, [[x,y],[x,y],[x,y],...]]  (flat colour)")
++        return {"shape": "poly", "layer": lay, "points": [[fl(p[0]), fl(p[1])] for p in body[2]], "fill": fill(body[1], True, where)}
++    raise RigError(f"{where}: unknown shape '{k}'; use capsule, ellipse, rect or poly")
++
++
++def offs(parts, dy, dx=0):
++    return {p: [dx, dy] for p in parts}
++
++
++def anim(name, a, parts, origin):
++    pr = a.get("preset")
++    body = a.get("body", [])
++    for p in body + a.get("parts", []) + a.get("legs", []) + a.get("keep", []) + ([a["part"]] if "part" in a else []):
++        if p not in parts:
++            raise RigError(f"animation {name}: part '{p}' is not defined in parts (have: {sorted(parts)})")
++    if pr == "bob":
++        pts, amt = a["parts"], a.get("amount", 1)
++        frames = [{"offsets": offs(pts, d * amt)} for d in (0, 0, 1, 1)]
++        return {"fps": a.get("fps", 4), "loop": True, "frames": frames}
++    if pr == "walk":
++        L, R = a["legs"]
++        lift = a.get("lift", 4)
++        pat = [(L, 0), (L, 1), (None, 0), (R, 0), (R, 1), (None, 0)]
++        frames = []
++        for leg, dy in pat:
++            o = offs(body, dy)
++            if leg:
++                o[leg] = [0, -lift]
++            frames.append({"offsets": o})
++        return {"fps": a.get("fps", 10), "loop": True, "frames": frames}
++    if pr == "swing":
++        deg, piv = a["degrees"], a["pivot"]
++        bob = a.get("bob", [0] * len(deg))
++        if len(bob) != len(deg):
++            raise RigError(f"animation {name}: 'bob' needs {len(deg)} numbers like 'degrees'")
++        frames = [{"offsets": offs(body, bob[i]), "rotate": {a["part"]: [deg[i], piv[0], piv[1]]}} for i in range(len(deg))]
++        out = {"fps": a.get("fps", 12), "loop": False, "phases": ["windup", "strike", "recover"], "frames": frames}
++        if a.get("hit_frames"):
++            out["hit_frames"] = a["hit_frames"]
++        return out
++    if pr == "hurt":
++        frames = [{"offsets": offs(a["parts"], dy, dx)} for dx, dy in ((-3, -1), (-2, 0), (0, 0))]
++        return {"fps": a.get("fps", 8), "loop": False, "frames": frames}
++    if pr == "death":
++        # collapse: lean back about the feet and sink; parts in "keep" (e.g. the feet) rotate but do not sink
++        piv = a.get("pivot", origin)
++        ang, drop, keep = a.get("angle", 25), a.get("drop", 10), set(a.get("keep", []))
++        frames = []
++        for fr, fd in zip((0, .2, .45, .7, .9, 1), (0, .15, .4, .7, .9, 1)):
++            o = {q: [0, 0 if q in keep else fl(drop * fd)] for q in a["parts"]}
++            frames.append({"offsets": o, "rotate": {q: [fl(ang * fr), piv[0], piv[1]] for q in a["parts"]}})
++        return {"fps": a.get("fps", 8), "loop": False, "frames": frames}
++    if "frames" in a:
++        return {"fps": a.get("fps", 8), "loop": a.get("loop", False), "frames": a["frames"]}
++    raise RigError(f"animation {name}: give 'preset' (bob, walk, swing, hurt, death) or raw 'frames'")
++
++
++def expand(rig):
++    for k in ("name", "size", "parts", "animations"):
++        if k not in rig:
++            raise RigError(f"rig is missing '{k}'")
++    W, H = rig["size"]
++    origin = rig.get("origin", [W // 2, H - 3])
++    parts = {"root": {"shapes": []}}
++    for pid, pdef in rig["parts"].items():
++        if "shapes" not in pdef or not pdef["shapes"]:
++            raise RigError(f"part '{pid}' needs a non-empty 'shapes' list")
++        layer = pdef.get("layer", "body")
++        parts[pid] = {"shapes": [shape(sp, layer, f"part {pid} shape #{i + 1}") for i, sp in enumerate(pdef["shapes"])]}
++    anchors = {"origin": {"part": "root", "at": origin}}
++    for an, (pt, x, y) in rig.get("anchors", {}).items():
++        anchors[an] = {"part": pt, "at": [x, y]}
++    anims = {n: anim(n, a, parts, origin) for n, a in rig["animations"].items()}
++    arch = {"archetype": rig["name"], "version": "1.0.0", "description": rig.get("description", f"{rig['name']} (built from a rig)"),
++            "view": rig.get("view", "front"), "canvas": {"default": [W, H], "supported": [[W, H]]},
++            "params": {"team_ramp": {"type": "ramp", "default": "blue", "allow": ["blue", "red", "green", "gold"]},
++                       "skin_ramp": {"type": "ramp", "default": "skin", "allow": ["skin"]},
++                       "steel_ramp": {"type": "ramp", "default": "steel", "allow": ["steel"]}},
++            "layers": LAYERS, "parts": parts, "anchors": anchors, "animations": anims}
++    return arch
++
++
++def example_asset(arch, style, team):
++    W, H = arch["canvas"]["default"]
++    an = {}
++    for t in arch["animations"]:
++        k = next((k for k in ANIM_KEYS if t == k or t.startswith(k + "_")), None)
++        if k and k not in an:
++            an[k] = {"template": t}
++    return {"arcforge": "2.0", "asset": {"id": f"rig.{arch['archetype']}", "type": "character", "version": "1.0.0"},
++            "target": {"profile": "arcade1-draft", "canvas": [W, H]}, "style_pack": style,
++            "archetype": {"name": arch["archetype"], "params": {"team_ramp": team}}, "features": [], "animations": an,
++            "tests": [{"assert": "dimensions", "expected": [W, H]}, {"assert": "palette_size", "max": 15},
++                      {"assert": "bbox_margin", "min": 0}]}
++
++
++def show(diags, limit=12):
++    for d in diags[:limit]:
++        extra = ""
++        for k in ("expected", "suggestions", "fix"):
++            if d.get(k):
++                extra += f" {k}={json.dumps(d[k])[:120]}"
++        print(f"  {d['severity'].upper()} {d['code']} {d['path']}: {d['message'][:150]}{extra}")
++    if len(diags) > limit:
++        print(f"  ... {len(diags) - limit} more")
++
++
++def sheet(renders, W, H, path, scale=3):
++    rows = [("base", renders["base"])] + [(n, f) for n, f in renders.items() if n != "base"]
++    cols = max(len(f) for _, f in rows)
++    buf = bytearray(W * cols * H * len(rows) * 4)
++    pw = W * cols
++    for r, (_, fs) in enumerate(rows):
++        for c, f in enumerate(fs):
++            for y in range(H):
++                dst = ((r * H + y) * pw + c * W) * 4
++                buf[dst:dst + W * 4] = f["rgba"][y * W * 4:(y + 1) * W * 4]
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_bytes(A.png_bytes(pw, H * len(rows), bytes(buf), scale=scale, bg=(52, 56, 72)))
++
++
++def main():
++    ap = argparse.ArgumentParser()
++    ap.add_argument("rig")
++    ap.add_argument("--team", default="blue")
++    ap.add_argument("--style", default="shaded_15")
++    ap.add_argument("--accept", action="store_true")
++    a = ap.parse_args()
++    try:
++        rig = json.loads(Path(a.rig).read_text())
++    except Exception as e:
++        sys.exit(f"RIG JSON error: {e}")
++    try:
++        arch = expand(rig)
++    except (RigError, KeyError, TypeError, ValueError) as e:
++        sys.exit(f"RIG ERROR: {e}")
++    name = arch["archetype"]
++    st = ROOT / "staging"
++    st.mkdir(exist_ok=True)
++    apath = st / f"{name}.archetype.json"
++    apath.write_text(json.dumps(arch, indent=2) + "\n")
++    sd = A.schema_diags(arch, "archetype.schema.json")
++    if sd:
++        print("ARCHETYPE SCHEMA ERRORS (the rig expanded to something invalid):")
++        show(sd)
++        sys.exit(1)
++    reg = A.load_registry()
++    reg["archetypes"][name] = arch
++    asset = example_asset(arch, a.style, a.team)
++    diags, ir = A.compile_asset(asset, reg, ROOT)
++    if ir is None:
++        print("COMPILE ERRORS:")
++        show([d for d in diags if d["severity"] == "error"] or diags)
++        sys.exit(1)
++    renders = A.render_all(ir)
++    results, d2 = A.run_tests(ir, renders)
++    errs = [d for d in diags + d2 if d["severity"] == "error"]
++    warns = [d for d in diags + d2 if d["severity"] != "error"]
++    out = ROOT / "out" / "rig" / f"{name}.png"
++    sheet(renders, ir["W"], ir["H"], out)
++    frames = sum(len(f) for f in renders.values())
++    if errs:
++        print(f"FAILED ({len(errs)} errors); preview still written: {out}")
++        show(errs)
++        sys.exit(1)
++    print(f"OK {name}: {ir['W']}x{ir['H']}, {frames} frames, tests {sum(r['status'] == 'PASS' for r in results)}/{len(results)} pass")
++    if warns:
++        print("warnings:")
++        show(warns, 5)
++    print(f"PREVIEW: {out}   (rows: base, then each animation; open it to judge the look)")
++    if a.accept:
++        r = subprocess.run([sys.executable, str(ROOT / "tools" / "lib_add.py"), str(apath)], cwd=ROOT)
++        sys.exit(r.returncode)
++
++
++if __name__ == "__main__":
++    main()

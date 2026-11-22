@@ -1,0 +1,48 @@
+{
+  "name": "knight_front",
+  "description": "96x96 front-view knight, volume shaded (rig version of the hand-written archetype).",
+  "size": [96, 96],
+  "view": "front",
+  "anchors": {"hand_r": ["arm_r", 60, 68], "head_top": ["helmet", 48, 10]},
+  "parts": {
+    "leg_l": {"layer": "body", "shapes": [
+        ["capsule", "S", 41, 78, 41, 88, 6],
+        ["ellipse", "S", 41, 92, 6, 4],
+        ["ellipse", "S", 41, 82.5, 4, 3.5]]},
+    "leg_r": {"layer": "body", "shapes": [
+        ["capsule", "S", 55, 78, 55, 88, 6],
+        ["ellipse", "S", 55, 92, 6, 4],
+        ["ellipse", "S", 55, 82.5, 4, 3.5]]},
+    "torso": {"layer": "body", "shapes": [
+        ["capsule", "T", 48, 46, 48, 75, 22, {"flat": true}],
+        ["capsule", "S", 48, 74, 48, 77, 22, {"flat": true}],
+        ["ellipse", "S.high", 48, 76, 3, 2, {"layer": "armor"}]]},
+    "arm_l": {"layer": "body", "shapes": [
+        ["capsule", "S", 36, 50, 33, 66, 7],
+        ["ellipse", "K", 33, 68, 4, 4]]},
+    "head": {"layer": "armor", "shapes": [
+        ["ellipse", "K", 48.5, 33, 10.5, 11, {"layer": "body"}],
+        ["ellipse", "outline", 43.5, 37.5, 1.5, 1.5],
+        ["ellipse", "outline", 52.5, 37.5, 1.5, 1.5],
+        ["ellipse", "K.shadow", 47.5, 39.5, 1.5, 1.5]]},
+    "pauldron_l": {"layer": "armor", "shapes": [
+        ["ellipse", "S", 35.5, 47, 7.5, 7]]},
+    "pauldron_r": {"layer": "armor", "shapes": [
+        ["ellipse", "S", 59.5, 47, 7.5, 7]]},
+    "helmet": {"layer": "armor", "shapes": [
+        ["ellipse", "S", 48, 24, 13, 10]]},
+    "plume": {"layer": "armor", "shapes": [
+        ["capsule", "T", 48, 20, 48, 10, 6]]},
+    "arm_r": {"layer": "held", "shapes": [
+        ["capsule", "S", 60, 50, 60, 68, 7],
+        ["ellipse", "K", 60, 67, 4, 4],
+        ["capsule", "S", 60, 68, 73, 40, 5],
+        ["capsule", "S", 56, 66, 64, 69, 3]]}
+  },
+  "animations": {
+    "idle_breathe": {"preset": "bob", "parts": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "fps": 4},
+    "walk_cycle": {"preset": "walk", "legs": ["leg_l", "leg_r"], "body": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "lift": 4, "fps": 10},
+    "attack_slash": {"preset": "swing", "part": "arm_r", "pivot": [60, 50], "degrees": [0, -35, -70, -20, 40, 70, 40, 10],
+                     "bob": [0, 0, -1, 0, 1, 1, 0, 0], "body": ["torso", "head", "helmet", "plume", "pauldron_l", "pauldron_r", "arm_l", "arm_r"], "fps": 12, "hit_frames": [4, 5]}
+  }
+}

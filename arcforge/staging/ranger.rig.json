@@ -1,0 +1,51 @@
+{
+  "name": "ranger",
+  "description": "96x96 front-view ranger: leather armor, bow in right hand, quiver on back.",
+  "size": [96, 96],
+  "view": "front",
+  "anchors": {"hand_r": ["arm_r", 62, 64], "head_top": ["helmet", 50, 4]},
+  "parts": {
+    "foot_l": {"layer": "body", "shapes": [["ellipse", "S", 41, 91, 5, 2.5]]},
+    "foot_r": {"layer": "body", "shapes": [["ellipse", "S", 55, 91, 5, 2.5]]},
+    "leg_l": {"layer": "body", "shapes": [
+        ["capsule", "S", 41, 78, 41, 88, 6],
+        ["ellipse", "S", 41, 92, 6, 4],
+        ["ellipse", "S", 41, 82.5, 4, 3.5]]},
+    "leg_r": {"layer": "body", "shapes": [
+        ["capsule", "S", 55, 78, 55, 88, 6],
+        ["ellipse", "S", 55, 92, 6, 4],
+        ["ellipse", "S", 55, 82.5, 4, 3.5]]},
+    "torso": {"layer": "body", "shapes": [
+        ["capsule", "S", 48, 46, 48, 75, 22, {"flat": true}],
+        ["capsule", "S", 48, 74, 48, 77, 22, {"flat": true}],
+        ["ellipse", "S.high", 48, 76, 3, 2, {"layer": "armor"}]]},
+    "arm_l": {"layer": "body", "shapes": [
+        ["capsule", "S", 36, 50, 33, 66, 7],
+        ["ellipse", "K", 33, 68, 4, 4]]},
+    "head": {"layer": "armor", "shapes": [
+        ["ellipse", "K", 48.5, 33, 10.5, 11, {"layer": "body"}],
+        ["ellipse", "outline", 43.5, 37.5, 1.5, 1.5],
+        ["ellipse", "outline", 52.5, 37.5, 1.5, 1.5],
+        ["ellipse", "K.shadow", 47.5, 39.5, 1.5, 1.5]]},
+    "helmet": {"layer": "armor", "shapes": [
+        ["ellipse", "S", 48, 24, 13, 10]]},
+    "arm_r": {"layer": "held", "shapes": [
+        ["capsule", "S", 60, 50, 60, 68, 7],
+        ["ellipse", "K", 60, 67, 4, 4],
+        ["capsule", "S", 60, 68, 73, 40, 5],
+        ["capsule", "S", 56, 66, 64, 69, 3]]},
+    "bow": {"layer": "held", "shapes": [
+        ["capsule", "S", 65, 60, 70, 55, 3],
+        ["capsule", "S", 65, 60, 70, 65, 3]]},
+    "quiver": {"layer": "armor", "shapes": [
+        ["capsule", "S", 48, 60, 48, 70, 12]]}
+  },
+  "animations": {
+    "idle_breathe": {"preset": "bob", "parts": ["torso", "head", "helmet", "arm_l", "arm_r", "bow", "quiver", "foot_l", "foot_r"], "fps": 4},
+    "walk_cycle": {"preset": "walk", "legs": ["foot_l", "foot_r"], "body": ["torso", "head", "helmet", "arm_l", "arm_r", "bow", "quiver", "foot_l", "foot_r"], "lift": 4, "fps": 10},
+    "attack_shoot": {"preset": "swing", "part": "arm_r", "pivot": [60, 50], "degrees": [0, -35, -70, -20, 40, 70, 40, 10],
+                    "bob": [0, 0, -1, 0, 1, 1, 0, 0], "body": ["torso", "head", "helmet", "arm_l", "arm_r", "bow", "quiver", "foot_l", "foot_r"], "fps": 12, "hit_frames": [4, 5]},
+    "hurt": {"preset": "hurt", "parts": ["torso", "head", "helmet", "arm_l", "arm_r", "bow", "quiver", "foot_l", "foot_r"]},
+    "death": {"preset": "death", "parts": ["foot_l", "foot_r", "torso", "head", "helmet", "arm_l", "arm_r", "bow", "quiver"], "keep": ["foot_l", "foot_r"], "angle": 18, "drop": 6}
+  }
+}

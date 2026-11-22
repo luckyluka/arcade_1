@@ -1,0 +1,1821 @@
+{
+  "archetype": "ranger",
+  "version": "1.0.0",
+  "description": "96x96 front-view ranger: leather armor, bow in right hand, quiver on back.",
+  "view": "front",
+  "canvas": {
+    "default": [
+      96,
+      96
+    ],
+    "supported": [
+      [
+        96,
+        96
+      ]
+    ]
+  },
+  "params": {
+    "team_ramp": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "blue",
+        "red",
+        "green",
+        "gold"
+      ]
+    },
+    "skin_ramp": {
+      "type": "ramp",
+      "default": "skin",
+      "allow": [
+        "skin"
+      ]
+    },
+    "steel_ramp": {
+      "type": "ramp",
+      "default": "steel",
+      "allow": [
+        "steel"
+      ]
+    }
+  },
+  "layers": [
+    "back",
+    "body",
+    "armor",
+    "held",
+    "foreground",
+    "fx"
+  ],
+  "parts": {
+    "root": {
+      "shapes": []
+    },
+    "foot_l": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 36,
+          "y": 89,
+          "w": 10,
+          "h": 5,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "foot_r": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 50,
+          "y": 89,
+          "w": 10,
+          "h": 5,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "leg_l": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 41,
+          "y1": 78,
+          "x2": 41,
+          "y2": 88,
+          "w": 6,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 35,
+          "y": 88,
+          "w": 12,
+          "h": 8,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 37,
+          "y": 79,
+          "w": 8,
+          "h": 7,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "leg_r": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 55,
+          "y1": 78,
+          "x2": 55,
+          "y2": 88,
+          "w": 6,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 49,
+          "y": 88,
+          "w": 12,
+          "h": 8,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 51,
+          "y": 79,
+          "w": 8,
+          "h": 7,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "torso": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 48,
+          "y1": 46,
+          "x2": 48,
+          "y2": 75,
+          "w": 22,
+          "fill": "$steel_ramp.*",
+          "caps": "flat"
+        },
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 48,
+          "y1": 74,
+          "x2": 48,
+          "y2": 77,
+          "w": 22,
+          "fill": "$steel_ramp.*",
+          "caps": "flat"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 45,
+          "y": 74,
+          "w": 6,
+          "h": 4,
+          "fill": "$steel_ramp.high"
+        }
+      ]
+    },
+    "arm_l": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 36,
+          "y1": 50,
+          "x2": 33,
+          "y2": 66,
+          "w": 7,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 29,
+          "y": 64,
+          "w": 8,
+          "h": 8,
+          "fill": "$skin_ramp.*"
+        }
+      ]
+    },
+    "head": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 38,
+          "y": 22,
+          "w": 21,
+          "h": 22,
+          "fill": "$skin_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 42,
+          "y": 36,
+          "w": 3,
+          "h": 3,
+          "fill": "outline"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 51,
+          "y": 36,
+          "w": 3,
+          "h": 3,
+          "fill": "outline"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 46,
+          "y": 38,
+          "w": 3,
+          "h": 3,
+          "fill": "$skin_ramp.shadow"
+        }
+      ]
+    },
+    "helmet": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 35,
+          "y": 14,
+          "w": 26,
+          "h": 20,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "arm_r": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 60,
+          "y1": 50,
+          "x2": 60,
+          "y2": 68,
+          "w": 7,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "held",
+          "x": 56,
+          "y": 63,
+          "w": 8,
+          "h": 8,
+          "fill": "$skin_ramp.*"
+        },
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 60,
+          "y1": 68,
+          "x2": 73,
+          "y2": 40,
+          "w": 5,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 56,
+          "y1": 66,
+          "x2": 64,
+          "y2": 69,
+          "w": 3,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "bow": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 65,
+          "y1": 60,
+          "x2": 70,
+          "y2": 55,
+          "w": 3,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 65,
+          "y1": 60,
+          "x2": 70,
+          "y2": 65,
+          "w": 3,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "quiver": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "armor",
+          "x1": 48,
+          "y1": 60,
+          "x2": 48,
+          "y2": 70,
+          "w": 12,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": {
+      "part": "root",
+      "at": [
+        48,
+        93
+      ]
+    },
+    "hand_r": {
+      "part": "arm_r",
+      "at": [
+        62,
+        64
+      ]
+    },
+    "head_top": {
+      "part": "helmet",
+      "at": [
+        50,
+        4
+      ]
+    }
+  },
+  "animations": {
+    "idle_breathe": {
+      "fps": 4,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    "walk_cycle": {
+      "fps": 10,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              -4
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              -4
+            ],
+            "foot_r": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    "attack_shoot": {
+      "fps": 12,
+      "loop": false,
+      "phases": [
+        "windup",
+        "strike",
+        "recover"
+      ],
+      "frames": [
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              0,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -35,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              -1
+            ],
+            "head": [
+              0,
+              -1
+            ],
+            "helmet": [
+              0,
+              -1
+            ],
+            "arm_l": [
+              0,
+              -1
+            ],
+            "arm_r": [
+              0,
+              -1
+            ],
+            "bow": [
+              0,
+              -1
+            ],
+            "quiver": [
+              0,
+              -1
+            ],
+            "foot_l": [
+              0,
+              -1
+            ],
+            "foot_r": [
+              0,
+              -1
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -70,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -20,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              1
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              40,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              1
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              70,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              40,
+              60,
+              50
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              10,
+              60,
+              50
+            ]
+          }
+        }
+      ],
+      "hit_frames": [
+        4,
+        5
+      ]
+    },
+    "hurt": {
+      "fps": 8,
+      "loop": false,
+      "frames": [
+        {
+          "offsets": {
+            "torso": [
+              -3,
+              -1
+            ],
+            "head": [
+              -3,
+              -1
+            ],
+            "helmet": [
+              -3,
+              -1
+            ],
+            "arm_l": [
+              -3,
+              -1
+            ],
+            "arm_r": [
+              -3,
+              -1
+            ],
+            "bow": [
+              -3,
+              -1
+            ],
+            "quiver": [
+              -3,
+              -1
+            ],
+            "foot_l": [
+              -3,
+              -1
+            ],
+            "foot_r": [
+              -3,
+              -1
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              -2,
+              0
+            ],
+            "head": [
+              -2,
+              0
+            ],
+            "helmet": [
+              -2,
+              0
+            ],
+            "arm_l": [
+              -2,
+              0
+            ],
+            "arm_r": [
+              -2,
+              0
+            ],
+            "bow": [
+              -2,
+              0
+            ],
+            "quiver": [
+              -2,
+              0
+            ],
+            "foot_l": [
+              -2,
+              0
+            ],
+            "foot_r": [
+              -2,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    "death": {
+      "fps": 8,
+      "loop": false,
+      "frames": [
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "helmet": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "bow": [
+              0,
+              0
+            ],
+            "quiver": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              0,
+              48,
+              93
+            ],
+            "foot_r": [
+              0,
+              48,
+              93
+            ],
+            "torso": [
+              0,
+              48,
+              93
+            ],
+            "head": [
+              0,
+              48,
+              93
+            ],
+            "helmet": [
+              0,
+              48,
+              93
+            ],
+            "arm_l": [
+              0,
+              48,
+              93
+            ],
+            "arm_r": [
+              0,
+              48,
+              93
+            ],
+            "bow": [
+              0,
+              48,
+              93
+            ],
+            "quiver": [
+              0,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "helmet": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "bow": [
+              0,
+              1
+            ],
+            "quiver": [
+              0,
+              1
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              4,
+              48,
+              93
+            ],
+            "foot_r": [
+              4,
+              48,
+              93
+            ],
+            "torso": [
+              4,
+              48,
+              93
+            ],
+            "head": [
+              4,
+              48,
+              93
+            ],
+            "helmet": [
+              4,
+              48,
+              93
+            ],
+            "arm_l": [
+              4,
+              48,
+              93
+            ],
+            "arm_r": [
+              4,
+              48,
+              93
+            ],
+            "bow": [
+              4,
+              48,
+              93
+            ],
+            "quiver": [
+              4,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              2
+            ],
+            "head": [
+              0,
+              2
+            ],
+            "helmet": [
+              0,
+              2
+            ],
+            "arm_l": [
+              0,
+              2
+            ],
+            "arm_r": [
+              0,
+              2
+            ],
+            "bow": [
+              0,
+              2
+            ],
+            "quiver": [
+              0,
+              2
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              8,
+              48,
+              93
+            ],
+            "foot_r": [
+              8,
+              48,
+              93
+            ],
+            "torso": [
+              8,
+              48,
+              93
+            ],
+            "head": [
+              8,
+              48,
+              93
+            ],
+            "helmet": [
+              8,
+              48,
+              93
+            ],
+            "arm_l": [
+              8,
+              48,
+              93
+            ],
+            "arm_r": [
+              8,
+              48,
+              93
+            ],
+            "bow": [
+              8,
+              48,
+              93
+            ],
+            "quiver": [
+              8,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              4
+            ],
+            "head": [
+              0,
+              4
+            ],
+            "helmet": [
+              0,
+              4
+            ],
+            "arm_l": [
+              0,
+              4
+            ],
+            "arm_r": [
+              0,
+              4
+            ],
+            "bow": [
+              0,
+              4
+            ],
+            "quiver": [
+              0,
+              4
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              13,
+              48,
+              93
+            ],
+            "foot_r": [
+              13,
+              48,
+              93
+            ],
+            "torso": [
+              13,
+              48,
+              93
+            ],
+            "head": [
+              13,
+              48,
+              93
+            ],
+            "helmet": [
+              13,
+              48,
+              93
+            ],
+            "arm_l": [
+              13,
+              48,
+              93
+            ],
+            "arm_r": [
+              13,
+              48,
+              93
+            ],
+            "bow": [
+              13,
+              48,
+              93
+            ],
+            "quiver": [
+              13,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              5
+            ],
+            "head": [
+              0,
+              5
+            ],
+            "helmet": [
+              0,
+              5
+            ],
+            "arm_l": [
+              0,
+              5
+            ],
+            "arm_r": [
+              0,
+              5
+            ],
+            "bow": [
+              0,
+              5
+            ],
+            "quiver": [
+              0,
+              5
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              16,
+              48,
+              93
+            ],
+            "foot_r": [
+              16,
+              48,
+              93
+            ],
+            "torso": [
+              16,
+              48,
+              93
+            ],
+            "head": [
+              16,
+              48,
+              93
+            ],
+            "helmet": [
+              16,
+              48,
+              93
+            ],
+            "arm_l": [
+              16,
+              48,
+              93
+            ],
+            "arm_r": [
+              16,
+              48,
+              93
+            ],
+            "bow": [
+              16,
+              48,
+              93
+            ],
+            "quiver": [
+              16,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "torso": [
+              0,
+              6
+            ],
+            "head": [
+              0,
+              6
+            ],
+            "helmet": [
+              0,
+              6
+            ],
+            "arm_l": [
+              0,
+              6
+            ],
+            "arm_r": [
+              0,
+              6
+            ],
+            "bow": [
+              0,
+              6
+            ],
+            "quiver": [
+              0,
+              6
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              18,
+              48,
+              93
+            ],
+            "foot_r": [
+              18,
+              48,
+              93
+            ],
+            "torso": [
+              18,
+              48,
+              93
+            ],
+            "head": [
+              18,
+              48,
+              93
+            ],
+            "helmet": [
+              18,
+              48,
+              93
+            ],
+            "arm_l": [
+              18,
+              48,
+              93
+            ],
+            "arm_r": [
+              18,
+              48,
+              93
+            ],
+            "bow": [
+              18,
+              48,
+              93
+            ],
+            "quiver": [
+              18,
+              48,
+              93
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

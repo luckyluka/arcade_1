@@ -41,9 +41,17 @@ def pick_anims(arch):
     return out
 
 
+def styles_for(reg, arch):
+    """Styles that define every ramp the archetype's ramp parameters may pick (e.g. knight_front needs shaded_15)."""
+    ok = [n for n, st in sorted(reg["styles"].items())
+          if all(r in st["ramps"] for s in arch.get("params", {}).values()
+                 if s["type"] == "ramp" and s.get("allow") for r in s["allow"])]
+    return ok or sorted(reg["styles"])
+
+
 def make_doc(reg, rng, aname, i, seed):
     arch = reg["archetypes"][aname]
-    style_name = rng.choice(sorted(reg["styles"]))
+    style_name = rng.choice(styles_for(reg, arch))
     style = reg["styles"][style_name]
     size_specs = arch.get("size") or {}
     archetype, size_val = {"name": aname}, None

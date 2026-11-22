@@ -1,0 +1,1459 @@
+{
+  "archetype": "mage_front",
+  "version": "1.0.0",
+  "description": "96x96 front-view mage: long robe, pointed hat, white beard, staff in the right hand.",
+  "view": "front",
+  "canvas": {
+    "default": [
+      96,
+      96
+    ],
+    "supported": [
+      [
+        96,
+        96
+      ]
+    ]
+  },
+  "params": {
+    "team_ramp": {
+      "type": "ramp",
+      "default": "blue",
+      "allow": [
+        "blue",
+        "red",
+        "green",
+        "gold"
+      ]
+    },
+    "skin_ramp": {
+      "type": "ramp",
+      "default": "skin",
+      "allow": [
+        "skin"
+      ]
+    },
+    "steel_ramp": {
+      "type": "ramp",
+      "default": "steel",
+      "allow": [
+        "steel"
+      ]
+    }
+  },
+  "layers": [
+    "back",
+    "body",
+    "armor",
+    "held",
+    "foreground",
+    "fx"
+  ],
+  "parts": {
+    "root": {
+      "shapes": []
+    },
+    "foot_l": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 36,
+          "y": 89,
+          "w": 10,
+          "h": 5,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "foot_r": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 50,
+          "y": 89,
+          "w": 10,
+          "h": 5,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "robe": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 48,
+          "y1": 42,
+          "x2": 48,
+          "y2": 84,
+          "w": 26,
+          "fill": "$team_ramp.*",
+          "caps": "flat"
+        },
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 48,
+          "y1": 60,
+          "x2": 48,
+          "y2": 62,
+          "w": 26,
+          "fill": "$steel_ramp.*",
+          "caps": "flat"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 46,
+          "y": 59,
+          "w": 5,
+          "h": 4,
+          "fill": "$steel_ramp.high"
+        }
+      ]
+    },
+    "arm_l": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "body",
+          "x1": 37,
+          "y1": 46,
+          "x2": 33,
+          "y2": 62,
+          "w": 8,
+          "fill": "$team_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 30,
+          "y": 61,
+          "w": 7,
+          "h": 7,
+          "fill": "$skin_ramp.*"
+        }
+      ]
+    },
+    "head": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "body",
+          "x": 40,
+          "y": 22,
+          "w": 17,
+          "h": 18,
+          "fill": "$skin_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 44,
+          "y": 30,
+          "w": 2,
+          "h": 3,
+          "fill": "outline"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 51,
+          "y": 30,
+          "w": 2,
+          "h": 3,
+          "fill": "outline"
+        }
+      ]
+    },
+    "beard": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 42,
+          "y": 35,
+          "w": 13,
+          "h": 14,
+          "fill": "$steel_ramp.*"
+        }
+      ]
+    },
+    "hat": {
+      "shapes": [
+        {
+          "shape": "ellipse",
+          "layer": "armor",
+          "x": 34,
+          "y": 19,
+          "w": 28,
+          "h": 8,
+          "fill": "$team_ramp.*"
+        },
+        {
+          "shape": "poly",
+          "layer": "armor",
+          "points": [
+            [
+              39,
+              23
+            ],
+            [
+              57,
+              23
+            ],
+            [
+              52,
+              12
+            ],
+            [
+              46,
+              3
+            ],
+            [
+              44,
+              12
+            ]
+          ],
+          "fill": "$team_ramp.deep"
+        }
+      ]
+    },
+    "arm_r": {
+      "shapes": [
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 63,
+          "y1": 22,
+          "x2": 66,
+          "y2": 74,
+          "w": 4,
+          "fill": "$steel_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "held",
+          "x": 58,
+          "y": 14,
+          "w": 10,
+          "h": 10,
+          "fill": "$steel_ramp.high"
+        },
+        {
+          "shape": "capsule",
+          "layer": "held",
+          "x1": 59,
+          "y1": 46,
+          "x2": 62,
+          "y2": 62,
+          "w": 8,
+          "fill": "$team_ramp.*"
+        },
+        {
+          "shape": "ellipse",
+          "layer": "held",
+          "x": 59,
+          "y": 61,
+          "w": 7,
+          "h": 7,
+          "fill": "$skin_ramp.*"
+        }
+      ]
+    }
+  },
+  "anchors": {
+    "origin": {
+      "part": "root",
+      "at": [
+        48,
+        93
+      ]
+    },
+    "hand_r": {
+      "part": "arm_r",
+      "at": [
+        62,
+        64
+      ]
+    },
+    "head_top": {
+      "part": "hat",
+      "at": [
+        50,
+        4
+      ]
+    }
+  },
+  "animations": {
+    "idle_breathe": {
+      "fps": 4,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "beard": [
+              0,
+              1
+            ],
+            "hat": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "beard": [
+              0,
+              1
+            ],
+            "hat": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    "walk_cycle": {
+      "fps": 10,
+      "loop": true,
+      "frames": [
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "foot_l": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "beard": [
+              0,
+              1
+            ],
+            "hat": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "foot_l": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "beard": [
+              0,
+              1
+            ],
+            "hat": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ],
+            "foot_r": [
+              0,
+              -4
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    "attack_cast": {
+      "fps": 12,
+      "loop": false,
+      "phases": [
+        "windup",
+        "strike",
+        "recover"
+      ],
+      "frames": [
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              0,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -20,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -45,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              -10,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              30,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              45,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              25,
+              58,
+              44
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "arm_r": [
+              5,
+              58,
+              44
+            ]
+          }
+        }
+      ],
+      "hit_frames": [
+        4,
+        5
+      ]
+    },
+    "hurt": {
+      "fps": 8,
+      "loop": false,
+      "frames": [
+        {
+          "offsets": {
+            "robe": [
+              -3,
+              -1
+            ],
+            "head": [
+              -3,
+              -1
+            ],
+            "beard": [
+              -3,
+              -1
+            ],
+            "hat": [
+              -3,
+              -1
+            ],
+            "arm_l": [
+              -3,
+              -1
+            ],
+            "arm_r": [
+              -3,
+              -1
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              -2,
+              0
+            ],
+            "head": [
+              -2,
+              0
+            ],
+            "beard": [
+              -2,
+              0
+            ],
+            "hat": [
+              -2,
+              0
+            ],
+            "arm_l": [
+              -2,
+              0
+            ],
+            "arm_r": [
+              -2,
+              0
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    "death": {
+      "fps": 8,
+      "loop": false,
+      "frames": [
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              0
+            ],
+            "head": [
+              0,
+              0
+            ],
+            "beard": [
+              0,
+              0
+            ],
+            "hat": [
+              0,
+              0
+            ],
+            "arm_l": [
+              0,
+              0
+            ],
+            "arm_r": [
+              0,
+              0
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              0,
+              48,
+              93
+            ],
+            "foot_r": [
+              0,
+              48,
+              93
+            ],
+            "robe": [
+              0,
+              48,
+              93
+            ],
+            "head": [
+              0,
+              48,
+              93
+            ],
+            "beard": [
+              0,
+              48,
+              93
+            ],
+            "hat": [
+              0,
+              48,
+              93
+            ],
+            "arm_l": [
+              0,
+              48,
+              93
+            ],
+            "arm_r": [
+              0,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              1
+            ],
+            "head": [
+              0,
+              1
+            ],
+            "beard": [
+              0,
+              1
+            ],
+            "hat": [
+              0,
+              1
+            ],
+            "arm_l": [
+              0,
+              1
+            ],
+            "arm_r": [
+              0,
+              1
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              4,
+              48,
+              93
+            ],
+            "foot_r": [
+              4,
+              48,
+              93
+            ],
+            "robe": [
+              4,
+              48,
+              93
+            ],
+            "head": [
+              4,
+              48,
+              93
+            ],
+            "beard": [
+              4,
+              48,
+              93
+            ],
+            "hat": [
+              4,
+              48,
+              93
+            ],
+            "arm_l": [
+              4,
+              48,
+              93
+            ],
+            "arm_r": [
+              4,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              2
+            ],
+            "head": [
+              0,
+              2
+            ],
+            "beard": [
+              0,
+              2
+            ],
+            "hat": [
+              0,
+              2
+            ],
+            "arm_l": [
+              0,
+              2
+            ],
+            "arm_r": [
+              0,
+              2
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              8,
+              48,
+              93
+            ],
+            "foot_r": [
+              8,
+              48,
+              93
+            ],
+            "robe": [
+              8,
+              48,
+              93
+            ],
+            "head": [
+              8,
+              48,
+              93
+            ],
+            "beard": [
+              8,
+              48,
+              93
+            ],
+            "hat": [
+              8,
+              48,
+              93
+            ],
+            "arm_l": [
+              8,
+              48,
+              93
+            ],
+            "arm_r": [
+              8,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              4
+            ],
+            "head": [
+              0,
+              4
+            ],
+            "beard": [
+              0,
+              4
+            ],
+            "hat": [
+              0,
+              4
+            ],
+            "arm_l": [
+              0,
+              4
+            ],
+            "arm_r": [
+              0,
+              4
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              13,
+              48,
+              93
+            ],
+            "foot_r": [
+              13,
+              48,
+              93
+            ],
+            "robe": [
+              13,
+              48,
+              93
+            ],
+            "head": [
+              13,
+              48,
+              93
+            ],
+            "beard": [
+              13,
+              48,
+              93
+            ],
+            "hat": [
+              13,
+              48,
+              93
+            ],
+            "arm_l": [
+              13,
+              48,
+              93
+            ],
+            "arm_r": [
+              13,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              5
+            ],
+            "head": [
+              0,
+              5
+            ],
+            "beard": [
+              0,
+              5
+            ],
+            "hat": [
+              0,
+              5
+            ],
+            "arm_l": [
+              0,
+              5
+            ],
+            "arm_r": [
+              0,
+              5
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              16,
+              48,
+              93
+            ],
+            "foot_r": [
+              16,
+              48,
+              93
+            ],
+            "robe": [
+              16,
+              48,
+              93
+            ],
+            "head": [
+              16,
+              48,
+              93
+            ],
+            "beard": [
+              16,
+              48,
+              93
+            ],
+            "hat": [
+              16,
+              48,
+              93
+            ],
+            "arm_l": [
+              16,
+              48,
+              93
+            ],
+            "arm_r": [
+              16,
+              48,
+              93
+            ]
+          }
+        },
+        {
+          "offsets": {
+            "foot_l": [
+              0,
+              0
+            ],
+            "foot_r": [
+              0,
+              0
+            ],
+            "robe": [
+              0,
+              6
+            ],
+            "head": [
+              0,
+              6
+            ],
+            "beard": [
+              0,
+              6
+            ],
+            "hat": [
+              0,
+              6
+            ],
+            "arm_l": [
+              0,
+              6
+            ],
+            "arm_r": [
+              0,
+              6
+            ]
+          },
+          "rotate": {
+            "foot_l": [
+              18,
+              48,
+              93
+            ],
+            "foot_r": [
+              18,
+              48,
+              93
+            ],
+            "robe": [
+              18,
+              48,
+              93
+            ],
+            "head": [
+              18,
+              48,
+              93
+            ],
+            "beard": [
+              18,
+              48,
+              93
+            ],
+            "hat": [
+              18,
+              48,
+              93
+            ],
+            "arm_l": [
+              18,
+              48,
+              93
+            ],
+            "arm_r": [
+              18,
+              48,
+              93
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

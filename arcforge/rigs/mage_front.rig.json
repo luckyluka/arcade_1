@@ -1,0 +1,39 @@
+{
+  "name": "mage_front",
+  "description": "96x96 front-view mage: long robe, pointed hat, white beard, staff in the right hand.",
+  "size": [96, 96],
+  "view": "front",
+  "anchors": {"hand_r": ["arm_r", 62, 64], "head_top": ["hat", 50, 4]},
+  "parts": {
+    "foot_l": {"layer": "body", "shapes": [["ellipse", "S", 41, 91, 5, 2.5]]},
+    "foot_r": {"layer": "body", "shapes": [["ellipse", "S", 55, 91, 5, 2.5]]},
+    "robe": {"layer": "body", "shapes": [
+        ["capsule", "T", 48, 42, 48, 84, 26, {"flat": true}],
+        ["capsule", "S", 48, 60, 48, 62, 26, {"flat": true}],
+        ["ellipse", "S.high", 48, 61, 2.5, 1.8, {"layer": "armor"}]]},
+    "arm_l": {"layer": "body", "shapes": [
+        ["capsule", "T", 37, 46, 33, 62, 8],
+        ["ellipse", "K", 33, 64, 3.5, 3.5]]},
+    "head": {"layer": "body", "shapes": [
+        ["ellipse", "K", 48, 31, 8.5, 9],
+        ["ellipse", "outline", 44.5, 31, 1, 1.4, {"layer": "armor"}],
+        ["ellipse", "outline", 51.5, 31, 1, 1.4, {"layer": "armor"}]]},
+    "beard": {"layer": "armor", "shapes": [["ellipse", "S", 48, 42, 6.5, 7]]},
+    "hat": {"layer": "armor", "shapes": [
+        ["ellipse", "T", 48, 23, 14, 4],
+        ["poly", "T.deep", [[39, 23], [57, 23], [52, 12], [46, 3], [44, 12]]]]},
+    "arm_r": {"layer": "held", "shapes": [
+        ["capsule", "S", 63, 22, 66, 74, 4],
+        ["ellipse", "S.high", 63, 19, 5, 5],
+        ["capsule", "T", 59, 46, 62, 62, 8],
+        ["ellipse", "K", 62, 64, 3.5, 3.5]]}
+  },
+  "animations": {
+    "idle_breathe": {"preset": "bob", "parts": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "fps": 4},
+    "walk_cycle": {"preset": "walk", "legs": ["foot_l", "foot_r"], "body": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "lift": 4, "fps": 10},
+    "attack_cast": {"preset": "swing", "part": "arm_r", "pivot": [58, 44], "degrees": [0, -20, -45, -10, 30, 45, 25, 5],
+                    "body": ["robe", "head", "beard", "hat", "arm_l", "arm_r"], "fps": 12, "hit_frames": [4, 5]},
+    "hurt": {"preset": "hurt", "parts": ["robe", "head", "beard", "hat", "arm_l", "arm_r"]},
+    "death": {"preset": "death", "parts": ["foot_l", "foot_r", "robe", "head", "beard", "hat", "arm_l", "arm_r"], "keep": ["foot_l", "foot_r"], "angle": 18, "drop": 6}
+  }
+}

@@ -1,0 +1,3 @@
+archetype	warrior	
+archetype	ranger	
+archetype	wizard	

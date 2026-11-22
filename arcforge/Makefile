@@ -5,6 +5,7 @@ EX = examples/hero.iron_knight.json
 .PHONY: check lint test golden render list spec-check
 check:
 	$(PY) tests/run_tests.py
+	$(PY) tests/check_rigs.py
 spec-check:
 	$(PY) spec-next/check_spec.py
 lint:
