@@ -29,6 +29,7 @@
 #include "expr.h"
 #include "json.h"
 #include "px.h"
+#include "raster.h"
 #include "schema.h"
 #include "sim.h"
 
@@ -792,13 +793,150 @@ typedef struct {
     char emsg[1024];
 } gctx;
 
-/* build_shape(): evaluate everything the oracle evaluates before it
- * builds geometry; the geometry itself is discarded (validate drops IR).
- * `fill` is the resolved-by-caller string (own or inherited from the
- * repeat). Order of evaluation is the oracle's, so errors surface
- * identically. */
+/* ---- IR emission (M4.2) -------------------------------------------------
+ * af_validate() compiles with every output list NULL: no geometry is
+ * materialised and the report cannot change. af_compile_asset() passes
+ * lists and receives the oracle's drawables (kind/fill/li, then part/seq/src
+ * stamped by the caller's add()). Ownership: af_json_obj_put / _arr_push
+ * take the value only on success, so every setter frees on failure. */
+
+static int oset(af_json *o, const char *key, af_json *v) {
+    if (!v) { crash("out of memory"); return -1; }
+    if (af_json_obj_put(o, key, v)) { af_json_free(v); crash("out of memory"); return -1; }
+    return 0;
+}
+
+static int oapush(af_json *a, af_json *v) {
+    if (!v) { crash("out of memory"); return -1; }
+    if (af_json_arr_push(a, v)) { af_json_free(v); crash("out of memory"); return -1; }
+    return 0;
+}
+
+/* set-or-replace: af_json_obj_put appends a SECOND pair for a key that is
+ * already there, while Python's dict update() rebinds in place (keeping the
+ * key's position). add() stamps "part" onto a drawable that already has it. */
+static int osetx(af_json *o, const char *key, af_json *v) {
+    if (!o || !key || !v || o->type != AF_JSON_OBJECT) {
+        af_json_free(v);
+        crash("out of memory");
+        return -1;
+    }
+    if (af_json_obj_set(o, key, v)) {
+        af_json_free(v);
+        crash("out of memory");
+        return -1;
+    }
+    return 0;
+}
+
+/* stamp(d, part, src): the oracle's add() minus the append -- part/seq/src
+ * in the oracle's key order. `part` NULL means the drawable already carries
+ * its own part (archetype and feature drawables do; custom fragments are
+ * stamped with the anchor's). */
+static int stamp_d(af_json *d, int64_t *seq, const char *part, const char *src) {
+    if (!d) { crash("out of memory"); return -1; }
+    af_json *pv = part ? af_json_str(part) : NULL;
+    af_json *qv = af_json_int(*seq);
+    af_json *sv = src ? af_json_str(src) : NULL;
+    if ((part && !pv) || !qv || !sv) {
+        af_json_free(pv);
+        af_json_free(qv);
+        af_json_free(sv);
+        crash("out of memory");
+        return -1;
+    }
+    if (part && osetx(d, "part", pv)) {
+        af_json_free(qv);
+        af_json_free(sv);
+        return -1;
+    }
+    if (oset(d, "seq", qv)) {          /* oset frees qv on failure */
+        af_json_free(sv);
+        return -1;
+    }
+    if (oset(d, "src", sv)) {          /* oset frees sv on failure */
+        return -1;
+    }
+    (*seq)++;
+    return 0;
+}
+
+/* add(d, part, src): stamp and append (takes `d` either way). */
+static int add_d(af_json *list, af_json *d, int64_t *seq,
+                 const char *part, const char *src) {
+    if (stamp_d(d, seq, part, src)) {
+        af_json_free(d);
+        return -1;
+    }
+    if (af_json_arr_push(list, d)) {
+        af_json_free(d);
+        crash("out of memory");
+        return -1;
+    }
+    return 0;
+}
+
+/* the oracle's fill tuple (ramp, tone) */
+static af_json *fill2(const char *ramp, const char *tone) {
+    af_json *f = af_json_arr();
+    if (!f) { crash("out of memory"); return NULL; }
+    if (oapush(f, af_json_str(ramp)) || oapush(f, af_json_str(tone))) {
+        af_json_free(f);
+        return NULL;
+    }
+    return f;
+}
+
+static af_json *iarr(const int64_t *v, size_t n) {
+    af_json *a = af_json_arr();
+    if (!a) { crash("out of memory"); return NULL; }
+    for (size_t i = 0; i < n; i++)
+        if (oapush(a, af_json_int(v[i]))) { af_json_free(a); return NULL; }
+    return a;
+}
+
+/* drawable with its "kind" set; the caller adds the rest in the oracle's
+ * key order (the IR is never serialised here, but keep it faithful) */
+static af_json *dnew(const char *kind) {
+    af_json *d = af_json_obj();
+    if (!d) { crash("out of memory"); return NULL; }
+    if (oset(d, "kind", af_json_str(kind))) { af_json_free(d); return NULL; }
+    return d;
+}
+
+/* rect / points -> {"kind":"poly", ...}: the oracle's shared tail, rotate
+ * every point about the origin in 1/64 px then add the anchor. */
+static af_json *poly_drawable(const int64_t *xy, size_t n, int64_t deg,
+                              const int64_t *at, const char *ramp,
+                              const char *tone, int64_t li) {
+    int64_t ax = at ? at[0] : 0, ay = at ? at[1] : 0;
+    af_json *list = af_json_arr();
+    if (!list) { crash("out of memory"); return NULL; }
+    for (size_t i = 0; i < n; i++) {
+        int64_t rx, ry, pair[2];
+        af_rot_fixed(xy[2 * i], xy[2 * i + 1], deg, &rx, &ry);
+        pair[0] = ax * 64 + rx;
+        pair[1] = ay * 64 + ry;
+        if (oapush(list, iarr(pair, 2))) { af_json_free(list); return NULL; }
+    }
+    af_json *d = dnew("poly");
+    if (!d) { af_json_free(list); return NULL; }
+    if (oset(d, "pts", list) || oset(d, "fill", fill2(ramp, tone)) ||
+        oset(d, "li", af_json_int(li))) {
+        af_json_free(d);
+        return NULL;
+    }
+    return d;
+}
+
+/* build_shape(): evaluate everything the oracle evaluates, then (only when
+ * `dout` is non-NULL) build the drawable it returns. `fill` is the
+ * resolved-by-caller string (own or inherited from the repeat); `at` is the
+ * anchor pixel (NULL = (0, 0)), `li` the layer index. Order of evaluation
+ * is the oracle's, so errors surface identically. */
 static int build_shape(const af_json *sh, const af_json *env, gctx *g,
-                       const char *fill, bres *r) {
+                       const char *fill, const int64_t *at, int64_t li,
+                       af_json **dout, bres *r) {
     char msg[768], ramp[64], tone[64];
     if (resolve_fill(fill, env, g->ramps, g->swap, ramp, sizeof ramp,
                      tone, sizeof tone, msg, sizeof msg) == 1) {
@@ -830,6 +968,26 @@ static int build_shape(const af_json *sh, const af_json *env, gctx *g,
             if (rc) { expr_err(r, "%s", msg); return rc; }
         }
         if (vals[4] <= 0) return 0;        /* not drawn, no diagnostic */
+        if (dout) {
+            int64_t ax = at ? at[0] : 0, ay = at ? at[1] : 0;
+            int64_t a0, a1, b0, b1;
+            af_rot_fixed(vals[0], vals[1], deg, &a0, &a1);
+            af_rot_fixed(vals[2], vals[3], deg, &b0, &b1);
+            int64_t p[4] = {ax * 64 + a0, ay * 64 + a1, ax * 64 + b0, ay * 64 + b1};
+            const af_json *caps = af_json_get(sh, "caps");
+            af_json *d = dnew("capsule");
+            if (!d) return 2;
+            if (oset(d, "p", iarr(p, 4)) ||
+                oset(d, "hw", af_json_int(vals[4] * 32)) ||
+                oset(d, "flat", af_json_bool(caps && caps->type == AF_JSON_STRING &&
+                                             !strcmp(caps->s, "flat"))) ||
+                oset(d, "fill", fill2(ramp, tone)) ||
+                oset(d, "li", af_json_int(li))) {
+                af_json_free(d);
+                return 2;
+            }
+            *dout = d;
+        }
         return 0;
     }
     if (!strcmp(kind, "ellipse")) {
@@ -841,6 +999,20 @@ static int build_shape(const af_json *sh, const af_json *env, gctx *g,
             int rc = ev_i(e, env, &vals[i], msg, sizeof msg);
             if (rc) { expr_err(r, "%s", msg); return rc; }
         }
+        if (vals[2] <= 0 || vals[3] <= 0) return 0;    /* not drawn */
+        if (dout) {
+            int64_t ax = at ? at[0] : 0, ay = at ? at[1] : 0;
+            int64_t box[4] = {ax + vals[0], ay + vals[1], vals[2], vals[3]};
+            af_json *d = dnew("ellipse");
+            if (!d) return 2;
+            if (oset(d, "box", iarr(box, 4)) ||
+                oset(d, "fill", fill2(ramp, tone)) ||
+                oset(d, "li", af_json_int(li))) {
+                af_json_free(d);
+                return 2;
+            }
+            *dout = d;
+        }
         return 0;
     }
     if (!strcmp(kind, "rect")) {
@@ -851,6 +1023,14 @@ static int build_shape(const af_json *sh, const af_json *env, gctx *g,
             int rc = ev_i(e, env, &vals[i], msg, sizeof msg);
             if (rc) { expr_err(r, "%s", msg); return rc; }
         }
+        if (vals[2] <= 0 || vals[3] <= 0) return 0;    /* not drawn */
+        if (dout) {
+            int64_t x = vals[0], y = vals[1], w = vals[2], h = vals[3];
+            int64_t corners[8] = {x, y, x + w, y, x + w, y + h, x, y + h};
+            af_json *d = poly_drawable(corners, 4, deg, at, ramp, tone, li);
+            if (!d) return 2;
+            *dout = d;
+        }
         return 0;
     }
     /* polygon: unpack each point, then evaluate it (the oracle's list
@@ -858,28 +1038,128 @@ static int build_shape(const af_json *sh, const af_json *env, gctx *g,
     const af_json *pts = af_json_get(sh, "points");
     if (!pts) { crash("bad shape"); return 2; }        /* KeyError */
     if (pts->type != AF_JSON_ARRAY) { crash("bad shape"); return 2; }
+    int64_t *xy = NULL;
+    if (dout) {
+        xy = (int64_t *)malloc(2 * (pts->n ? pts->n : 1) * sizeof(int64_t));
+        if (!xy) { crash("out of memory"); return 2; }
+    }
     for (size_t i = 0; i < pts->n; i++) {
         const af_json *pt = pts->items[i];
         if (!pt || pt->type != AF_JSON_ARRAY) {
             verr(r, "cannot unpack non-iterable %s object", py_typename(pt));
+            free(xy);
             return 3;
         }
         if (pt->n != 2) {
             if (pt->n > 2) verr(r, "too many values to unpack (expected 2)");
             else verr(r, "not enough values to unpack (expected 2, got %zu)", pt->n);
+            free(xy);
             return 3;
         }
         for (int j = 0; j < 2; j++) {
             int rc = ev_i(pt->items[j], env, &vals[0], msg, sizeof msg);
-            if (rc) { expr_err(r, "%s", msg); return rc < 0 ? 2 : rc; }
+            if (rc) {
+                expr_err(r, "%s", msg);
+                free(xy);
+                return rc < 0 ? 2 : rc;
+            }
+            if (xy) xy[2 * i + j] = vals[0];
         }
+    }
+    if (dout) {
+        af_json *d = poly_drawable(xy, pts->n, deg, at, ramp, tone, li);
+        free(xy);
+        if (!d) return 2;
+        *dout = d;
     }
     return 0;
 }
 
 /* build_line(): rotate / endpoints / thickness / fill, then discard */
+/* ---- line brush (spec 02 §C `line`) ------------------------------------ */
+
+static int cmp_i64p(const void *a, const void *b) {
+    const int64_t *p = (const int64_t *)a, *q = (const int64_t *)b;
+    if (p[0] != q[0]) return p[0] < q[0] ? -1 : 1;
+    if (p[1] != q[1]) return p[1] < q[1] ? -1 : 1;
+    return 0;
+}
+
+/* bresenham(x1,y1,x2,y2) inclusive, then the thickness^2 square brush on
+ * every step, sorted unique -- the oracle's build_line, as the px list of
+ * a {"kind":"px"} drawable. */
+static af_json *line_px(int64_t x1, int64_t y1, int64_t x2, int64_t y2,
+                        int64_t th, const char *ramp, const char *tone) {
+    int64_t r = th / 2;
+    int64_t adx = x2 - x1 < 0 ? x1 - x2 : x2 - x1;
+    int64_t ady = y2 - y1 < 0 ? y1 - y2 : y2 - y1;
+    int64_t dx = adx, dy = -ady;
+    int sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+    int64_t err = dx + dy;
+    int64_t x = x1, y = y1;
+
+    size_t n = 0, cap = 0;
+    int64_t *pts = NULL;
+    size_t side = (size_t)(2 * r + 1);
+    if (side > SIZE_MAX / side || side * side > SIZE_MAX / (2 * sizeof(int64_t))) {
+        crash("out of memory");        /* the oracle's MemoryError: exit 1 */
+        return NULL;
+    }
+    size_t per = side * side;
+    for (;;) {
+        if (n + 2 * per > cap) {
+            size_t nc = cap ? cap * 2 : 256;
+            while (nc < n + 2 * per) nc *= 2;
+            int64_t *np = (int64_t *)realloc(pts, nc * sizeof *np);
+            if (!np) { free(pts); crash("out of memory"); return NULL; }
+            pts = np;
+            cap = nc;
+        }
+        for (int64_t i = -r; i <= r; i++)
+            for (int64_t j = -r; j <= r; j++) {
+                pts[n++] = x + i;
+                pts[n++] = y + j;
+            }
+        if (x == x2 && y == y2) break;
+        int64_t e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x += sx; }
+        if (e2 <= dx) { err += dx; y += sy; }
+    }
+    qsort(pts, n / 2, 2 * sizeof(int64_t), cmp_i64p);
+
+    af_json *arr = af_json_arr();
+    if (!arr) { free(pts); crash("out of memory"); return NULL; }
+    for (size_t i = 0; i < n / 2; i++) {
+        if (i && pts[2 * i] == pts[2 * i - 2] && pts[2 * i + 1] == pts[2 * i - 1])
+            continue;
+        af_json *e = af_json_arr();
+        if (!e) {
+            crash("out of memory");
+            af_json_free(arr);
+            free(pts);
+            return NULL;
+        }
+        if (oapush(e, af_json_int(pts[2 * i])) ||
+            oapush(e, af_json_int(pts[2 * i + 1])) ||
+            oapush(e, fill2(ramp, tone))) {
+            af_json_free(e);
+            af_json_free(arr);
+            free(pts);
+            return NULL;
+        }
+        if (oapush(arr, e)) {           /* oapush frees e on failure */
+            af_json_free(arr);
+            free(pts);
+            return NULL;
+        }
+    }
+    free(pts);
+    return arr;
+}
+
 static int build_line(const af_json *sh, const af_json *env, gctx *g,
-                      const char *fill, bres *r) {
+                      const char *fill, const int64_t *at, int64_t li,
+                      af_json **dout, bres *r) {
     char msg[768], ramp[64], tone[64];
     int64_t deg = 0;
     const af_json *rot = af_json_get(sh, "rotate");
@@ -893,10 +1173,11 @@ static int build_line(const af_json *sh, const af_json *env, gctx *g,
         }
     }
     static const char *const keys[] = {"x1", "y1", "x2", "y2"};
+    int64_t ends[4];
     for (int i = 0; i < 4; i++) {
         const af_json *e = af_json_get(sh, keys[i]);
         if (!e) { crash("bad shape"); return 2; }
-        int rc = ev_i(e, env, &deg, msg, sizeof msg);
+        int rc = ev_i(e, env, &ends[i], msg, sizeof msg);
         if (rc) { expr_err(r, "%s", msg); return rc; }
     }
     int64_t th = 0;
@@ -916,6 +1197,19 @@ static int build_line(const af_json *sh, const af_json *env, gctx *g,
                      tone, sizeof tone, msg, sizeof msg) == 1) {
         expr_err(r, "%s", msg);
         return 2;
+    }
+    if (dout) {
+        af_json *pxl = line_px(ends[0], ends[1], ends[2], ends[3], th, ramp, tone);
+        if (!pxl) return 2;
+        af_json *d = dnew("px");
+        if (!d) { af_json_free(pxl); return 2; }
+        int64_t a[2] = {at ? at[0] : 0, at ? at[1] : 0};
+        if (oset(d, "at", iarr(a, 2)) || oset(d, "px", pxl) ||
+            oset(d, "li", af_json_int(li))) {
+            af_json_free(d);
+            return 2;
+        }
+        *dout = d;
     }
     return 0;
 }
@@ -1012,9 +1306,11 @@ static int px_prepare(const af_json *shfile, const char *path,
 }
 
 /* legend entries -> (ramp,tone) pairs; appends E_PX_LEGEND like the
- * oracle and returns 1 when any entry failed (all are still checked) */
+ * oracle and returns 1 when any entry failed (all are still checked).
+ * `fills[i]` (optional, nleg slots) receives the resolved tuple, NULL for
+ * "transparent" and for entries that failed -- the oracle's `legend`. */
 static int px_legend(const af_px *px, const char *file, const char *path,
-                     gctx *g) {
+                     gctx *g, af_json **fills) {
     char msg[768], ramp[64], tone[64];
     int bad = 0;
     char p[768];
@@ -1028,14 +1324,93 @@ static int px_legend(const af_px *px, const char *file, const char *path,
             snprintf(m, sizeof m, "%s: legend '%s': %s", file, px->leg_ch[i], msg);
             diags_push(g->diags, D("E_PX_LEGEND", p, m, NULL, NULL, NULL, NULL));
             bad = 1;
+        } else if (fills) {
+            fills[i] = fill2(ramp, tone);
         }
     }
     return bad;
 }
 
-/* build_px(): file + frame + legend checks only; the pixel list itself is
- * discarded (validate drops IR). */
-static int build_px(const af_json *sh, gctx *g, const char *path, bres *r) {
+/* one UTF-8 code point at s[i]; *adv bytes. Rows are valid UTF-8 (the
+ * parser rejected anything else), and Python indexes `row` by CODE POINT. */
+static int64_t utf8_cp(const char *s, size_t i, size_t len, size_t *adv) {
+    unsigned char c = (unsigned char)s[i];
+    if (c < 0x80) { *adv = 1; return c; }
+    int n = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+    if (n == 1 || i + (size_t)n > len) { *adv = 1; return c; }
+    int64_t cp = c & (0x7F >> n);
+    for (int k = 1; k < n; k++) cp = (cp << 6) | ((unsigned char)s[i + k] & 0x3F);
+    *adv = (size_t)n;
+    return cp;
+}
+
+/* the single code point a legend key stands for, or -1 (never matches a
+ * one-character `ch`) */
+static int64_t leg_cp(const char *key, int *ok) {
+    size_t adv = 0;
+    size_t len = strlen(key);
+    if (!len) { *ok = 0; return -1; }
+    int64_t cp = utf8_cp(key, 0, len, &adv);
+    *ok = (adv == len);
+    return cp;
+}
+
+/* px_pixels(): rows x columns -> [(dx, dy, fill), ...], one entry per
+ * legend-matched code point, attach offset applied and `flip` ("x"/"y"/NULL)
+ * negating the matching axis. Returns an array (possibly empty), or NULL
+ * with g_crash set (missing attach anchor, out of memory) -- the caller
+ * frees `fills` either way. */
+static af_json *px_pixels(const af_px *px, int frame, af_json **fills,
+                          const char *flip) {
+    int64_t fax = 0, fay = 0;
+    int have_att = 0;
+    for (size_t i = 0; i < px->nanc && !have_att; i++)
+        if (!strcmp(px->anc_name[i], "attach")) {
+            fax = px->anc_x[i];
+            fay = px->anc_y[i];
+            have_att = 1;
+        }
+    if (!have_att) { crash("bad px"); return NULL; }    /* KeyError */
+    af_json *pxl = af_json_arr();
+    if (!pxl) { crash("out of memory"); return NULL; }
+    char **rows = px->frame_rows[frame];
+    size_t nrows = px->frame_nrows[frame];
+    for (size_t rw = 0; rw < nrows; rw++) {
+        const char *row = rows[rw];
+        size_t rlen = strlen(row);
+        for (size_t ci = 0; ci < rlen;) {
+            size_t adv = 0;
+            int64_t cp = utf8_cp(row, ci, rlen, &adv);
+            ci += adv;
+            for (size_t li = 0; li < px->nleg; li++) {
+                int ok = 0;
+                int64_t kcp = leg_cp(px->leg_ch[li], &ok);
+                if (!ok || kcp != cp || !fills || !fills[li]) continue;
+                int64_t dx = (int64_t)ci - adv - fax;   /* col = start index */
+                int64_t dy = (int64_t)rw - fay;
+                if (flip && !strcmp(flip, "x")) dx = -dx;
+                else if (flip && !strcmp(flip, "y")) dy = -dy;
+                af_json *e = af_json_arr();
+                if (!e) { crash("out of memory"); af_json_free(pxl); return NULL; }
+                if (oapush(e, af_json_int(dx)) ||
+                    oapush(e, af_json_int(dy)) ||
+                    oapush(e, af_json_clone(fills[li]))) {
+                    af_json_free(e);
+                    af_json_free(pxl);
+                    return NULL;
+                }
+                if (oapush(pxl, e)) { af_json_free(pxl); return NULL; }
+                break;
+            }
+        }
+    }
+    return pxl;
+}
+
+/* build_px(): file + frame + legend checks, then (only when `dout` is set)
+ * the pixel list itself -- rows x columns, attach offset, optional flip. */
+static int build_px(const af_json *sh, gctx *g, const char *path,
+                    const int64_t *at, int64_t li, af_json **dout, bres *r) {
     (void)r;
     const af_json *fn = af_json_get(sh, "file");
     if (!fn) { crash("bad px"); return 0; }
@@ -1044,12 +1419,51 @@ static int build_px(const af_json *sh, gctx *g, const char *path, bres *r) {
     if (px_prepare(fn, path, af_json_get(sh, "frame"), g, &use, &owned))
         return 0;
     const char *file = fn->s;
-    if (px_legend(owned, file, path, g)) {
+    af_json **fills = NULL;
+    if (dout && owned->nleg) {
+        fills = (af_json **)calloc(owned->nleg, sizeof *fills);
+        if (!fills) { af_px_free(owned); crash("out of memory"); return 0; }
+    }
+    if (px_legend(owned, file, path, g, fills)) {
+        if (fills) {
+            for (size_t i = 0; i < owned->nleg; i++) af_json_free(fills[i]);
+            free(fills);
+        }
         af_px_free(owned);
         return 0;
     }
-    /* rows/attach/flip: pure geometry, no diagnostics after this point */
+    if (!dout) {
+        free(fills);
+        af_px_free(owned);
+        return 0;
+    }
+
+    const af_json *flipn = af_json_get(sh, "flip");
+    const char *flip = flipn && flipn->type == AF_JSON_STRING ? flipn->s : NULL;
+    af_json *pxl = px_pixels(owned, use.frame, fills, flip);
+    if (fills) { for (size_t i = 0; i < owned->nleg; i++) af_json_free(fills[i]); free(fills); }
     af_px_free(owned);
+    if (!pxl) return 0;                 /* attach KeyError / OOM: crash set */
+
+    if (!pxl->n) {                     /* the oracle: `if not pxs: return []` */
+        af_json_free(pxl);
+        return 0;
+    }
+    af_json *d = dnew("px");
+    if (!d) { af_json_free(pxl); return 2; }
+    int64_t a[2] = {at ? at[0] : 0, at ? at[1] : 0};
+    af_json *av = iarr(a, 2);
+    af_json *liv = af_json_int(li);
+    if (!av || !liv) {
+        af_json_free(d); af_json_free(av); af_json_free(liv);
+        af_json_free(pxl);
+        return 2;
+    }
+    if (oset(d, "at", av) || oset(d, "px", pxl) || oset(d, "li", liv)) {
+        af_json_free(d);
+        return 2;
+    }
+    *dout = d;
     return 0;
 }
 
@@ -1091,15 +1505,16 @@ static int shape_anchor_of(const af_json *sh, gctx *g, const af_json **adef,
 /* ---- compile_shapes / build_one / build_repeat -------------------------- */
 
 static int build_one(const af_json *sh, const af_json *env, gctx *g,
-                     const char *path, int depth, bres *r);
+                     const char *path, int depth, af_json *out, bres *r);
 static int build_repeat(const af_json *sh, const af_json *env, gctx *g,
-                        const char *path, int depth, bres *r);
+                        const char *path, int depth, af_json *out, bres *r);
 
-/* compile_shapes(shapes, env, g, path, depth): ShapeErr is reported per
+/* compile_shapes(shapes, env, g, path, depth, out): ShapeErr is reported per
  * shape (the list keeps compiling); ExprError propagates (st == 2) to the
- * phase handler, which formats E_ARCHETYPE_EXPR / E_RECIPE_EXPR. */
+ * phase handler, which formats E_ARCHETYPE_EXPR / E_RECIPE_EXPR. `out` is
+ * the drawable list being built (NULL while validating: no geometry). */
 static int compile_shapes(const af_json *shapes, const af_json *env, gctx *g,
-                          const char *path, int depth) {
+                          const char *path, int depth, af_json *out) {
     if (!shapes) { crash("bad shapes"); return 2; }
     /* Python: `enumerate(shapes)`. A dict or str IS iterable: empty ones
      * iterate zero times (success, no shapes); a non-empty one feeds its
@@ -1118,7 +1533,7 @@ static int compile_shapes(const af_json *shapes, const af_json *env, gctx *g,
         snprintf(p, sizeof p, "%s/%zu", path, i);
         bres r;
         memset(&r, 0, sizeof r);
-        int st = build_one(shapes->items[i], env, g, p, depth, &r);
+        int st = build_one(shapes->items[i], env, g, p, depth, out, &r);
         if (st && !r.st) r.st = st;     /* propagated from a nested list */
         if (r.st == 1) {
             diags_push(g->diags, D(r.code, p, r.msg, opt(r.obs), opt(r.exp), NULL, NULL));
@@ -1132,13 +1547,216 @@ static int compile_shapes(const af_json *shapes, const af_json *env, gctx *g,
     return 0;
 }
 
+/* g["layers"].index(name): shape_layer_of has already proved membership
+ * with the same comparison, so this only fails on a shape it did not see. */
+static int64_t layer_index(const af_json *layers, const char *name) {
+    if (layers && layers->type == AF_JSON_ARRAY)
+        for (size_t i = 0; i < layers->n; i++)
+            if (layers->items[i]->type == AF_JSON_STRING &&
+                !strcmp(layers->items[i]->s, name))
+                return (int64_t)i;
+    crash("bad layer");
+    return 0;
+}
+
+/* integer node a[i]; the compiler only ever builds integer geometry, so a
+ * float/string here is the oracle's TypeError on the way to the rasterizer */
+static int dcell(const af_json *a, size_t i, int64_t *out) {
+    if (!a || a->type != AF_JSON_ARRAY || i >= a->n ||
+        a->items[i]->type != AF_JSON_INT) {
+        crash("bad document");
+        return -1;
+    }
+    *out = a->items[i]->i;
+    return 0;
+}
+
+/* replace an integer array node of `n` cells in place */
+static int dset_iarr(af_json *d, const char *key, const int64_t *v, size_t n) {
+    af_json *nv = iarr(v, n);
+    if (!nv) return -1;
+    if (af_json_obj_set(d, key, nv)) {
+        af_json_free(nv);              /* json.c frees only on bad shape */
+        crash("out of memory");
+        return -1;
+    }
+    return 0;
+}
+
+/* shift_shape(d, dx, dy): translate one compiled drawable by whole pixels
+ * (the oracle's repeat steps). */
+static int shift_shape(af_json *d, int64_t dx, int64_t dy) {
+    const af_json *kn = af_json_get(d, "kind");
+    const char *kind = kn && kn->type == AF_JSON_STRING ? kn->s : NULL;
+    if (!kind) { crash("bad document"); return -1; }
+    if (!strcmp(kind, "ellipse")) {
+        const af_json *b = af_json_get(d, "box");
+        int64_t v[4];
+        for (size_t i = 0; i < 4; i++)
+            if (dcell(b, i, v)) return -1;
+        v[0] += dx;
+        v[1] += dy;
+        return dset_iarr(d, "box", v, 4);
+    }
+    if (!strcmp(kind, "px")) {
+        const af_json *a = af_json_get(d, "at");
+        int64_t v[2];
+        for (size_t i = 0; i < 2; i++)
+            if (dcell(a, i, v)) return -1;
+        v[0] += dx;
+        v[1] += dy;
+        return dset_iarr(d, "at", v, 2);
+    }
+    const af_json *p = af_json_get(d, !strcmp(kind, "capsule") ? "p" : "pts");
+    if (!p || p->type != AF_JSON_ARRAY) { crash("bad document"); return -1; }
+    if (!strcmp(kind, "capsule")) {
+        int64_t v[4];
+        for (size_t i = 0; i < 4; i++)
+            if (dcell(p, i, v)) return -1;
+        v[0] += dx * 64; v[1] += dy * 64;
+        v[2] += dx * 64; v[3] += dy * 64;
+        return dset_iarr(d, "p", v, 4);
+    }
+    if (strcmp(kind, "poly")) { crash("bad document"); return -1; }
+    af_json *np = af_json_arr();
+    if (!np) { crash("out of memory"); return -1; }
+    for (size_t i = 0; i < p->n; i++) {
+        int64_t v[2];
+        if (dcell(p->items[i], 0, &v[0]) || dcell(p->items[i], 1, &v[1])) {
+            af_json_free(np);
+            return -1;
+        }
+        v[0] += dx * 64;
+        v[1] += dy * 64;
+        if (oapush(np, iarr(v, 2))) { af_json_free(np); return -1; }
+    }
+    if (af_json_obj_set(d, "pts", np)) {
+        af_json_free(np);
+        crash("out of memory");
+        return -1;
+    }
+    return 0;
+}
+
+/* qsort key for the reflected px list: (dx, dy) -- unique by construction
+ * (one entry per source pixel), so the order is total. */
+typedef struct { int64_t dx, dy; size_t i; } pxy;
+
+static int pxy_cmp(const void *a, const void *b) {
+    const pxy *p = (const pxy *)a, *q = (const pxy *)b;
+    if (p->dx != q->dx) return p->dx < q->dx ? -1 : 1;
+    if (p->dy != q->dy) return p->dy < q->dy ? -1 : 1;
+    return p->i < q->i ? -1 : p->i > q->i;
+}
+
+/* reflect_shape(d, a): exact integer reflection of one compiled drawable
+ * about column a, applied before rasterization (spec 02 §C `mirror`). Poly
+ * points are fixed-point: X' = (2a+1)*64 - X mirrors pixel centres exactly.
+ * px entries keep `at` and mirror their offsets (dx' = 2a - 2*at - dx), and
+ * the list is re-sorted like the oracle's sorted(). */
+static int reflect_shape(af_json *d, int64_t a) {
+    const af_json *kn = af_json_get(d, "kind");
+    const char *kind = kn && kn->type == AF_JSON_STRING ? kn->s : NULL;
+    if (!kind) { crash("bad document"); return -1; }
+    if (!strcmp(kind, "ellipse")) {
+        const af_json *b = af_json_get(d, "box");
+        int64_t v[4];
+        for (size_t i = 0; i < 4; i++)
+            if (dcell(b, i, v)) return -1;
+        v[0] = 2 * a - v[0] - v[2] + 1;
+        return dset_iarr(d, "box", v, 4);
+    }
+    if (!strcmp(kind, "px")) {
+        const af_json *atn = af_json_get(d, "at");
+        const af_json *pxl = af_json_get(d, "px");
+        int64_t at[2];
+        if (dcell(atn, 0, &at[0]) || dcell(atn, 1, &at[1])) return -1;
+        if (!pxl || pxl->type != AF_JSON_ARRAY) { crash("bad document"); return -1; }
+        size_t n = pxl->n;
+        pxy *keys = (pxy *)malloc((n ? n : 1) * sizeof *keys);
+        if (!keys) { crash("out of memory"); return -1; }
+        int bad = 0;
+        for (size_t i = 0; i < n && !bad; i++) {
+            const af_json *e = pxl->items[i];
+            int64_t dx, dy;
+            if (!e || e->type != AF_JSON_ARRAY || e->n != 3 ||
+                dcell(e, 0, &dx) || dcell(e, 1, &dy)) {
+                if (!g_crash) crash("bad document");
+                bad = 1;
+                break;
+            }
+            keys[i].dx = 2 * a - 2 * at[0] - dx;
+            keys[i].dy = dy;
+            keys[i].i = i;
+        }
+        if (bad) { free(keys); return -1; }
+        qsort(keys, n, sizeof *keys, pxy_cmp);
+        af_json *np = af_json_arr();
+        if (!np) { free(keys); crash("out of memory"); return -1; }
+        int fail = 0;
+        for (size_t i = 0; i < n && !fail; i++) {
+            const af_json *e = pxl->items[keys[i].i];
+            af_json *ne = af_json_arr();
+            if (!ne) { fail = 1; break; }
+            if (oapush(ne, af_json_int(keys[i].dx)) ||
+                oapush(ne, af_json_int(keys[i].dy)) ||
+                oapush(ne, af_json_clone(e->items[2]))) {
+                af_json_free(ne);
+                fail = 1;
+                break;
+            }
+            if (oapush(np, ne)) { fail = 1; break; }   /* oapush freed ne */
+        }
+        free(keys);
+        if (fail) { af_json_free(np); if (!g_crash) crash("out of memory"); return -1; }
+        if (af_json_obj_set(d, "px", np)) {
+            af_json_free(np);
+            crash("out of memory");
+            return -1;
+        }
+        return 0;
+    }
+    int64_t off = (2 * a + 1) * 64;
+    if (!strcmp(kind, "capsule")) {
+        const af_json *p = af_json_get(d, "p");
+        int64_t v[4];
+        for (size_t i = 0; i < 4; i++)
+            if (dcell(p, i, v)) return -1;
+        v[0] = off - v[0];
+        v[2] = off - v[2];
+        return dset_iarr(d, "p", v, 4);
+    }
+    if (strcmp(kind, "poly")) { crash("bad document"); return -1; }
+    const af_json *p = af_json_get(d, "pts");
+    if (!p || p->type != AF_JSON_ARRAY) { crash("bad document"); return -1; }
+    af_json *np = af_json_arr();
+    if (!np) { crash("out of memory"); return -1; }
+    for (size_t i = 0; i < p->n; i++) {
+        int64_t v[2];
+        if (dcell(p->items[i], 0, &v[0]) || dcell(p->items[i], 1, &v[1])) {
+            af_json_free(np);
+            return -1;
+        }
+        v[0] = off - v[0];
+        if (oapush(np, iarr(v, 2))) { af_json_free(np); return -1; }
+    }
+    if (af_json_obj_set(d, "pts", np)) {
+        af_json_free(np);
+        crash("out of memory");
+        return -1;
+    }
+    return 0;
+}
+
 /* build_repeat(): E_REPEAT_BOUND checks then `count` iterations of the
  * child list; each iteration binds var and $i in a cloned env. The tail of
  * appended diagnostics is deduplicated by JSON equality (the oracle's
  * json.dumps(sort_keys=True) key) -- ONLY when the loop completes: an
- * ExprError raised mid-loop propagates before the dedup runs. */
+ * ExprError raised mid-loop propagates before the dedup runs.
+ * `out` (NULL while validating) collects the children's drawables, shifted
+ * by i * step per iteration like the oracle's local `out` list. */
 static int build_repeat(const af_json *sh, const af_json *env, gctx *g,
-                        const char *path, int depth, bres *r) {
+                        const char *path, int depth, af_json *out, bres *r) {
     char msg[1024];
     if (depth >= 2) {
         shape_err(r, "E_REPEAT_BOUND", "repeat nesting exceeds 2 levels",
@@ -1195,10 +1813,14 @@ static int build_repeat(const af_json *sh, const af_json *env, gctx *g,
         if (!cenv) { crash("out of memory"); return 2; }
         if (vn->type == AF_JSON_STRING) af_json_obj_set(cenv, vn->s, af_json_int(i));
         af_json_obj_set(cenv, "i", af_json_int(i));
+        size_t m0 = out ? out->n : 0;
         int rc = compile_shapes(af_json_get(sh, "shapes"), cenv, &cg,
-                                childpath, depth + 1);
+                                childpath, depth + 1, out);
         af_json_free(cenv);
         if (rc) return rc;          /* propagate: no dedup, Python never reaches it */
+        if (out)
+            for (size_t k = m0; k < out->n; k++)
+                if (shift_shape(out->items[k], i * sx, i * sy)) return 2;
     }
 
     /* dedup the appended tail, keeping first occurrences */
@@ -1215,10 +1837,14 @@ static int build_repeat(const af_json *sh, const af_json *env, gctx *g,
 }
 
 /* build_one(): kind -> when -> mirror/rotate -> (repeat | layer/anchor ->
- * px | fill -> line/shape). Geometry is discarded; every expression the
- * oracle evaluates is evaluated, in its order, so errors surface alike. */
+ * px | fill -> line/shape). Every expression the oracle evaluates is
+ * evaluated, in its order, so errors surface alike. With `out` non-NULL the
+ * drawable(s) are appended there with `part` stamped (the oracle's
+ * `d["part"] = part`); seq/src stay with the caller's add(), and the
+ * mirror pass appends the exact integer reflection of what this call
+ * produced -- never of its siblings. */
 static int build_one(const af_json *sh, const af_json *env, gctx *g,
-                     const char *path, int depth, bres *r) {
+                     const char *path, int depth, af_json *out, bres *r) {
     (void)path;
     if (!sh || sh->type != AF_JSON_OBJECT) { crash("bad shape"); return 2; }
     const af_json *kn = af_json_get(sh, "shape");
@@ -1241,51 +1867,102 @@ static int build_one(const af_json *sh, const af_json *env, gctx *g,
         return 1;
     }
 
+    size_t n0 = out ? out->n : 0;
+    int rc = 0;
+
     if (kind && !strcmp(kind, "repeat")) {
         if (g->recipe) {
+            /* children inherit these; validate them even when count is 0 */
             char *lname = NULL;
             if (shape_layer_of(sh, g, &lname, r)) return r->st;
             free(lname);
             const af_json *a = NULL;
             if (shape_anchor_of(sh, g, &a, r)) return r->st;
         }
-        return build_repeat(sh, env, g, path, depth, r);
-    }
-
-    char *lname = NULL;
-    if (shape_layer_of(sh, g, &lname, r)) return r->st;
-    const af_json *at = NULL;
-    if (g->recipe) {
-        const af_json *a = NULL;
-        if (shape_anchor_of(sh, g, &a, r)) { free(lname); return r->st; }
-        at = af_json_get(a, "at");
-        if (!at || !af_json_get(a, "part")) { crash("bad anchor"); free(lname); return 2; }
-    } else if (af_json_get(sh, "anchor")) {
-        const af_json *a = NULL;
-        if (shape_anchor_of(sh, g, &a, r)) { free(lname); return r->st; }
-        at = af_json_get(a, "at");
-        if (!at || !af_json_get(a, "part")) { crash("bad anchor"); free(lname); return 2; }
-    }
-    (void)at;
-
-    int rc;
-    if (kind && !strcmp(kind, "px")) {
-        rc = build_px(sh, g, path, r);
+        rc = build_repeat(sh, env, g, path, depth, out, r);
+        if (rc) return rc;
     } else {
-        const af_json *filln = af_json_get(sh, "fill");
-        if (!filln) filln = g->t_fill;
-        if (!filln || filln->type == AF_JSON_NULL) {
-            shape_err(r, "E_SHAPE_PARAM",
-                      "shape has no fill and its repeat declares none", NULL, NULL);
-            free(lname);
-            return 1;
+        char *lname = NULL;
+        if (shape_layer_of(sh, g, &lname, r)) return r->st;
+        int64_t li = layer_index(g->layers, lname);
+        free(lname);
+        if (g_crash) return 2;
+
+        const af_json *at = NULL;          /* the anchor's evaluated [x, y] */
+        const af_json *partn = NULL;       /* the anchor's part value */
+        if (g->recipe) {
+            const af_json *a = NULL;
+            if (shape_anchor_of(sh, g, &a, r)) return r->st;
+            at = af_json_get(a, "at");
+            partn = af_json_get(a, "part");
+            if (!at || !partn) { crash("bad anchor"); return 2; }
+        } else if (af_json_get(sh, "anchor")) {
+            /* archetype px fragment at an anchor */
+            const af_json *a = NULL;
+            if (shape_anchor_of(sh, g, &a, r)) return r->st;
+            at = af_json_get(a, "at");
+            partn = af_json_get(a, "part");
+            if (!at || !partn) { crash("bad anchor"); return 2; }
         }
-        if (filln->type != AF_JSON_STRING) { crash("bad fill"); free(lname); return 2; }
-        if (kind && !strcmp(kind, "line")) rc = build_line(sh, env, g, filln->s, r);
-        else rc = build_shape(sh, env, g, filln->s, r);
+        int64_t atv[2] = {0, 0};
+        const int64_t *atp = NULL;
+        if (at) {
+            if (dcell(at, 0, &atv[0]) || dcell(at, 1, &atv[1])) return 2;
+            atp = atv;
+        }
+
+        af_json *d = NULL;
+        af_json **dout = out ? &d : NULL;
+        if (kind && !strcmp(kind, "px")) {
+            rc = build_px(sh, g, path, atp, li, dout, r);
+        } else {
+            const af_json *filln = af_json_get(sh, "fill");
+            if (!filln) filln = g->t_fill;
+            if (!filln || filln->type == AF_JSON_NULL) {
+                shape_err(r, "E_SHAPE_PARAM",
+                          "shape has no fill and its repeat declares none", NULL, NULL);
+                return 1;
+            }
+            if (filln->type != AF_JSON_STRING) { crash("bad fill"); return 2; }
+            if (kind && !strcmp(kind, "line"))
+                rc = build_line(sh, env, g, filln->s, atp, li, dout, r);
+            else
+                rc = build_shape(sh, env, g, filln->s, atp, li, dout, r);
+        }
+        if (rc) return rc;
+
+        if (out && d) {
+            af_json *pn;
+            if (partn) pn = af_json_clone(partn);
+            else if (g->part) pn = af_json_str(g->part);
+            else pn = af_json_null();       /* the oracle's part = None */
+            if (!pn) { crash("out of memory"); af_json_free(d); return 2; }
+            if (osetx(d, "part", pn)) { af_json_free(d); return 2; }
+            if (af_json_arr_push(out, d)) {
+                af_json_free(d);
+                crash("out of memory");
+                return 2;
+            }
+        }
     }
-    free(lname);
-    return rc;
+
+    /* also draw the exact integer reflection (spec 02 §C); reflect_shape
+     * rebinds box/px/pts, so the clone leaves the original intact */
+    const af_json *mn = out ? af_json_get(sh, "mirror") : NULL;
+    if (mn && mn->type == AF_JSON_STRING && !strcmp(mn->s, "x")) {
+        size_t m0 = out->n;
+        for (size_t k = n0; k < m0; k++) {
+            af_json *c = af_json_clone(out->items[k]);
+            if (!c) { crash("out of memory"); return 2; }
+            if (reflect_shape(c, g->axis)) { af_json_free(c); return 2; }
+            if (af_json_arr_push(out, c)) {
+                af_json_free(c);
+                crash("out of memory");
+                return 2;
+            }
+        }
+    }
+    return 0;
 }
 
 /* ---- compile_asset ------------------------------------------------------ */
@@ -1423,6 +2100,9 @@ typedef struct {
     af_json *diags;
     urec *urecs;
     size_t nurecs;
+    /* M4.2: the base drawable list (states copy their custom tail from it) */
+    af_json *drawables;
+    size_t custom_start;
 } cas;
 
 /* sorted keys of an object as a C array (caller frees) */
@@ -1548,16 +2228,21 @@ static int track_env(cas *c, const af_json *track, const char *tpath,
     return 0;
 }
 
-/* make_state(track, smap, tpath): the drawable set is discarded; every
- * diagnostic the oracle would append on the way is appended here. */
-static void make_state(cas *c, const af_json *track, const af_json *smap,
-                       const char *tpath) {
+/* make_state(track, smap, tpath): the drawable set for one (params, swap)
+ * frame state, returned as an owned array; every diagnostic the oracle
+ * would append on the way is appended here. NULL only when g_crash is set. */
+static af_json *make_state(cas *c, const af_json *track, const af_json *smap,
+                           const char *tpath) {
     af_json *fenv = NULL, *frec = NULL;
-    if (track_env(c, track, tpath, &fenv, &frec)) return;
+    if (track_env(c, track, tpath, &fenv, &frec)) return NULL;
+    af_json *out = af_json_arr();
+    if (!out) { crash("out of memory"); return NULL; }
+    int64_t sseq = 0;
     if (smap && smap->type != AF_JSON_OBJECT) {
         crash("bad document");
+        af_json_free(out);
         af_json_free(fenv); af_json_free(frec);
-        return;
+        return NULL;
     }
     /* mirror axis re-derived at this state's env */
     const af_json *axis_name_n = af_json_get(c->arch, "mirror_axis");
@@ -1577,7 +2262,11 @@ static void make_state(cas *c, const af_json *track, const af_json *smap,
     g.diags = c->diags;
     g.anchors = c->anchors;
     const af_json *parts = need(c->arch, "parts");
-    if (g_crash) { af_json_free(fenv); af_json_free(frec); return; }
+    if (g_crash) {
+        af_json_free(out);
+        af_json_free(fenv); af_json_free(frec);
+        return NULL;
+    }
     for (size_t pi = 0; pi < parts->n / 2; pi++) {
         const char *part = parts->items[2 * pi]->s;
         const af_json *pdef = parts->items[2 * pi + 1];
@@ -1598,14 +2287,23 @@ static void make_state(cas *c, const af_json *track, const af_json *smap,
                     smap_v->type == AF_JSON_STRING ? smap_v->s : "");
         } else {
             shapes = need(pdef, "shapes");
+            ptr_cat(gpath, sizeof gpath, "shapes");
         }
-        ptr_cat(gpath, sizeof gpath, "shapes");
         g.part = part;
-        int rc = compile_shapes(shapes, fenv, &g, gpath, 0);
+        size_t n0 = out->n;
+        int rc = compile_shapes(shapes, fenv, &g, gpath, 0, out);
         if (rc == 2 || rc == 3) {
             char m[1100];
             snprintf(m, sizeof m, "archetype geometry failed in the frame state: %s", g.emsg);
             diags_push(c->diags, D("E_ARCHETYPE_EXPR", tpath, m, NULL, NULL, NULL, NULL));
+        } else {
+            /* sadd(d, f"archetype:{part}") */
+            char src[640];
+            int bad = 0;
+            snprintf(src, sizeof src, "archetype:%s", part);
+            for (size_t k = n0; k < out->n && !bad; k++)
+                bad = stamp_d(out->items[k], &sseq, NULL, src);
+            if (bad) break;
         }
         if (g_crash) break;
     }
@@ -1702,18 +2400,48 @@ static void make_state(cas *c, const af_json *track, const af_json *smap,
             af_json_free(renv);
             continue;
         }
-        int rc = compile_shapes(geo_used, renv, &gr, gpath, 0);
+        size_t n0 = out->n;
+        int rc = compile_shapes(geo_used, renv, &gr, gpath, 0, out);
         af_json_free(renv);
         if (rc == 2 || rc == 3) {       /* the oracle catches (ExprError, ValueError) */
             char m[1100];
             snprintf(m, sizeof m, "recipe '%s' failed to evaluate in the frame state: %s",
                      u->name, gr.emsg);
             diags_push(c->diags, D("E_RECIPE_EXPR", tpath, m, NULL, NULL, NULL, NULL));
+        } else {
+            /* sadd(d, f"feature:{rname}") */
+            char src[640];
+            int bad = 0;
+            snprintf(src, sizeof src, "feature:%s", u->name);
+            for (size_t k = n0; k < out->n && !bad; k++)
+                bad = stamp_d(out->items[k], &sseq, NULL, src);
+            if (bad) break;
         }
         if (g_crash) break;
     }
+
+    /* custom fragments are env-independent; renumber so (li, seq) keeps
+     * the base painter order (archetype, features, custom) */
+    if (!g_crash && c->drawables)
+        for (size_t i = c->custom_start; i < c->drawables->n; i++) {
+            af_json *cd = af_json_clone(c->drawables->items[i]);
+            if (!cd || af_json_arr_push(out, cd)) {
+                af_json_free(cd);
+                crash("out of memory");
+                break;
+            }
+        }
+    if (g_crash) {
+        af_json_free(out);
+        af_json_free(fenv);
+        af_json_free(frec);
+        return NULL;
+    }
+    for (size_t i = 0; i < out->n; i++)
+        if (osetx(out->items[i], "seq", af_json_int((int64_t)i))) break;
     af_json_free(fenv);
     af_json_free(frec);
+    return g_crash ? (af_json_free(out), NULL) : out;
 }
 
 /* ---- number comparisons (Python semantics) ------------------------------ */
@@ -1823,12 +2551,14 @@ static af_json *clash_set(const af_json *params, const af_json *env) {
     return out;
 }
 
-/* compile_asset(asset, reg, base_dir): the oracle's compile_asset
+/* compile_asset(asset, reg, base_dir, ir_out): the oracle's compile_asset
  * diagnostics, in order. NULL means the oracle would traceback (exit 1,
- * no stdout). The IR Python returns (drawables, states, hitboxes) is
- * discarded: validate never prints it. */
+ * no stdout). *ir_out receives the oracle's IR object (M4.2) when the run
+ * succeeds and no diagnostic is an error, else NULL; pass ir_out = NULL
+ * when only the diagnostics are wanted (validate prints nothing else). */
 static af_json *compile_asset(const af_json *asset, const af_json *reg,
-                              const char *base_dir) {
+                              const char *base_dir, af_json **ir_out) {
+    if (ir_out) *ir_out = NULL;
     af_json *diags = schema_diags(asset, "asset.schema.json", "");
     if (!diags) return NULL;
     if (diags->n) return diags;
@@ -1866,6 +2596,12 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
     af_json *size_env = NULL, *menv = NULL, *env = NULL, *params = NULL;
     af_json *anchors = NULL, **state_keys = NULL;
     af_json *overridable = NULL, *rec_kinds = NULL;
+    /* M4.2: the IR's materialised geometry (NULL until the archetype body) */
+    af_json *drawables = NULL, *hitboxes = NULL, *anims_ir = NULL;
+    af_json *auto_ir = NULL, *mc_ir = NULL, *states = NULL;
+    af_json *feature_names = NULL;
+    int64_t seq = 0;
+    size_t custom_start = 0;
     urec *urecs = NULL;
     uslot *slots = NULL;
     bnd *bounds = NULL;
@@ -1898,6 +2634,20 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
         crash("bad canvas");                /* W, H = canvas */
         failed = 1;
         goto out;
+    }
+
+    /* 2.1 auto: the derived-cell contract the rasterizer resolves later */
+    if (auto_mode) {
+        static const char *const ak[3] = {"margin", "multiple_of", "align"};
+        auto_ir = af_json_obj();
+        if (!auto_ir) { crash("out of memory"); failed = 1; goto out; }
+        for (int i = 0; i < 3; i++) {
+            const af_json *v = af_json_get(canvas, ak[i]);
+            af_json *c = v ? af_json_clone(v)
+                           : (i == 2 ? af_json_str("pivot_bottom_center")
+                                     : af_json_int(1));
+            if (osetx(auto_ir, ak[i], c)) { failed = 1; goto out; }
+        }
     }
 
     /* ---- size parameters (2.1) ----------------------------------------- */
@@ -2095,6 +2845,8 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
         }
         if (!failed_mc) {
             if (nmv < 2) { crash("bad document"); failed = 1; goto out; }  /* mc[1] */
+            mc_ir = iarr(mv, nmv);
+            if (!mc_ir) { failed = 1; goto out; }
             if (!auto_mode && (W < mv[0] || H < mv[1])) {
                 af_json *mc = af_json_arr();
                 int okfix = 1;
@@ -2267,6 +3019,8 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
     /* ---- archetype body -------------------------------------------------- */
     const af_json *parts = need(arch, "parts");
     if (g_crash || !parts || parts->type != AF_JSON_OBJECT) { failed = 1; goto out; }
+    drawables = af_json_arr();
+    if (!drawables) { crash("out of memory"); failed = 1; goto out; }
     gctx g;
     memset(&g, 0, sizeof g);
     g.recipe = 0;
@@ -2289,13 +3043,20 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
         ptr_cat(gpath, sizeof gpath, part);
         ptr_cat(gpath, sizeof gpath, "shapes");
         g.part = part;
-        int rc = compile_shapes(shapes, env, &g, gpath, 0);
+        size_t n0 = drawables->n;
+        int rc = compile_shapes(shapes, env, &g, gpath, 0, drawables);
         if (rc == 2 || rc == 3) {
             char m[1100];
             snprintf(m, sizeof m, "archetype geometry failed: %s", g.emsg);
             diags_push(diags, D("E_ARCHETYPE_EXPR", "/archetype", m, NULL, NULL, NULL, NULL));
             break;
         }
+        /* add(d, d["part"], f"archetype:{part}") */
+        char src[640];
+        snprintf(src, sizeof src, "archetype:%s", part);
+        for (size_t k = n0; k < drawables->n; k++)
+            if (stamp_d(drawables->items[k], &seq, NULL, src)) break;
+        if (g_crash) break;
     }
     if (g_crash) { failed = 1; goto out; }
 
@@ -2322,6 +3083,14 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
     gr.base_dir = base_dir;
     gr.diags = diags;
     gr.anchors = anchors;
+
+    feature_names = af_json_arr();
+    hitboxes = af_json_arr();
+    if (!feature_names || !hitboxes) {
+        crash("out of memory");
+        failed = 1;
+        goto out;
+    }
 
     size_t cap = features ? features->n : 0;
     if (cap) {
@@ -2500,6 +3269,12 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
             }
         }
 
+        /* feature_names.append(name): recorded before check_params, so a
+         * recipe whose parameters fail still names the feature (oracle) */
+        if (oapush(feature_names, af_json_str(namestr))) {
+            failed = 1;
+            goto out;
+        }
         urecs[nurecs].fp = xstrdup(fp);
         urecs[nurecs].name = xstrdup(namestr);
         urecs[nurecs].rec = rec;
@@ -2594,7 +3369,8 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
         char gpath[768];
         snprintf(gpath, sizeof gpath, "%s/geometry", fp);
         if (geo->type == AF_JSON_OBJECT) ptr_cat(gpath, sizeof gpath, aname->s);
-        int rc = compile_shapes(geo_used, renv, &gr, gpath, 0);
+        size_t n0 = drawables->n;
+        int rc = compile_shapes(geo_used, renv, &gr, gpath, 0, drawables);
         if (rc == 2) {
             char m[1100];
             snprintf(m, sizeof m, "recipe '%s' failed to evaluate: %s",
@@ -2609,6 +3385,15 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
             af_json_free(renv);
             failed = 1;
             goto out;
+        }
+        /* add(d, d["part"], f"feature:{name}") */
+        {
+            char src[640];
+            int bad = 0;
+            snprintf(src, sizeof src, "feature:%s", namestr);
+            for (size_t k = n0; k < drawables->n && !bad; k++)
+                bad = stamp_d(drawables->items[k], &seq, NULL, src);
+            if (bad) { af_json_free(renv); failed = 1; goto out; }
         }
 
         /* hitboxes: anchor lookup, then the rect (its unpack happens after
@@ -2654,10 +3439,43 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                 break;
             }
             if (g_crash) break;
-            need(hb, "id");                 /* read after the unpack */
-            need(hb, "active_in");
+            const af_json *hid = need(hb, "id");      /* read after the unpack */
+            const af_json *hain = need(hb, "active_in");
             if (g_crash) break;
-            /* the drawable itself is IR: validate discards it */
+            /* the hitbox itself is IR: {"id", "rect", "part", "active_in"} */
+            const af_json *aat = af_json_get(a, "at");
+            const af_json *apart = af_json_get(a, "part");
+            if (!aat || aat->type != AF_JSON_ARRAY || aat->n != 2 || !apart ||
+                aat->items[0]->type != AF_JSON_INT ||
+                aat->items[1]->type != AF_JSON_INT) {
+                crash("bad anchor");
+                break;
+            }
+            xywh[0] += aat->items[0]->i;
+            xywh[1] += aat->items[1]->i;
+            {
+                af_json *hbo = af_json_obj();
+                af_json *vid = af_json_clone(hid);
+                af_json *r4 = iarr(xywh, 4);
+                af_json *vpart = af_json_clone(apart);
+                af_json *vain = af_json_clone(hain);
+                if (!hbo || !vid || !r4 || !vpart || !vain) {
+                    af_json_free(hbo); af_json_free(vid); af_json_free(r4);
+                    af_json_free(vpart); af_json_free(vain);
+                    if (!g_crash) crash("out of memory");
+                    break;
+                }
+                if (osetx(hbo, "id", vid) || oset(hbo, "rect", r4) ||
+                    osetx(hbo, "part", vpart) || osetx(hbo, "active_in", vain)) {
+                    af_json_free(hbo);
+                    break;
+                }
+                if (af_json_arr_push(hitboxes, hbo)) {
+                    af_json_free(hbo);
+                    crash("out of memory");
+                    break;
+                }
+            }
         }
         af_json_free(renv);
         if (g_crash) { failed = 1; goto out; }
@@ -2681,6 +3499,7 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
     gc.base_dir = base_dir;
     gc.diags = diags;
     gc.anchors = anchors;
+    custom_start = drawables->n;
     for (size_t i = 0; custom && i < custom->n; i++) {
         const af_json *c = custom->items[i];
         char cp[768];
@@ -2727,14 +3546,76 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
             if (g_crash) { failed = 1; goto out; }
             continue;
         }
-        if (px_legend(owned, cfile->s, cp, &gc)) {
+        af_json **cfills = NULL;
+        if (owned->nleg) {
+            cfills = (af_json **)calloc(owned->nleg, sizeof *cfills);
+            if (!cfills) {
+                af_px_free(owned);
+                crash("out of memory");
+                failed = 1;
+                goto out;
+            }
+        }
+        if (px_legend(owned, cfile->s, cp, &gc, cfills)) {
+            if (cfills) {
+                for (size_t k = 0; k < owned->nleg; k++) af_json_free(cfills[k]);
+                free(cfills);
+            }
             af_px_free(owned);
             if (g_crash) { failed = 1; goto out; }
             continue;
         }
+        /* the fragment's pixels, then the drawable itself (always added,
+         * even when the legend matches nothing) */
+        af_json *cpx = px_pixels(owned, use.frame, cfills, NULL);
+        if (cfills) {
+            for (size_t k = 0; k < owned->nleg; k++) af_json_free(cfills[k]);
+            free(cfills);
+        }
         af_px_free(owned);
-        need(c, "id");                      /* f"custom:{c['id']}" */
-        if (g_crash) { failed = 1; goto out; }
+        if (!cpx) { failed = 1; goto out; }
+        const af_json *cid = need(c, "id");  /* f"custom:{c['id']}" */
+        const af_json *ca = af_json_get(anchors, canchor->s);
+        const af_json *caat = ca ? af_json_get(ca, "at") : NULL;
+        const af_json *capart = ca ? af_json_get(ca, "part") : NULL;
+        if (!cid || !caat || caat->type != AF_JSON_ARRAY || caat->n != 2 ||
+            !capart || capart->type != AF_JSON_STRING ||
+            caat->items[0]->type != AF_JSON_INT ||
+            caat->items[1]->type != AF_JSON_INT) {
+            if (!g_crash) crash("bad anchor");
+            af_json_free(cpx);
+            failed = 1;
+            goto out;
+        }
+        int64_t cli = layer_index(layers, clayer->s);
+        if (g_crash) { af_json_free(cpx); failed = 1; goto out; }
+        {
+            af_json *d = dnew("px");
+            af_json *av = iarr((const int64_t[]){caat->items[0]->i,
+                                                 caat->items[1]->i}, 2);
+            af_json *lv = af_json_int(cli);
+            if (!d || !av || !lv) {
+                af_json_free(d); af_json_free(av); af_json_free(lv);
+                af_json_free(cpx);
+                if (!g_crash) crash("out of memory");
+                failed = 1;
+                goto out;
+            }
+            if (oset(d, "at", av) || oset(d, "px", cpx) || oset(d, "li", lv)) {
+                /* oset freed the value that failed; whatever else was not
+                 * attached yet is owned by nobody -- OOM only, and d goes */
+                af_json_free(d);
+                failed = 1;
+                goto out;
+            }
+            char src[700], idb[64];
+            snprintf(src, sizeof src, "custom:%s",
+                     py_str(cid, idb, sizeof idb));
+            if (add_d(drawables, d, &seq, capart->s, src)) {
+                failed = 1;
+                goto out;
+            }
+        }
     }
     if (g_crash) { failed = 1; goto out; }
 
@@ -2746,6 +3627,10 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
         failed = 1;
         goto out;
     }
+    /* anims = {} even when the asset binds no animation (the oracle
+     * initialises it before the loop), so the IR key is never null */
+    anims_ir = af_json_obj();
+    if (!anims_ir) { crash("out of memory"); failed = 1; goto out; }
     if (anims_n) {
         bounds = (bnd *)calloc(anims_n->n ? anims_n->n : 1, sizeof *bounds);
         if (!bounds) { crash("out of memory"); failed = 1; goto out; }
@@ -2772,6 +3657,11 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                                     close_arr(tpln, arch_anims), NULL));
                 if (g_crash) { failed = 1; goto out; }
                 continue;
+            }
+            /* anims[name] = tpl (the archetype's template object) */
+            if (osetx(anims_ir, nm, af_json_clone(tpl))) {
+                failed = 1;
+                goto out;
             }
             int seen = 0;
             for (size_t b = 0; b < nbounds; b++)
@@ -2822,14 +3712,14 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                             af_json_bool(1));
     af_json_free(rec_kinds);
     rec_kinds = NULL;
-    if (g_crash) { af_json_free(overridable); failed = 1; goto out; }
+    if (g_crash) { failed = 1; goto out; }
 
     for (size_t bi = 0; bi < nbounds; bi++) {
         const char *tname = bounds[bi].tname;
         const af_json *frames = need(bounds[bi].tpl, "frames");
         if (g_crash || !frames || frames->type != AF_JSON_ARRAY) {
             if (!g_crash) crash("bad document");
-            af_json_free(overridable);
+
             failed = 1;
             goto out;
         }
@@ -2876,7 +3766,7 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                 }
                 if (g_crash || (npk && !pk)) {
                     free(pk);
-                    af_json_free(overridable);
+
                     failed = 1;
                     goto out;
                 }
@@ -2897,7 +3787,7 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                                         fix_op("remove", p)));
                     if (g_crash) {
                         free(pk);
-                        af_json_free(overridable);
+
                         failed = 1;
                         goto out;
                     }
@@ -2911,7 +3801,7 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                 if (fswap->type != AF_JSON_OBJECT) { crash("bad document"); break; }
                 size_t nsk = 0;
                 char **sk = sorted_keys(fswap, &nsk);
-                if (nsk && !sk) { af_json_free(overridable); failed = 1; goto out; }
+                if (nsk && !sk) { failed = 1; goto out; }
                 for (size_t i = 0; i < nsk; i++) {
                     const char *part = sk[i];
                     const af_json *sset = af_json_get(fswap, part);
@@ -2928,7 +3818,7 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                                             sorted_strs(parts),
                                             close_arr(obs, parts),
                                             fix_op("remove", spath)));
-                        if (g_crash) { free(sk); af_json_free(overridable); failed = 1; goto out; }
+                        if (g_crash) { free(sk); failed = 1; goto out; }
                         continue;
                     }
                     const af_json *vn = af_json_get(pnode, "variants");
@@ -2936,12 +3826,12 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                     if (vn && vn->type != AF_JSON_OBJECT && vn->type != AF_JSON_ARRAY) {
                         crash("bad document");
                         free(sk);
-                        af_json_free(overridable);
+
                         failed = 1;
                         goto out;
                     }
                     af_json *vs = sorted_strs(vn);
-                    if (!vs) { free(sk); af_json_free(overridable); failed = 1; goto out; }
+                    if (!vs) { free(sk); failed = 1; goto out; }
                     int inset = 0;
                     if (vn && vn->type == AF_JSON_ARRAY) {
                         for (size_t vi = 0; vi < vn->n && !inset; vi++)
@@ -2964,16 +3854,16 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
                         }
                         diags_push(diags, D("E_UNKNOWN_SWAP_SET", spath, m,
                                             opt(sset), vs, sug, fix));
-                        if (g_crash) { free(sk); af_json_free(overridable); failed = 1; goto out; }
+                        if (g_crash) { free(sk); failed = 1; goto out; }
                     } else {
                         af_json_free(vs);
                     }
                 }
                 free(sk);
-                if (g_crash) { af_json_free(overridable); failed = 1; goto out; }
+                if (g_crash) { failed = 1; goto out; }
             }
         }
-        if (g_crash) { af_json_free(overridable); failed = 1; goto out; }
+        if (g_crash) { failed = 1; goto out; }
     }
     af_json_free(overridable);
     overridable = NULL;
@@ -3020,10 +3910,44 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
             ptr_cat(tpath, sizeof tpath, tname);
             ptr_cat(tpath, sizeof tpath, "frames");
             ptr_int(tpath, sizeof tpath, (long long)fi);
-            make_state(&(cas){asset, arch, style, size_specs, size_env, arch_params,
-                              ramps, layers, anchors, swap, base_dir, W, H, diags,
-                              urecs, nurecs},
-                       tr, sm, tpath);
+            af_json *sds = make_state(&(cas){asset, arch, style, size_specs, size_env,
+                                             arch_params, ramps, layers, anchors, swap,
+                                             base_dir, W, H, diags, urecs, nurecs,
+                                             drawables, custom_start},
+                                      tr, sm, tpath);
+            if (g_crash || !sds) {
+                af_json_free(sds);
+                if (!g_crash) crash("state");
+                failed = 1;
+                goto out;
+            }
+            /* states[key] = drawables -- {"params", "swap", "drawables"} */
+            af_json *st = af_json_obj();
+            if (!st) {
+                af_json_free(sds);
+                crash("out of memory");
+                failed = 1;
+                goto out;
+            }
+            if (osetx(st, "params", af_json_clone(af_json_get(key, "params"))) ||
+                osetx(st, "swap", af_json_clone(af_json_get(key, "swap")))) {
+                af_json_free(st);
+                af_json_free(sds);
+                failed = 1;
+                goto out;
+            }
+            if (osetx(st, "drawables", sds)) {   /* takes sds (frees on fail) */
+                af_json_free(st);
+                failed = 1;
+                goto out;
+            }
+            if (!states) states = af_json_arr();
+            if (!states || af_json_arr_push(states, st)) {
+                af_json_free(st);
+                crash("out of memory");
+                failed = 1;
+                goto out;
+            }
             if (g_crash) { failed = 1; goto out; }
         }
         if (g_crash) { failed = 1; goto out; }
@@ -3031,6 +3955,83 @@ static af_json *compile_asset(const af_json *asset, const af_json *reg,
     if (has_error(diags)) goto out;
 
 out:
+    /* ---- M4.2: hand the oracle's IR to the caller when the run is clean
+     * (no failed step, no error diagnostic) -- validate ignores it, the
+     * render path consumes it. Key order = the oracle's dict order. ----- */
+    if (ir_out) {
+        if (failed || has_error(diags)) {
+            *ir_out = NULL;
+        } else {
+            af_json *ir = af_json_obj();
+            int bad = ir ? 0 : 1;
+            const af_json *tgt = af_json_get(asset, "target");
+            const af_json *cp = tgt ? af_json_get(tgt, "clip_policy") : NULL;
+            af_json *cpv = cp ? af_json_clone(cp) : NULL;
+            if (!cpv) cpv = af_json_str("error");   /* .get(..., "error") */
+            /* the archetype's part names, in document order */
+            af_json *plist = af_json_arr();
+            if (!plist) bad = 1;
+            if (!bad)
+                for (size_t i = 0; i < parts->n / 2; i++)
+                    if (oapush(plist, af_json_str(parts->items[2 * i]->s))) {
+                        bad = 1;
+                        break;
+                    }
+            /* every setter takes its value (freeing it on failure), so the
+             * local is NULLed the moment it is handed over */
+            if (!bad && osetx(ir, "asset", af_json_clone(asset))) bad = 1;
+            if (!bad && osetx(ir, "arch", af_json_clone(arch))) bad = 1;
+            if (!bad && osetx(ir, "style", af_json_clone(style))) bad = 1;
+            if (!bad && osetx(ir, "W", af_json_int(W))) bad = 1;
+            if (!bad && osetx(ir, "H", af_json_int(H))) bad = 1;
+            if (!bad) { bad = osetx(ir, "drawables", drawables) != 0; drawables = NULL; }
+            if (!bad && osetx(ir, "anchors", af_json_clone(anchors))) bad = 1;
+            if (!bad) { bad = osetx(ir, "parts", plist) != 0; plist = NULL; }
+            if (!bad) { bad = osetx(ir, "features", feature_names) != 0; feature_names = NULL; }
+            if (!bad) { bad = osetx(ir, "animations", anims_ir) != 0; anims_ir = NULL; }
+            if (!bad) { bad = osetx(ir, "hitboxes", hitboxes) != 0; hitboxes = NULL; }
+            if (!bad) {
+                af_json *av = auto_ir ? auto_ir : af_json_null();
+                bad = osetx(ir, "auto", av) != 0;
+                auto_ir = NULL;
+            }
+            if (!bad) {
+                af_json *mv = mc_ir ? mc_ir : af_json_null();
+                bad = osetx(ir, "min_cell", mv) != 0;
+                mc_ir = NULL;
+            }
+            if (!bad) { bad = osetx(ir, "clip_policy", cpv) != 0; cpv = NULL; }
+            if (!bad && osetx(ir, "env", af_json_clone(env))) bad = 1;
+            if (!bad) {
+                /* states = {} in the oracle: always present, even when no
+                 * frame binds a (params, swap) key (the raster reads it) */
+                af_json *sv = states ? states : af_json_arr();
+                bad = osetx(ir, "states", sv) != 0;
+                states = NULL;
+            }
+            if (bad) {
+                af_json_free(ir);       /* holds whatever was inserted */
+                af_json_free(plist);
+                af_json_free(feature_names);
+                af_json_free(anims_ir);
+                af_json_free(hitboxes);
+                af_json_free(auto_ir);
+                af_json_free(mc_ir);
+                af_json_free(states);
+                af_json_free(cpv);
+                if (!g_crash) crash("out of memory");
+            } else {
+                *ir_out = ir;
+            }
+        }
+    }
+    af_json_free(drawables);
+    af_json_free(feature_names);
+    af_json_free(anims_ir);
+    af_json_free(hitboxes);
+    af_json_free(auto_ir);
+    af_json_free(mc_ir);
+    af_json_free(states);
     for (size_t i = 0; i < nkeys; i++) af_json_free(state_keys[i]);
     free(state_keys);
     if (bounds)
@@ -4390,22 +5391,34 @@ static int load_asset_docs(const af_json *doc, const char *path,
 
 /* ---- the command -------------------------------------------------------- */
 
-af_json *af_validate(const char *asset_path, const char *argv0) {
+/* run_validate(asset_path, argv0, irs_out): the whole validate pass. With
+ * irs_out NULL it is exactly af_validate (no geometry materialised). With
+ * irs_out set it also collects the oracle's IR, one per expanded document,
+ * and leaves *irs_out NULL if any document could not produce one. */
+static af_json *run_validate(const char *asset_path, const char *argv0,
+                             af_json **irs_out) {
+    if (irs_out) *irs_out = NULL;
     g_crash = 0;
     g_why[0] = 0;
     find_root(argv0);
+
+    af_json *irs = NULL;
+    if (irs_out) {
+        irs = af_json_arr();
+        if (!irs) { crash("out of memory"); return NULL; }
+    }
 
     char regdir[1200];
     snprintf(regdir, sizeof regdir, "%s/registry", g_root);
     char err[512];
     af_registry *reg = af_registry_load(regdir, err, sizeof err);
-    if (!reg) { crash("registry"); return NULL; }
+    if (!reg) { af_json_free(irs); crash("registry"); return NULL; }
     af_json *regj = af_registry_json(reg, err, sizeof err);
     af_registry_free(reg);
-    if (!regj) { crash("registry"); return NULL; }
+    if (!regj) { af_json_free(irs); crash("registry"); return NULL; }
 
     af_json *doc = load_json_file(asset_path);
-    if (!doc) { af_json_free(regj); return NULL; }
+    if (!doc) { af_json_free(regj); af_json_free(irs); return NULL; }
 
     char base[1024];
     python_parent(asset_path, base, sizeof base);
@@ -4441,8 +5454,23 @@ af_json *af_validate(const char *asset_path, const char *argv0) {
                 crash("out of memory");
                 goto out;
             }
+            int ir_ok = 1;
             for (size_t i = 0; i < nd && !g_crash; i++) {
-                af_json *d3 = compile_asset(docs[i].doc, regj, base);
+                af_json *ir = NULL;
+                af_json *d3 = compile_asset(docs[i].doc, regj, base,
+                                            irs_out ? &ir : NULL);
+                if (irs_out) {
+                    if (ir) {
+                        if (af_json_arr_push(irs, ir) != 0) {
+                            af_json_free(ir);
+                            crash("out of memory");
+                            ir_ok = 0;
+                            break;
+                        }
+                    } else {
+                        ir_ok = 0;      /* no IR for this document */
+                    }
+                }
                 if (!d3) break;             /* g_crash set */
                 prefixed_push(diags, d3, docs[i].pfx);
                 af_json *idc = af_json_clone(docs[i].id);
@@ -4451,6 +5479,10 @@ af_json *af_validate(const char *asset_path, const char *argv0) {
                     crash("out of memory");
                     break;
                 }
+            }
+            if (irs_out && (!ir_ok || g_crash)) {
+                af_json_free(irs);
+                irs = NULL;
             }
             af_json *stats = NULL;
             if (!g_crash && nd > 1) {
@@ -4476,10 +5508,25 @@ out:
     af_json_free(doc);
     if (!report || g_crash) {
         af_json_free(report);
+        af_json_free(irs);
         if (!g_crash) crash("report");
         return NULL;
     }
+    if (irs_out) *irs_out = irs;
     return report;
+}
+
+af_json *af_validate(const char *asset_path, const char *argv0) {
+    return run_validate(asset_path, argv0, NULL);
+}
+
+/* af_compile_asset(asset_path, argv0, irs_out): validate plus the oracle's
+ * IR -- one object per expanded document, in document order. The report is
+ * af_validate's byte for byte; *irs_out is NULL when any document failed to
+ * produce one (invalid input, crash). The caller owns both. */
+af_json *af_compile_asset(const char *asset_path, const char *argv0,
+                          af_json **irs_out) {
+    return run_validate(asset_path, argv0, irs_out);
 }
 
 const char *af_validate_why(void) {

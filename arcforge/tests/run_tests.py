@@ -100,5 +100,12 @@ for label, script in (("C expression parity (M4.1c)", "test_expr_parity.py"),
         "\n".join(l for l in p.stdout.splitlines() if l.startswith("FAIL"))[:900] \
         or (p.stdout + p.stderr)[-600:]
     check(label, p.returncode == 0, detail)
+# M4.2: drawables -> RGBA frames + frame SHA-256 hashes vs the oracle.
+p = subprocess.run([sys.executable, str(ROOT / "tests" / "test_render_parity.py")],
+                   capture_output=True, text=True)
+detail = "" if p.returncode == 0 else \
+    "\n".join(l for l in p.stdout.splitlines() if l.startswith("FAIL"))[:900] \
+    or (p.stdout + p.stderr)[-600:]
+check("C render parity (M4.2)", p.returncode == 0, detail)
 print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILED'}")
 sys.exit(1 if fails else 0)
